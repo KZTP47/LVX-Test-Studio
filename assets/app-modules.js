@@ -66,7 +66,7 @@
 
 ;
 
-;/* module: graph-engine; source: graph-engine.js; sha256: 19fa28e0ac32b91341f64de813cf0b736776f0d7e5178b705e0bc30e86fc3e13 */
+;/* module: graph-engine; source: graph-engine.js; sha256: df0d69820dfdd61839f84d08f502e12e257eb770dedc29ce000fb43a64b5d901 */
 /**
  * GRAPH ENGINE
  * Handles execution of complex dependency graphs (DAGs).
@@ -91,15 +91,58 @@ class GraphEngine {
 
     static nodeTypes() { return ['script','test-suite','security-scan','security-gate','git-repo','unit-test-runner','ai-unit-test','ai-log-summary','log-collector','start-runner','wait-delay','api-performance','api-contract','code-review','website-ux-auto-tester','push-deploy']; }
 
+    // Old editors kept retry/stop references after deleting nodes or connections.
+    // Remove only obsolete references; malformed live policies still need fixing.
+    static normalizeRunnerReferences(workflow) {
+        const nodes = Array.isArray(workflow.nodes) ? workflow.nodes : [], edges = Array.isArray(workflow.edges) ? workflow.edges : [];
+        const ids = new Set(nodes.filter(Boolean).map(node => node.id)), warnings = [];
+        for (const node of nodes) {
+            if (!node || GraphEngine.normalizeNodeType(node.type || node.data?.type) !== 'start-runner' || !node.data || typeof node.data !== 'object') continue;
+            const config = node.data, downstream = new Set(), queue = [node.id];
+            if (config.runnerSettingsVersion == null && config.downloadLogs === true && typeof config.logPath === 'string' && /^(?:[a-z]:[\\/]|\\\\|\/)/i.test(config.logPath)) {
+                const relativePath = 'logs/' + String(node.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+                config.logDestinationMigration = {originalPath:config.logPath,relativePath};
+                config.logPath = relativePath;
+                config.runnerSettingsVersion = 1;
+                warnings.push(`Runner ${node.id}: logs from this older graph will be saved inside this workspace at ${relativePath}. The previous destination is retained in its settings.`);
+            }
+            while (queue.length) {
+                const current = queue.shift();
+                for (const edge of edges.filter(edge => edge?.source === current)) {
+                    if (edge.target !== node.id && !downstream.has(edge.target)) { downstream.add(edge.target); queue.push(edge.target); }
+                }
+            }
+            if (config.stopNodeId && (!ids.has(config.stopNodeId) || !downstream.has(config.stopNodeId))) {
+                config.stopNodeId = ''; warnings.push(`Runner ${node.id}: a removed stop boundary was cleared.`);
+            }
+            const disabled = new Set(Array.isArray(config.disabledRetryNodeIds) ? config.disabledRetryNodeIds.filter(id => ids.has(id)) : []);
+            if (Array.isArray(config.disabledRetryNodeIds)) config.disabledRetryNodeIds = [...disabled];
+            if (!Array.isArray(config.retryTargets)) continue;
+            const seen = new Map();
+            config.retryTargets = config.retryTargets.filter(target => {
+                if (target && typeof target.nodeId === 'string' && (!ids.has(target.nodeId) || !downstream.has(target.nodeId) || disabled.has(target.nodeId))) {
+                    warnings.push(`Runner ${node.id}: a removed or disabled retry target was cleared.`); return false;
+                }
+                if (!target || typeof target !== 'object') return true;
+                if (target.attempts == null) target.attempts = 0;
+                if (seen.has(target.nodeId) && JSON.stringify(seen.get(target.nodeId)) === JSON.stringify(target)) return false;
+                seen.set(target.nodeId, target); return true;
+            });
+        }
+        return warnings;
+    }
+
     static executionPlan(workflow, options = {}) {
-        const copy=JSON.parse(JSON.stringify(workflow)), runners=copy.nodes.filter(n=>GraphEngine.normalizeNodeType(n.type)==='start-runner'), assignments={}, scopes=new Map();
+        const validation=GraphEngine.validate(workflow);
+        if(!validation.valid) throw new Error(validation.errors.join(' '));
+        const copy=validation.workflow, runners=copy.nodes.filter(n=>GraphEngine.normalizeNodeType(n.type)==='start-runner'), assignments={}, scopes=new Map();
         const outgoing=id=>copy.edges.filter(e=>e.source===id).map(e=>e.target);
         const scopeFor=runner=>{if(scopes.has(runner.id))return scopes.get(runner.id);const ids=new Set([runner.id]),distances=new Map([[runner.id,0]]),queue=[runner.id];while(queue.length){const id=queue.shift();if(id===runner.data.stopNodeId)continue;for(const next of outgoing(id))if(!ids.has(next)){ids.add(next);distances.set(next,distances.get(id)+1);queue.push(next);}}const result={ids,distances};scopes.set(runner.id,result);return result;};
         let allowed=null;
         if(options.selectedNodeId||options.selectedNodeIds?.length){const selected=options.selectedNodeIds||[options.selectedNodeId];if(!Array.isArray(selected)||selected.some(id=>!copy.nodes.some(n=>n.id===id)))throw Error('Selected node does not exist.');allowed=new Set(selected);const visit=id=>copy.edges.filter(e=>e.target===id).forEach(e=>{if(!allowed.has(e.source)){allowed.add(e.source);visit(e.source);}});selected.forEach(visit);}
         else if(runners.length){const selected=options.runnerId?runners.filter(r=>r.id===options.runnerId):runners;if(!selected.length)throw Error('Selected runner does not exist.');allowed=new Set();for(const runner of selected)for(const id of scopeFor(runner).ids)allowed.add(id);}
         else if(options.runnerId)throw Error('Selected runner does not exist.');
-        for(const node of copy.nodes){let nearest=null,distance=Infinity;for(const runner of runners){const d=scopeFor(runner).distances.get(node.id);if(d!=null&&d<distance){nearest=runner;distance=d;}}if(nearest){assignments[node.id]=nearest.id;const target=nearest.data.retryTargets?.find(t=>t.nodeId===node.id);if(target&&!node.retry&&!node.data.retry)node.retry={maxAttempts:Number(target.attempts)+1,backoffMs:Number(target.backoffMs||0)};}}
+        for(const node of copy.nodes){let nearest=null,distance=Infinity;for(const runner of runners){const d=scopeFor(runner).distances.get(node.id);if(d!=null&&d<distance){nearest=runner;distance=d;}}if(nearest){assignments[node.id]=nearest.id;const target=nearest.data.retryTargets?.find(t=>t.nodeId===node.id);if(target&&!node.retry&&!node.data.retry&&node.executionPolicy?.retryAttempts==null)node.retry={maxAttempts:Number(target.attempts)+1,backoffMs:Number(target.backoffMs??0)};}}
         if(allowed){copy.nodes=copy.nodes.filter(n=>allowed.has(n.id));copy.edges=copy.edges.filter(e=>allowed.has(e.source)&&allowed.has(e.target));}
         return {workflow:copy,runnerAssignments:Object.fromEntries(Object.entries(assignments).filter(([id])=>copy.nodes.some(n=>n.id===id)))};
     }
@@ -211,6 +254,7 @@ class GraphEngine {
         const outputEntries=sortedNodes.flatMap(node=>Object.entries(context.results[node.id]?.artifacts||{}).map(([name,value])=>({producer:node.id,runId:context.results[node.id].runId||null,name,value})));
         const outputCounts=outputEntries.reduce((counts,item)=>{counts[item.name]=(counts[item.name]||0)+1;return counts;},Object.create(null));
         const artifacts=Object.fromEntries(outputEntries.map(item=>[outputCounts[item.name]>1?`${item.producer}.${item.name}`:item.name,item.value]));
+        if (options.signal?.aborted) overallStatus = 'CANCELLED';
         return {
             status: overallStatus,
             duration: Date.now() - context.startTime,
@@ -308,7 +352,9 @@ class GraphEngine {
     static matchesType(value, type) { return type === 'any' || (type === 'array' ? Array.isArray(value) : type === 'object' ? !!value && typeof value === 'object' && !Array.isArray(value) : typeof value === type); }
 
     static validate(workflow, { strict = false } = {}) {
+        if (!workflow || typeof workflow !== 'object' || Array.isArray(workflow)) return {valid:false,errors:['Choose a workflow containing nodes and connections.'],warnings:[],workflow:{schemaVersion:1,nodes:[],edges:[]}};
         const migrated = JSON.parse(JSON.stringify(workflow || {})), errors = [];
+        const warnings = GraphEngine.normalizeRunnerReferences(migrated);
         if (migrated.schemaVersion != null && migrated.schemaVersion !== 1) errors.push('Unsupported workflow schema version.');
         migrated.schemaVersion = 1;
         if (!Array.isArray(migrated.nodes) || !migrated.nodes.length) errors.push('Add at least one workflow step.');
@@ -319,23 +365,24 @@ class GraphEngine {
             if(!node || typeof node!=='object') {errors.push('Each step must contain a valid configuration.');continue;}
             if(typeof node.id!=='string'||!node.id.trim()||node.id.length>128)errors.push('Step IDs must be nonempty strings of at most 128 characters.');
             node.type = GraphEngine.normalizeNodeType(node.type || node.data?.type);
-            if (!node.data || typeof node.data !== 'object') errors.push(`Step ${node.id || '(unnamed)'} needs configuration.`);
+            if (!node.data || typeof node.data !== 'object' || Array.isArray(node.data)) errors.push(`Step ${node.id || '(unnamed)'} needs configuration.`);
             if (!GraphEngine.nodeTypes().includes(node.type)) errors.push(`Step ${node.id} has unsupported type ${node.type}.`);
             if (strict && node.type==='script' && (!node.data?.engine || (!node.data.code && !node.data.projectPath))) errors.push(`Step ${node.id} needs an engine and code or project.`);
             if(strict&&node.data?.engine&&!['javascript','playwright','python','robot','java','csharp','jest','junit','nunit','pytest'].includes(node.data.engine))errors.push(`Step ${node.id} needs a supported execution engine.`);
             if(strict&&node.type==='script'&&['jest','junit','nunit','pytest'].includes(node.data?.engine)&&!node.data.projectPath)errors.push(`Step ${node.id} needs its native project directory.`);
             if(node.type==='start-runner'){
                 if(node.data?.stopNodeId&&!migrated.nodes.some(n=>n.id===node.data.stopNodeId&&n.id!==node.id))errors.push(`Runner ${node.id} has an invalid stop boundary.`);
-                if(node.data?.retryTargets!=null&&(!Array.isArray(node.data.retryTargets)||node.data.retryTargets.some(t=>!migrated.nodes.some(n=>n.id===t.nodeId)||!Number.isInteger(Number(t.attempts))||Number(t.attempts)<0||Number(t.attempts)>20)))errors.push(`Runner ${node.id} needs valid retry targets with 0–20 retries.`);
+                const targets=node.data?.retryTargets;
+                if(targets!=null&&(!Array.isArray(targets)||targets.some(t=>!t||typeof t.nodeId!=='string'||!migrated.nodes.some(n=>n?.id===t.nodeId&&n.id!==node.id)||typeof t.attempts==='boolean'||String(t.attempts).trim()===''||!Number.isInteger(Number(t.attempts))||Number(t.attempts)<0||Number(t.attempts)>20||!Number.isFinite(Number(t.backoffMs??0))||Number(t.backoffMs??0)<0||Number(t.backoffMs??0)>60000)||new Set(targets.map(t=>t?.nodeId)).size!==targets.length))errors.push(`Runner ${node.id}: choose each connected retry target once and use a whole number from 0 to 20 retries (0 means run once).`);
             }
             if(!['stop','continue'].includes(node.onFailure||node.data?.onFailure||'stop'))errors.push(`Step ${node.id} must stop or continue after failure.`);
-            const retry=node.retry||node.data?.retry||{},attempts=Number(retry.maxAttempts??1),backoff=Number(retry.backoffMs??0);
-            if(!Number.isInteger(attempts)||attempts<1||attempts>10||!Number.isFinite(backoff)||backoff<0||backoff>60000)errors.push(`Step ${node.id} needs 1–10 attempts and 0–60000ms retry backoff.`);
+            const retry=node.retry||node.data?.retry||(node.executionPolicy?.retryAttempts!=null?{maxAttempts:Number(node.executionPolicy.retryAttempts)+1}:{}),attempts=Number(retry.maxAttempts??1),backoff=Number(retry.backoffMs??0);
+            if(!Number.isInteger(attempts)||attempts<1||attempts>21||!Number.isFinite(backoff)||backoff<0||backoff>60000)errors.push(`Step ${node.id} needs 1–21 attempts and 0–60000ms retry backoff.`);
             const resources=node.resources||node.data?.resources||[];
             if(!Array.isArray(resources)||resources.some(value=>typeof value!=='string'||!value.trim()))errors.push(`Step ${node.id} needs nonempty resource lock names.`);
         }
         if (Array.isArray(migrated.nodes) && Array.isArray(migrated.edges)) try { new GraphEngine()._getTopologicalSort(migrated.nodes, migrated.edges); } catch (error) { errors.push(error.message); }
-        return { valid: errors.length === 0, errors, workflow: migrated };
+        return { valid: errors.length === 0, errors, warnings, workflow: migrated };
     }
 }
 
@@ -636,7 +683,7 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
 
 ;
 
-;/* module: protected-config; source: protected-config.js; sha256: 2d1af7578497190a8d848da8f04af642e04821fc5bd95918b17844a6669c7431 */
+;/* module: protected-config; source: protected-config.js; sha256: dab10f9a30f83d321004bb6d0bf4f7711498c8a98f43c98cf8762fbf34438cbb */
 /** Encryption references stay in the renderer; only the main process resolves them. */
 (() => {
  const reference=value=>typeof value==='string'&&/^secret:[a-f0-9-]{36}$/.test(value);
@@ -674,6 +721,8 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
   const body=options.body==null?undefined:String(options.body);
   const hasReference=REFERENCE_TEST(String(url))||REFERENCE_TEST(JSON.stringify(headers))||REFERENCE_TEST(body||'');
   if(!hasReference)return fetch(url,options);
+  const unavailable=pendingIssues().find(issue=>[String(url),JSON.stringify(headers),body||''].some(value=>value.includes(issue.reference)));
+  if(unavailable)throw Error('The saved sign-in for '+unavailable.label+' needs re-entry. Open Repair saved connection. Your other connections are available.');
   if(options.signal?.aborted)throw new DOMException('The request was cancelled.','AbortError');
   const requestId=crypto.randomUUID();
   const payload={requestId,url:String(url),method:options.method||'GET',headers,timeoutMs:Number(options.timeout||30000),...(body!==undefined?{body}:{})};
@@ -682,15 +731,54 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
   finally{if(abort)options.signal.removeEventListener('abort',abort);}
  }
  function REFERENCE_TEST(value){return /secret:[a-f0-9-]{36}/.test(value);}
+ const recoveryKey='lvx_credential_recovery';
+ function recoveryRecords(){try{return JSON.parse(localStorage.getItem(recoveryKey)||'[]');}catch{return [];}}
+ function saveRecovery(records){localStorage.setItem(recoveryKey,JSON.stringify(records));}
+ function atPath(value,path){for(const part of path)value=value?.[part];return value;}
+ function setPath(value,path,next){let target=value;for(const part of path.slice(0,-1))target=target[part];target[path.at(-1)]=next;}
+ function referencePaths(value,reference,path=[]){if(value===reference)return [path];if(!value||typeof value!=='object')return [];return Object.entries(value).flatMap(([key,child])=>referencePaths(child,reference,[...path,key]));}
+ function pendingIssues(){return recoveryRecords().filter(record=>{if(record.resolvedAt)return false;try{return referencePaths(JSON.parse(localStorage.getItem(record.storageKey)),record.reference).length>0;}catch{return false;}}).map(({encrypted,...record})=>record);}
+ function emit(name){window.dispatchEvent?.(typeof Event==='function'?new Event(name):{type:name});}
+ function publishIssues(){window.LVXCredentialIssues=pendingIssues();emit('lvx-credential-issues');}
+ async function recoverLegacy(value,key){
+  const issues=recoveryRecords();
+  async function walk(item,path=[],labels=[]){
+   if(item&&typeof item==='object'&&item.__lvxEncrypted){
+    try{return await protect(item,key+'.'+path.join('.'));}catch(error){
+     if(!/legacy.*credential|credential.*legacy/i.test(error.message))throw error;
+     const id=crypto.randomUUID(),reference='secret:'+id;
+     issues.push({id,reference,storageKey:key,path,label:[...labels,path.at(-1)||'Saved sign-in'].filter(Boolean).join(' / '),encrypted:structuredClone(item),createdAt:new Date().toISOString()});
+     return reference;
+    }
+   }
+   if(Array.isArray(item)){const result=[];for(let i=0;i<item.length;i++)result.push(await walk(item[i],[...path,i],labels));return result;}
+   if(item&&typeof item==='object'){const result={},nextLabels=item.name?[...labels,String(item.name).slice(0,100)]:labels;for(const [field,child]of Object.entries(item))result[field]=await walk(child,[...path,field],nextLabels);return result;}
+   return item;
+  }
+  const result=await walk(value);
+  // Stage recovery metadata until protection and the settings revision check succeed.
+  return {value:result,issues};
+ }
+ async function repair(id,replacement,{retryOriginal=false,forget=false}={}){
+  const records=recoveryRecords(),record=records.find(item=>item.id===id&&!item.resolvedAt);if(!record)throw Error('This saved connection has already been repaired. Refresh the list.');
+  const original=localStorage.getItem(record.storageKey);if(!original)throw Error('The saved connection no longer exists.');let value=JSON.parse(original);const locations=referencePaths(value,record.reference);
+  if(!locations.length)throw Error('This connection changed. Refresh the list before repairing it.');
+  let next='';
+  if(retryOriginal)next=await protect(record.encrypted,record.label);
+  else if(!forget){if(typeof replacement!=='string'||!replacement.trim())throw Error('Enter the replacement credential, or choose Forget saved sign-in.');next=(await invoke('security','storeSecret',{label:record.label.slice(0,120),value:replacement})).reference;}
+  if(localStorage.getItem(record.storageKey)!==original)throw Error('This connection changed while it was being repaired. Try again; the newer settings were preserved.');
+  for(const location of locations){if(location.length)setPath(value,location,next);else value=next;}localStorage.setItem(record.storageKey,JSON.stringify(value));record.resolvedAt=new Date().toISOString();saveRecovery(records);publishIssues();emit('lvx-credentials-migrated');return {repaired:true,forgotten:forget,updatedReferences:locations.length};
+ }
  async function migrate(keys=['execution_config','storage_config','cicd_backend_config','notification_integrations','lvx_pipelines','lvx_unit_tests','sharing_backend_config','test_environments']){
   if(!window.electronAPI?.studioOps)return {migrated:0,desktop:false};
   if(localStorage.length!==undefined)for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(/^(?:versions_|suite_versions_)/.test(key)&&!keys.includes(key))keys.push(key);}
   let migrated=0;const errors=[];
-  for(const key of keys){const original=localStorage.getItem(key);if(!original)continue;try{const protectedValue=JSON.stringify(await protect(JSON.parse(original),key));if(protectedValue!==original){localStorage.setItem(key,protectedValue);migrated++;}}catch(error){errors.push({key,message:error.message});}}
+  for(const key of keys){const original=localStorage.getItem(key);if(!original)continue;try{let value=JSON.parse(original),safe,recovery;try{safe=await protect(value,key);}catch(error){if(!JSON.stringify(value).includes('"__lvxEncrypted"'))throw error;recovery=await recoverLegacy(value,key);safe=await protect(recovery.value,key);}const protectedValue=JSON.stringify(safe);if(localStorage.getItem(key)!==original)throw Error('Settings changed while saved sign-ins were being upgraded. Retry to preserve the newer settings.');if(protectedValue!==original){if(recovery)saveRecovery(recovery.issues);localStorage.setItem(key,protectedValue);migrated++;}}catch(error){errors.push({key,message:error.message});}}
+  publishIssues();
   if(errors.length){const error=new Error('Some saved credentials could not be protected. Open Setup & diagnostics before using saved connections.');error.details=errors;throw error;}
-  return {migrated,desktop:true};
+  return {migrated,desktop:true,issues:pendingIssues()};
  }
- window.LVXCredentials=Object.freeze({protect,request,migrate,isReference:reference});
+ window.LVXCredentials=Object.freeze({protect,request,migrate,repair,issues:pendingIssues,isReference:reference});
 })();
 
 ;
@@ -3702,7 +3790,7 @@ window.getMonacoInstance = getMonacoInstance;
 
 ;
 
-;/* module: pipeline-manager; source: pipeline-manager.js; sha256: a5298094d2eaf0f1daddc94212814df348c4930f592ca37b4ae43199373c6957 */
+;/* module: pipeline-manager; source: pipeline-manager.js; sha256: f0041a89b87a06c5583198f5b56b73c502a486beeb72928b9b051d0c5bf6a0bb */
 
 /**
  * PIPELINE MANAGER
@@ -3711,6 +3799,20 @@ window.getMonacoInstance = getMonacoInstance;
  */
 
 let pipelines = [];
+let workspacePipelines = [], workspacePipelineRefresh = 0;
+async function refreshWorkspacePipelines() {
+    const api=window.electronAPI?.studioOps,generation=++workspacePipelineRefresh;
+    if(!api)return;
+    try{
+        const status=await api.invoke('host','status');
+        const result=status.workspaceRoot?await api.invoke('workspace','list',{collection:'workflows',workspaceRoot:status.workspaceRoot}):{records:[]};
+        if(generation!==workspacePipelineRefresh)return;
+        workspacePipelines=(result.records||[]).filter(record=>record.value?.hiddenFromLibrary!==true&&Array.isArray(record.value?.nodes)&&Array.isArray(record.value?.edges));
+        renderPipelinesList();
+    }catch(error){if(generation===workspacePipelineRefresh){window.LVXPipelineLibraryError=error.message;workspacePipelines=[];renderPipelinesList();}}
+}
+window.refreshWorkspacePipelines=refreshWorkspacePipelines;
+window.electronAPI?.studioOps?.onEvent?.(event=>{if((event.domain==='workspace'&&event.type==='changed')||(event.domain==='host'&&event.type==='workspace'))void refreshWorkspacePipelines();});
 let currentEditingPipeline = null;
 let pipelineStages = []; // Renamed from 'steps' to 'stages' for internal clarity
 let selectedStageIndex = null;
@@ -3718,6 +3820,7 @@ let selectedStageIndex = null;
 function initializePipelineManager() {
     loadPipelines();
     renderPipelinesList();
+    void refreshWorkspacePipelines();
     console.log("Pipeline Manager Initialized");
 }
 
@@ -3747,10 +3850,18 @@ function renderPipelinesList() {
 
     container.innerHTML = '';
 
+    for(const record of workspacePipelines){
+        const row=document.createElement('div');row.className='aero-button p-2 rounded text-sm mb-2 lvx-saved-workflow';row.dataset.workflowId=record.id;
+        const label=document.createElement('strong');label.textContent=record.value.name||'Saved graph workflow';
+        const actions=document.createElement('div');actions.className='flex gap-2 mt-2';
+        for(const [run,text]of [[false,'Open graph'],[true,'Run graph']]){const button=document.createElement('button');button.type='button';button.className='aero-button-'+(run?'success':'purple')+' px-2 py-1 text-xs';button.textContent=text;button.onclick=()=>window.LVXStudio.openGraph(record.id,{run}).catch(error=>window.showMessage?.(error.message,'error'));actions.append(button);}
+        row.append(label,actions);container.append(row);
+    }
+
     if (pipelines.length === 0) {
-        container.innerHTML = `
+        container.insertAdjacentHTML('beforeend', `
             <div class="text-center p-4">
-                <p class="text-xs aero-text-muted mb-2">No pipelines yet.</p>
+                <p class="text-xs aero-text-muted mb-2">${workspacePipelines.length?'Create another pipeline:':'No pipelines yet.'}</p>
                 <div class="flex gap-2 justify-center">
                     <button onclick="openPipelineEditor()" class="aero-button-success text-xs py-1 px-2 rounded">
                         + New Linear Pipeline
@@ -3759,7 +3870,7 @@ function renderPipelinesList() {
                         + New Graph Pipeline
                     </button>
                 </div>
-            </div>`;
+            </div>`);
         return;
     }
 
@@ -5814,7 +5925,7 @@ window.refreshSecurityDashboard = refreshSecurityDashboard;
 
 ;
 
-;/* module: visual-editor; source: visual-editor.js; sha256: 7715f5a80d5669ae79865e3ba78629753e3bc83e9fbfdf93f7aacca7b7366465 */
+;/* module: visual-editor; source: visual-editor.js; sha256: 172b0cc7303ce27dc40f78edf1b183a02f069bb66757bf1a3755ad07970664ca */
 /** Complete Machina visual authoring; executable actions are delegated to native Studio services. */
 function renderNodeIcon(key, size = 16) {
  const names={'git':'branch','terminal':'code','zap':'bolt','clipboard-check':'check','code-review':'eye','message-circle':'file','rocket':'upload','web-audit':'globe','minimize':'minus'};
@@ -6030,6 +6141,7 @@ class VisualEditor {
 
     loadGraph(graphData = {}) {
         const copy=JSON.parse(JSON.stringify(graphData));
+        this.runnerMigrationWarnings=window.GraphEngine?.normalizeRunnerReferences(copy)||[];
         this.graphMetadata={...copy};delete this.graphMetadata.nodes;delete this.graphMetadata.edges;
         this.nodes=(copy.nodes||[]).map((node,index)=>({...node,type:String(node.type||node.data?.type||'test-suite').replace(/_/g,'-'),data:node.data||{},position:node.position||{x:node.x||100+index*350,y:node.y||100}}));
         this.edges=(copy.edges||[]).map((edge,index)=>({...edge,id:edge.id||'imported-edge-'+index}));
@@ -6781,6 +6893,7 @@ ${summaryText || 'No summary generated.'}
         const toolButtons = this.container.querySelectorAll('[data-ve-tool]');
         toolButtons.forEach(button => {
             if (!button?.classList) return;
+            button.setAttribute('aria-pressed', String(button.dataset?.veTool === this.activeTool));
             if (button.dataset?.veTool === this.activeTool) {
                 button.classList.add('active');
             } else {
@@ -6898,15 +7011,14 @@ ${summaryText || 'No summary generated.'}
 
         savedRetryTargets.forEach(row => {
             if (!row || !validNodeIds.has(row.nodeId)) return;
-            const parsedAttempts = parseInt(row.attempts, 10);
-            retryAttemptsByNodeId.set(row.nodeId, parsedAttempts > 0 ? parsedAttempts : 1);
+            retryAttemptsByNodeId.set(row.nodeId, row.attempts ?? 0);
         });
 
         const retryRows = retryCandidateNodes
             .filter(node => !disabledRetryNodeIds.has(node.id))
             .map(node => ({
                 nodeId: node.id,
-                attempts: retryAttemptsByNodeId.get(node.id) || 1
+                attempts: retryAttemptsByNodeId.get(node.id) ?? 0
             }));
 
         return {
@@ -7187,8 +7299,8 @@ ${summaryText || 'No summary generated.'}
         zoomControls.id = 've-viewport-controls';
         zoomControls.className = 've-zoom-controls';
         zoomControls.innerHTML = `
-            <button type="button" data-ve-tool="select" title="Select and move nodes">${window.LVXIcons?.svg("select")||''} Select</button>
-            <button type="button" data-ve-tool="pan" title="Hand tool">${window.LVXIcons?.svg("hand")||''} Pan</button>
+            <button type="button" data-ve-tool="select" aria-pressed="true" title="Select and move nodes">${window.LVXIcons?.svg("select")||''} Select</button>
+            <button type="button" data-ve-tool="pan" aria-pressed="false" title="Hand tool">${window.LVXIcons?.svg("hand")||''} Pan</button>
             <button type="button" id="ve-zoom-in-btn" title="Zoom in">${window.LVXIcons?.svg("plus")||''}</button>
             <button type="button" id="ve-zoom-out-btn" title="Zoom out">${window.LVXIcons?.svg("minus")||''}</button>
             <button type="button" id="ve-reset-view-btn" title="Reset view">${window.LVXIcons?.svg("refresh")||''} Reset</button>
@@ -7301,7 +7413,7 @@ ${summaryText || 'No summary generated.'}
         if (!list) return;
 
         list.innerHTML = '';
-        this.availableSuites.forEach(suite => {
+        this.availableSuites.filter(suite => suite.hiddenFromLibrary !== true).forEach(suite => {
             const item = document.createElement('div');
             item.className = 've-palette-item aero-card';
             item.draggable = true;
@@ -7676,6 +7788,7 @@ ${summaryText || 'No summary generated.'}
             e.stopPropagation();
             if (confirm('Delete this connection?')) {
                 this.edges = this.edges.filter(ed => ed !== edge);
+                window.GraphEngine?.normalizeRunnerReferences({nodes:this.nodes,edges:this.edges});
                 this.render();
                 this._commitHistoryState();
             }
@@ -7843,6 +7956,7 @@ ${summaryText || 'No summary generated.'}
     deleteNode(id) {
         this.nodes = this.nodes.filter(n => n.id !== id);
         this.edges = this.edges.filter(e => e.source !== id && e.target !== id);
+        window.GraphEngine?.normalizeRunnerReferences({nodes:this.nodes,edges:this.edges});
         if (this.selectedNodeId === id) {
             this.selectedNodeId = null;
         }
@@ -8263,7 +8377,7 @@ ${summaryText || 'No summary generated.'}
                         <div class="flex items-center justify-between mb-3 gap-4">
                             <div>
                                 <h4 class="text-lg font-semibold" style="color: #052e16;">Jobs to retry running upon fail</h4>
-                                <p class="text-xs" style="color: rgba(5, 46, 22, 0.78);">Retries are applied only to the nodes connected directly after this runner.</p>
+                                <p class="text-xs" style="color: rgba(5, 46, 22, 0.78);">A job runs once by default. Choose 0–20 extra tries after failure. Only directly connected jobs are listed; stopping a run stops its retries too.</p>
                             </div>
                             <button id="cfg-runner-add-retry" class="aero-button-success py-2 px-4 rounded-lg" ${retryCandidateNodes.length === 0 ? 'disabled' : ''}>Add Another</button>
                         </div>
@@ -8285,6 +8399,7 @@ ${summaryText || 'No summary generated.'}
                         </div>
 
                         <div id="cfg-runner-log-path-group">
+                            ${config.logDestinationMigration ? `<p role="status" class="text-sm mb-3" style="color:#052e16;">This older graph used a log folder from another location. Logs now go to <strong>${this._escapeHTML(config.logPath)}</strong> inside your selected workspace. You can change that destination below. The previous location is retained in the graph settings.</p>` : ''}
                             <label class="block text-sm font-semibold mb-2" style="color: #052e16;">Destination to save logs to</label>
                             <input type="text" id="cfg-runner-log-path" value="${this._escapeHTML(config.logPath || '')}" placeholder="logs/runner.log or logs/" class="w-full aero-input p-3 rounded-lg font-mono text-sm" style="background: rgba(255,255,255,0.82); color: #111827; border-color: rgba(20, 83, 45, 0.4);">
                             <p class="text-xs mt-2" style="color: rgba(5, 46, 22, 0.78);">Paths stay inside the selected workspace. A folder receives a separate log file for each run.</p>
@@ -8379,7 +8494,7 @@ ${summaryText || 'No summary generated.'}
                         </div>
                         <div>
                             <label class="block text-xs font-semibold mb-1" style="color: #052e16;">Retry attempts</label>
-                            <input type="number" min="1" max="20" value="${this._escapeHTML(row.attempts || 1)}" class="cfg-runner-retry-attempts w-full aero-input p-2 rounded-lg text-sm font-mono" style="background: rgba(255,255,255,0.86); color: #111827; border-color: rgba(20, 83, 45, 0.35);">
+                            <input type="number" min="0" max="20" step="1" required value="${this._escapeHTML(row.attempts ?? 0)}" aria-label="Extra retries after failure" class="cfg-runner-retry-attempts w-full aero-input p-2 rounded-lg text-sm font-mono" style="background: rgba(255,255,255,0.86); color: #111827; border-color: rgba(20, 83, 45, 0.35);">
                         </div>
                         <button type="button" class="cfg-runner-remove-retry rounded-full w-10 h-10 font-bold" data-index="${index}" style="background: #ea580c; color: white; border: 2px solid rgba(124, 45, 18, 0.75);">X</button>
                     </div>
@@ -8422,8 +8537,7 @@ ${summaryText || 'No summary generated.'}
                     const index = rowEl ? parseInt(rowEl.dataset.index, 10) : -1;
                     if (index < 0 || index >= retryRows.length) return;
 
-                    const attemptsValue = parseInt(inputEl.value, 10);
-                    retryRows[index].attempts = Number.isFinite(attemptsValue) && attemptsValue > 0 ? attemptsValue : 1;
+                    retryRows[index].attempts = inputEl.value;
                 };
             });
 
@@ -8451,7 +8565,7 @@ ${summaryText || 'No summary generated.'}
 
                 if (!nextAvailableNode) return;
 
-                retryRows.push({ nodeId: nextAvailableNode.id, attempts: 1, showSubtree: false });
+                retryRows.push({ nodeId: nextAvailableNode.id, attempts: 0, showSubtree: false });
                 renderRetryRows();
             };
         }
@@ -8463,12 +8577,15 @@ ${summaryText || 'No summary generated.'}
 
         modal.querySelector('#cfg-runner-cancel').onclick = () => modal.remove();
         modal.querySelector('#cfg-runner-save').onclick = () => {
+            for(const input of rowsContainer.querySelectorAll('.cfg-runner-retry-attempts')) {
+                if(!input.checkValidity()) { input.reportValidity(); input.focus(); return; }
+            }
             const parsedRetryTargets = Array.from(rowsContainer.querySelectorAll('.cfg-runner-retry-row')).map(rowEl => {
                 const nodeIdValue = rowEl.querySelector('.cfg-runner-retry-node')?.value || '';
-                const attemptsValue = parseInt(rowEl.querySelector('.cfg-runner-retry-attempts')?.value, 10);
+                const attemptsValue = Number(rowEl.querySelector('.cfg-runner-retry-attempts')?.value);
                 return {
                     nodeId: nodeIdValue,
-                    attempts: Number.isFinite(attemptsValue) && attemptsValue > 0 ? attemptsValue : 1
+                    attempts: attemptsValue
                 };
             }).filter(row => row.nodeId);
 
@@ -8480,6 +8597,7 @@ ${summaryText || 'No summary generated.'}
             node.data.logPath = modal.querySelector('#cfg-runner-log-path').value.trim();
             node.data.saveIndividualNodeLogs = modal.querySelector('#cfg-runner-save-node-logs').checked;
             node.data.captureAIContext = modal.querySelector('#cfg-runner-capture-ai').checked;
+            node.data.runnerSettingsVersion = 1;
             node.data.stopNodeId = modal.querySelector('#cfg-runner-stop-node').value || '';
             node.data.name = 'Start Runner Node';
 
@@ -9828,7 +9946,7 @@ window.visualEditor = new VisualEditor('visual-editor-root'); // Default
 
 ;
 
-;/* module: script; source: script.js; sha256: 3f67254b6aae301eed500471bfee3c3db58b7dd582e607d3a7ad954ea16b395d */
+;/* module: script; source: script.js; sha256: 2ed180e772e8878c5eb1d16d812dc31ccf443bf49ed393636c5e99334b5a847f */
 
 // ============================================
 // EXECUTION ENGINE
@@ -10148,6 +10266,30 @@ async function executeDesktopCode(engine, code, inputFiles = [], contextVariable
 }
 window.cancelDesktopRuns=async()=>{for(const id of window.LVXActiveRuns||[])await window.electronAPI.studioOps.invoke('execution','cancel',{id});};
 
+// Imported tests are reviewed at the point of use, with the exact definition
+// and workspace bound to the approval. Cancelling never starts a process.
+window.LVXReviewImported = async function (definition) {
+    const api=window.electronAPI?.studioOps;if(!api)return true;
+    const binding=(await api.invoke('host','status')).workspaceRoot;
+    const review=await api.invoke('host','inspectImport',{definition,workspaceRoot:binding});
+    if(!review.hashes.length)return true;
+    return new Promise(resolve=>{
+        const dialog=document.createElement('dialog');dialog.className='lvx-import-review';dialog.setAttribute('aria-labelledby','lvx-import-review-title');
+        const heading=document.createElement('h2');heading.id='lvx-import-review-title';heading.textContent='Review this imported test';
+        const help=document.createElement('p');help.textContent='Imported tests can run code on your computer. Check the source and website or file targets below. Trust only work you recognise. This approval covers this exact saved content.';
+        const source=document.createElement('pre');source.tabIndex=0;source.textContent=JSON.stringify(definition,null,2);
+        const status=document.createElement('p');status.setAttribute('role','alert');
+        const actions=document.createElement('div');actions.className='studio-actions';
+        const cancel=document.createElement('button');cancel.type='button';cancel.className='aero-button-gray';cancel.textContent='Cancel';
+        const approve=document.createElement('button');approve.type='button';approve.className='aero-button-success';approve.textContent='Trust and continue';
+        const previous=document.activeElement;
+        const finish=value=>{dialog.close();dialog.remove();previous?.focus();resolve(value);};
+        cancel.onclick=()=>finish(false);dialog.oncancel=event=>{event.preventDefault();finish(false);};
+        approve.onclick=async()=>{approve.disabled=true;try{await api.invoke('host','trustImportDefinition',{definition,hashes:review.hashes,workspaceRoot:binding});finish(true);}catch(error){status.textContent=error.message;approve.disabled=false;}};
+        actions.append(cancel,approve);dialog.append(heading,help,source,status,actions);document.body.append(dialog);dialog.showModal();cancel.focus();
+    });
+};
+
 async function executePythonCode(code, inputFiles = [], contextVariables = {}, executionOptions = {}) {
     if (window.electronAPI?.studioOps) return executeDesktopCode('python', code, inputFiles, contextVariables, executionOptions);
     const execute = async () => {
@@ -10427,6 +10569,21 @@ function loadExecutionConfig() {
     }
     updateExecutionDisplay();
 }
+
+window.addEventListener?.('lvx-credentials-migrated', () => {
+    if (!executionConfig) return;
+    const previous = executionConfig;
+    loadExecutionConfig();
+    // An open form may contain the user's edits. Refresh only unchanged fields
+    // whose saved value was repaired, so Save cannot restore an obsolete ref.
+    const modal = document.getElementById('execution-settings-modal');
+    if (modal && !modal.classList.contains('hidden')) {
+        for (const [field, key] of [['jdoodle-client-id','jdoodleClientId'],['jdoodle-client-secret','jdoodleClientSecret'],['robot-backend-url','robotBackendUrl'],['robot-api-url','robotApiUrl']]) {
+            const input = document.getElementById(field);
+            if (input && input.value === String(previous[key] || '')) input.value = executionConfig[key] || '';
+        }
+    }
+});
 
 function updateExecutionDisplay() {
     const modeText = executionConfig.mode === 'real' ? 'Real Execution' : 'Simulated';
@@ -11130,7 +11287,7 @@ function renderViews() {
     allViewsBtn.innerHTML = `
  <div class="flex justify-between items-center">
  <span class="font-semibold">All Views</span>
- <span class="text-xs aero-badge-info">${testSuites.length}</span>
+ <span class="text-xs aero-badge-info">${testSuites.filter(s=>s.hiddenFromLibrary!==true).length}</span>
  </div>
  `;
     allViewsBtn.onclick = () => switchView(null);
@@ -11138,7 +11295,7 @@ function renderViews() {
 
     // Individual views
     views.forEach(view => {
-        const suitesInView = testSuites.filter(s => s.view_id === view.id);
+        const suitesInView = testSuites.filter(s => s.hiddenFromLibrary!==true && s.view_id === view.id);
         const viewBtn = document.createElement('div');
         viewBtn.className = `${currentViewId === view.id ? 'aero-button-primary' : 'aero-button hover:aero-button-primary'
             } p-3 rounded transition duration-200 mb-2`;
@@ -11364,9 +11521,9 @@ function renderTestSuites(suites) {
     window.testSuites = suites;
 
     // Filter by current view first
-    let filteredSuites = suites;
+    let filteredSuites = suites.filter(s=>s.hiddenFromLibrary!==true);
     if (currentViewId !== null) {
-        filteredSuites = suites.filter(s => s.view_id === currentViewId);
+        filteredSuites = filteredSuites.filter(s => s.view_id === currentViewId);
     }
 
     // Apply search filter
@@ -11549,7 +11706,7 @@ function openAddSuiteModal() {
     const modalTitle = document.getElementById('modal-title');
     if (modalTitle) {
         const envName = window.environmentManager ? window.environmentManager.getActiveEnvironment().name : '';
-        modalTitle.innerHTML = `Add New Test Suite <span class="text-sm font-normal text-gray-400 ml-2">Env: ${escapeHtml(envName)}</span>`;
+        modalTitle.innerHTML = `Add code test suite <span class="text-sm font-normal text-gray-400 ml-2">Env: ${escapeHtml(envName)}</span>`;
     }
 
     const suiteForm = document.getElementById('suite-form');
@@ -12428,7 +12585,10 @@ async function executeSuiteCore(suite) {
         const validationSource=window.ExecutionValidation.getSuiteValidationSource(suite),validationMode=window.ExecutionValidation.getSuiteValidationMode(suite.language,validationSource);
         const executionOptions = {...(validationMode==='python-assertions'?{validationCode:validationSource}:{}),parameters:{...envInputs.parameters,...(suite.parameters||{})},parameterSchema:{...envInputs.parameterSchema,...(suite.parameter_schema||suite.parameterSchema||{})}};
         let result;
-        if (suite.language === 'python') {
+        if (suite.language === 'javascript') {
+            if(!window.electronAPI?.studioOps)throw Error('JavaScript suites run in the Windows desktop app. Open LVX Test Studio to run this test.');
+            result = await executeDesktopCode('javascript',codeToExecute,suite.input_files??suite.inputFiles??[],suite.contextVariables||{},executionOptions);
+        } else if (suite.language === 'python') {
             result = await executePythonCode(codeToExecute, suite.input_files ?? suite.inputFiles ?? [], suite.contextVariables || {}, executionOptions);
         } else if (suite.language === 'robot') {
             if (executionConfig.robotType === 'browser') {
@@ -12454,7 +12614,9 @@ async function executeSuiteCore(suite) {
             result = await executeWebsiteIntegration(suiteWithEnv);
             }
         } else if (suite.language === 'playwright') {
-            if (window.electronAPI && window.electronAPI.runPlaywrightTest) {
+            if (window.electronAPI?.studioOps) {
+                result = await executeDesktopCode('playwright',codeToExecute,suite.input_files??suite.inputFiles??[],suite.contextVariables||{},executionOptions);
+            } else if (window.electronAPI && window.electronAPI.runPlaywrightTest) {
                 // Call Electron Backend
                 const backendResult = await window.electronAPI.runPlaywrightTest(codeToExecute);
                 result = {
@@ -12650,6 +12812,7 @@ async function runDataDrivenTest(suite, dataSet, silent = false, inputs = {}) {
 
 async function runTestSuite(suiteId, silent = false, inputs = {}) {
     const suiteForPlan=testSuites.find(suite=>suite.id===suiteId);
+    if(suiteForPlan&&!silent&&window.LVXReviewImported&&!await window.LVXReviewImported(suiteForPlan))return {status:'CANCELLED',log:'Imported test review cancelled. No test was started.'};
     const mock=suiteForPlan?.mock_builder;
     if(mock&&(mock.mocks?.length||mock.setupSteps?.length||mock.teardownSteps?.length||mock.fileData?.rows?.length)&&window.electronAPI?.studioOps&&window.LVXMachinaGraph){
       return window.LVXMachinaGraph.runWorkflow({schemaVersion:1,name:suiteForPlan.name,nodes:[{id:'suite-'+suiteId,type:'test-suite',data:{suite:suiteForPlan,suiteId,name:suiteForPlan.name}}],edges:[]},{waitForCompletion:true,parameters:inputs});
@@ -12670,7 +12833,7 @@ async function runTestSuite(suiteId, silent = false, inputs = {}) {
     }
 
     // *** NEW LOGIC: Reroute Visual Web Tests to the Live Runner ***
-    if (suite.language === 'website' && suite.website_method === 'upload' && !silent) {
+    if (suite.language === 'website' && (suite.website_method === 'upload' || suite.vwt_steps_json) && !silent) {
         if (typeof vwt_openLiveRunner === 'function') {
             vwt_openLiveRunner(suite);
             return { status: 'PENDING', log: 'Opened in Visual Runner' };
@@ -12912,10 +13075,16 @@ function showMessage(text, type = 'info') {
     };
 
     messageBox.className = `fixed top-5 right-5 z-50 transition-all duration-300 ${classes[type]} px-6 py-3 rounded-lg shadow-lg`;
+    clearTimeout(messageBox._lvxHideTimer);
     messageBox.textContent = text;
+    messageBox.setAttribute('role',type==='error'?'alert':'status');
+    messageBox.classList.toggle('lvx-message-error',type==='error');
+    if(type==='error'){
+        const dismiss=document.createElement('button');dismiss.type='button';dismiss.className='lvx-message-dismiss';dismiss.textContent='Dismiss';dismiss.onclick=()=>{messageBox.style.transform='translateX(150%)';};messageBox.appendChild(dismiss);
+    }
     messageBox.style.transform = 'translateX(0)';
 
-    setTimeout(() => {
+    if(type!=='error')messageBox._lvxHideTimer=setTimeout(() => {
         messageBox.style.transform = 'translateX(150%)';
     }, 3000);
 }
@@ -21357,7 +21526,7 @@ console.log('Collaboration UI functions (Part 1) loaded');
 
 ;
 
-;/* module: machina-graph-bridge; source: machina-graph-bridge.js; sha256: 3c6168e27974f51c2b6b669badb8c1ae83ad759befdbf2499cd43fe6385954d6 */
+;/* module: machina-graph-bridge; source: machina-graph-bridge.js; sha256: 23cc73387f7d36c70eb009260ba9fe203baa10a2293e8b48dba3e80a52a2561f */
 /* Native execution boundary and progressive visual authoring for the Machina graph. */
 (() => {
  'use strict';
@@ -21482,6 +21651,7 @@ console.log('Collaboration UI functions (Part 1) loaded');
   const suites=context.suites||window.LVXApp?.getSuites?.()||window.testSuites||[];
   for(const node of snapshot.nodes||[])if(node.data?.suiteId){const suite=node.data.suite||await context.resolveSuite?.(node.data.suiteId)||suites.find(s=>s.id===node.data.suiteId);if(!suite)throw Error(`Suite ${node.data.suiteId} is unavailable. Reload available suites.`);node.data={...node.data,suite:clone(suite)};}
   const protectedWorkflow=await protect(snapshot,'Visual workflow');
+  if(window.LVXReviewImported&&!await window.LVXReviewImported(protectedWorkflow))return {status:'CANCELLED',cancelled:true};
   const {waitForCompletion=false,...executionOptions}=options;
   const run=await invoke('runWorkflow',{workflow:protectedWorkflow,...executionOptions});
   const editor=authoringEditor||context.editor;const session=mountRun(run,protectedWorkflow,editor&&snapshot.nodes.every(node=>editor.nodes.some(candidate=>candidate.id===node.id))?editor:null);context.onRun?.(run,protectedWorkflow);
@@ -21518,7 +21688,7 @@ console.log('Collaboration UI functions (Part 1) loaded');
   if(node.type==='ai-unit-test')extras+=`<label>Optional inline source code<textarea data-extra="sourceCode">${esc(d.sourceCode||'')}</textarea></label>`;
   if(['unit-test-runner','ai-unit-test','code-review','log-collector','ai-log-summary'].includes(node.type))extras+=`<label><input type="checkbox" data-extra="overwrite" ${d.overwrite?'checked':''}> Replace an existing generated file when approved</label>`;
   if(node.type==='push-deploy')extras+=`<label><input type="checkbox" data-extra="enabled" ${d.enabled===true?'checked':''}> Enable this deployment step</label><p class="mg-hint">Deployment also requires explicit deployment approval in the connected review session.</p>`;
-  const details=document.createElement('details');details.className='mg-execution-details';details.innerHTML=`<summary>Execution and failure handling</summary><div class="grid">${extras}${input('Retry attempts','retryAttempts',typeof storedRetry==='object'?storedRetry.maxAttempts??1:storedRetry??1,'number','min="1" max="10"')}${input('Retry delay (ms)','retryDelay',storedRetry?.backoffMs??0,'number','min="0" max="60000"')}<label>When this node fails<select data-extra="onFailure"><option value="stop" ${storedFailure!=='continue'?'selected':''}>Stop dependent execution</option><option value="continue" ${storedFailure==='continue'?'selected':''}>Continue independent work</option></select></label>${input('Exclusive resource names (comma separated)','resources',Array.isArray(storedResources)?storedResources.join(', '):String(storedResources))}</div>`;
+  const details=document.createElement('details');details.className='mg-execution-details';details.innerHTML=`<summary>Execution and failure handling</summary><div class="grid">${extras}${input('Total attempts (including first run)','retryAttempts',typeof storedRetry==='object'?storedRetry.maxAttempts??1:storedRetry??1,'number','min="1" max="21"')}${input('Retry delay (ms)','retryDelay',storedRetry?.backoffMs??0,'number','min="0" max="60000"')}<label>When this node fails<select data-extra="onFailure"><option value="stop" ${storedFailure!=='continue'?'selected':''}>Stop dependent execution</option><option value="continue" ${storedFailure==='continue'?'selected':''}>Continue independent work</option></select></label>${input('Exclusive resource names (comma separated)','resources',Array.isArray(storedResources)?storedResources.join(', '):String(storedResources))}</div>`;
   const footer=inner.querySelector(':scope > .flex.justify-end');
   const formBody=inner.querySelector(':scope > .overflow-y-auto');
   if(formBody)formBody.appendChild(details);else inner.insertBefore(details,footer||error);
@@ -21535,7 +21705,7 @@ console.log('Collaboration UI functions (Part 1) loaded');
    const before=clone(node);
    try{
     const extras=Object.fromEntries(Array.from(details.querySelectorAll('[data-extra]')).map(field=>[field.dataset.extra,field.type==='checkbox'?field.checked:field.type==='number'?Number(field.value):field.value]));
-    if(extras.retryAttempts<1)throw Error('Retry attempts must be at least one.');
+    if(!Number.isInteger(extras.retryAttempts)||extras.retryAttempts<1||extras.retryAttempts>21)throw Error('Total attempts must be a whole number from 1 to 21 (the first run plus up to 20 retries).');
     const priorRetry=node.retry??node.data.retry;const retry=priorRetry&&typeof priorRetry==='object'?{...priorRetry}:{};if(node.retry!==undefined||extras.retryAttempts!==1||extras.retryDelay!==0)node.retry={...retry,maxAttempts:extras.retryAttempts,backoffMs:extras.retryDelay};node.onFailure=extras.onFailure;node.resources=extras.resources.split(',').map(s=>s.trim()).filter(Boolean);
     for(const key of ['cwd','engine','overwrite','enabled','sourceCode'])if(Object.hasOwn(extras,key))node.data[key]=extras[key];
     await original?.call(save,event);
@@ -22243,7 +22413,7 @@ console.log('Security UI loaded');
 
 ;
 
-;/* module: visual-web-tester; source: visual-web-tester.js; sha256: 00ff82ea438bc89f876d97c6bd8b2533587462ce3bcee29061d1f546522fc9df */
+;/* module: visual-web-tester; source: visual-web-tester.js; sha256: 466f3df61730de84a4054cd5490fc29d9c5d4fa3faf05a9ce352e29856cb8585 */
 // Robot uses two or more spaces (or a tab) between cells. Escape literals so
 // user text cannot accidentally create extra cells, variables or physical rows.
 function vwtRobotCell(value) {
@@ -22542,6 +22712,8 @@ function openVisualWebTester() {
   document.getElementById('vwt-logs').value = '';
   for(const id of ['vwt-html-file','vwt-css-files','vwt-js-files','vwt-project-files','vwt-update-file']){const el=document.getElementById(id);if(el)el.value='';}
   vwt_setSourceMode('files');
+  const address=document.getElementById('vwt-website-url');if(address)address.value='';
+  vwt_targetNotice('Choose Files or folder, Website URL, or Git repository to begin.');vwt_updateWebsiteActions();
   vwt_initializeToolbox();
   vwt_renderCanvas();
   vwt_renderPropertiesPanel();
@@ -22557,7 +22729,7 @@ function openVisualWebTesterForEdit(suite) {
   vwt_files.html = suite.website_html_content || null;
   vwt_files.css = suite.website_css_contents || [];
   vwt_files.js = suite.website_js_contents || [];
-  vwt_target=suite.website_target?JSON.parse(JSON.stringify(suite.website_target)):null;
+  vwt_target=suite.website_target?JSON.parse(JSON.stringify(suite.website_target)):suite.website_url?{version:1,kind:'url',url:suite.website_url}:null;
   vwt_targetEdited=false;
   vwt_setSourceMode(vwt_target?.source?.type==='repository'?'repository':vwt_target?.kind==='url'&&!vwt_target?.source?'url':'files');
   if(document.getElementById('vwt-repository-url'))document.getElementById('vwt-repository-url').value=vwt_target?.source?.repository||'';
@@ -22648,6 +22820,8 @@ function vwt_readFileAsText(file) {
 function vwt_setSourceMode(mode){
   vwt_sourceMode=['files','repository','url'].includes(mode)?mode:'files';
   const select=document.getElementById('vwt-source-kind');if(select)select.value=vwt_sourceMode;
+  const modal=document.getElementById('visual-web-tester-modal');if(modal)modal.dataset.vwtSourceMode=vwt_sourceMode;
+  for(const button of document.querySelectorAll?.('[data-vwt-source]')||[])button.setAttribute('aria-pressed',String(button.dataset.vwtSource===vwt_sourceMode));
   for(const name of ['files','repository','url']){const panel=document.getElementById('vwt-source-'+name);if(panel)panel.hidden=name!==vwt_sourceMode;}
 }
 function vwt_targetNotice(message,error=false){
@@ -22697,6 +22871,7 @@ async function vwt_checkRunningTarget(){
 }
 function vwt_suiteSource(suite){
   if(suite.website_target)return JSON.parse(JSON.stringify(suite.website_target));
+  if(suite.website_url)return {version:1,kind:'url',url:suite.website_url};
   return vwt_buildWebsiteHTML({html:suite.website_html_content,css:suite.website_css_contents||[],js:suite.website_js_contents||[]});
 }
 function vwt_currentSource(){return vwt_target||vwt_buildWebsiteHTML(vwt_files);}
@@ -22720,6 +22895,7 @@ function vwt_renderTargetControls(){
   const refresh=document.getElementById('vwt-refresh-source');if(refresh)refresh.disabled=!target?.source?.id||vwt_targetBusy;
   const stop=document.getElementById('vwt-stop-project');if(stop){stop.disabled=!target?.source?.id||vwt_stoppingProject;stop.textContent=vwt_targetBusy&&!vwt_stoppingProject?'Cancel startup / stop website':'Stop project website';}
   const warnings=document.getElementById('vwt-source-warnings');if(warnings)warnings.textContent=(target?.warnings||[]).join('\n');
+  vwt_updateWebsiteActions();
 }
 async function vwt_readAsset(file,path){
   if(/\.(?:html?|css|[cm]?js|json|map|svg|txt|xml|webmanifest|md|csv|ts|tsx|jsx|vue|svelte)$/i.test(path)||String(file.type||'').startsWith('text/'))return {path,content:await vwt_readFileAsText(file),encoding:'utf8'};
@@ -22764,7 +22940,29 @@ async function vwt_targetOperation(operation,{interrupt=false,sourceId=vwt_targe
 function vwt_confirmSourceReplacement(){return !vwt_targetEdited||confirm('Replace the current website source? File edits made only in this test will be replaced. Your test steps stay unchanged.');}
 async function vwt_chooseProjectFolder(){if(!vwt_allowSourceChange()||!vwt_confirmSourceReplacement())return;return vwt_targetOperation(async()=>{if(!window.electronAPI?.studioOps?.choosePath)throw Error('Choose folder requires the LVX desktop application.');return window.electronAPI.studioOps.choosePath({kind:'web-project'});});}
 async function vwt_loadRepository(){if(!vwt_allowSourceChange())return;const url=document.getElementById('vwt-repository-url')?.value.trim(),ref=document.getElementById('vwt-repository-ref')?.value.trim();if(!url){vwt_targetNotice('Enter a repository URL first.',true);return;}if(!vwt_confirmSourceReplacement())return;return vwt_targetOperation(()=>vwt_previewInvoke('target:repository',{url,ref}));}
-async function vwt_loadWebsite(){if(!vwt_allowSourceChange())return;try{const url=new URL(document.getElementById('vwt-website-url')?.value.trim());if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error();if(!vwt_confirmSourceReplacement())return;vwt_target={version:1,kind:'url',url:url.href,label:url.hostname};vwt_targetEdited=false;vwt_updateFilesPreview();vwt_targetNotice('Website selected. Reload Preview to load it.');}catch{vwt_targetNotice('Enter a full http:// or https:// website address without a password.',true);}}
+async function vwt_loadWebsite(){
+  if(!vwt_allowSourceChange())return;
+  let url;try{url=new URL(document.getElementById('vwt-website-url')?.value.trim());if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error();}
+  catch{vwt_targetNotice('Enter a full http:// or https:// website address without a password. For a local app, include its port, for example http://localhost:3000.',true);return;}
+  if(!vwt_confirmSourceReplacement())return;
+  vwt_clearCreatorPreview();vwt_target={version:1,kind:'url',url:url.href,label:url.hostname};vwt_targetEdited=false;vwt_updateFilesPreview();
+  const generation=vwt_targetGeneration;
+  try{await vwt_renderIframe();}catch(error){if(generation===vwt_targetGeneration)vwt_targetNotice('Could not load the website. '+error.message+' Check the address, internet/VPN connection, or start the local server, then choose Use website again.',true);}
+}
+function vwt_updateWebsiteActions(){
+  const ready=!!vwt_remoteSessions.get(document.getElementById('vwt-iframe'))&&!vwt_targetBusy;
+  for(const id of ['vwt-website-signin','vwt-website-refresh']){const button=document.getElementById(id);if(button)button.disabled=!ready;}
+}
+async function vwt_showWebsite(){
+  try{const id=vwt_remoteSessions.get(document.getElementById('vwt-iframe'));if(!id)throw Error('Choose Use website first.');await vwt_previewInvoke('show',{id});vwt_targetNotice('Website opened. After signing in or navigating there, choose Update preview after sign in.');}
+  catch(error){vwt_targetNotice(error.message,true);}
+}
+async function vwt_refreshWebsiteSnapshot(){
+  const iframe=document.getElementById('vwt-iframe'),id=vwt_remoteSessions.get(iframe),generation=vwt_targetGeneration;
+  if(!id){vwt_targetNotice('Choose Use website first.',true);return;}
+  try{const result=await vwt_previewInvoke('snapshot',{id});if(generation!==vwt_targetGeneration||vwt_remoteSessions.get(iframe)!==id)return;vwt_setStaticPreview(iframe,result.html,true);vwt_targetNotice('Preview updated: '+(result.url||vwt_target?.url||'website')+'. Add test steps, then Run Live Test.');}
+  catch(error){if(generation===vwt_targetGeneration)vwt_targetNotice('Could not update the preview. '+error.message+' Choose Use website to open it again.',true);}
+}
 async function vwt_refreshSource(){if(!vwt_target?.source?.id)return;if(vwt_targetEdited&&!confirm('Read the original folder or repository again? This replaces file edits made only in this test. Your test steps stay unchanged.'))return;return vwt_targetOperation(()=>vwt_previewInvoke('target:refresh',{sourceId:vwt_target.source.id}));}
 async function vwt_startProject(){
   if(vwt_targetBusy)return;
@@ -22818,11 +23016,14 @@ async function vwt_renderIframe() {
     const ready=await vwt_checkRunningTarget();if(generation!==vwt_targetGeneration||target!==vwt_target)return;
     if(!ready)throw Error(vwt_target.project?.requiresServer?'Start the project server below before loading its preview.':'Add an HTML start page and select it before reloading.');
     const iframe=document.getElementById('vwt-iframe');
-    await vwt_openRemote(iframe,vwt_target);if(generation===vwt_targetGeneration)vwt_targetNotice('Preview loaded. Add test steps, then Run Live Test.');return;
+    const ticket=++vwt_operationTicket;vwt_targetBusy=true;vwt_updateWebsiteActions();vwt_targetNotice('Loading website in its isolated browser…');
+    try{const result=await vwt_openRemote(iframe,target);if(generation===vwt_targetGeneration&&ticket===vwt_operationTicket)vwt_targetNotice((target.kind==='url'&&!target.source?'Website loaded: '+(result.url||target.url)+'. ':'Preview loaded. ')+'Add test steps, then Run Live Test.');return result;}
+    finally{if(generation===vwt_targetGeneration&&ticket===vwt_operationTicket){vwt_targetBusy=false;vwt_updateWebsiteActions();}}
   }
   const htmlContent = vwt_buildWebsiteHTML(vwt_files);
   if (!htmlContent) {
-    vwt_log("Error: No HTML content to render.");
+    vwt_targetNotice('No website selected yet. Choose Files or folder, Website URL, or Git repository above.',true);
+    vwt_log("No website selected. Choose a website source first.");
     return;
   }
   const iframe = document.getElementById('vwt-iframe');
@@ -23356,7 +23557,7 @@ let vwt_activeRunnerIdInModal = null;
  * Main entry point to start a new test run or maximize an existing one.
  */
 function vwt_openLiveRunner(suite) {
-  if (!suite || suite.language !== 'website' || suite.website_method !== 'upload') {
+  if (!suite || suite.language !== 'website' || (suite.website_method !== 'upload' && !suite.vwt_steps_json)) {
     console.error("Invalid suite for Live Runner.");
     return;
   }
@@ -23494,6 +23695,35 @@ function vwt_closeLiveRunner(fromModalOrRunnerId) {
 /**
  * The core test execution logic for a given runner.
  */
+function vwt_runDefinition(value){
+  const transient=new Set(['last_run_status','last_run_time','last_run_log','dateCreated','dateModified']);
+  const stable=item=>Array.isArray(item)?item.map(stable):item&&typeof item==='object'?Object.fromEntries(Object.keys(item).sort().map(key=>[key,stable(item[key])])):item;
+  return JSON.stringify(stable(Object.fromEntries(Object.entries(value||{}).filter(([key])=>!transient.has(key)))));
+}
+async function vwt_captureRunStorage(runner){
+  const storage=await window.LVXApp?.getStorage()||window.currentStorage;
+  if(!storage?.transport?.call||typeof storage.commitUpdate!=='function'||typeof storage.queue!=='function')throw Error('Revision-protected storage is unavailable. Reconnect the workspace to save run results.');
+  await storage.guard();
+  const workspaceRoot=storage.workspaceRoot,record=await storage.transport.call('read',{collection:'suites',id:runner.suite.id});
+  if(!record)throw Error('This test was deleted. Its run result will stay in this window only.');
+  const current=typeof storage.suite==='function'?storage.suite(record):record.value;
+  if(vwt_runDefinition(current)!==vwt_runDefinition(runner.suite))throw Error('This test changed since the runner was opened. Reopen it before saving a new run result.');
+  return {storage,workspaceRoot,record:JSON.parse(JSON.stringify(record))};
+}
+async function vwt_persistRunResult(runner,capture,log){
+  const {storage,workspaceRoot,record}=capture;
+  const updates={last_run_status:runner.status,last_run_time:new Date().toISOString(),last_run_log:log};
+  const sameStorage=async()=>{if((await window.LVXApp?.getStorage()||window.currentStorage)!==storage||storage.workspaceRoot!==workspaceRoot)throw Error('Workspace storage changed during the run. The result was not written to another workspace.');};
+  await storage.queue(async()=>{
+    await sameStorage();await storage.guard();await sameStorage();
+    const latest=await storage.transport.call('read',{collection:'suites',id:runner.suite.id});
+    if(!latest)throw Error('This test was deleted during the run. Its saved list was not changed.');
+    if(latest.revision!==record.revision)throw Error('This test changed during the run. Reopen it and run again; its newer saved version was preserved.');
+    await sameStorage();await storage.commitUpdate(runner.suite.id,updates,record);
+  });
+  Object.assign(runner.suite,updates);runner.resultSaved=true;
+  try{await window.LVXApp?.refreshSuites?.();}catch(error){throw Error('Run result was saved, but the test list could not refresh: '+error.message);}
+}
 async function vwt_runLiveTestFromRunner(runnerId) {
   if (!runnerId) runnerId = vwt_activeRunnerIdInModal;
   const runner = activeTestRunners.get(runnerId);
@@ -23520,8 +23750,11 @@ async function vwt_runLiveTestFromRunner(runnerId) {
     document.getElementById('vwt-runner-logs').value = '';
   }
   runner.log.length = 0;
+  runner.resultSaved=false;runner.persistenceError=null;
 
   runnerLog("--- Starting Live Test Run ---");
+  let storageCapture,storageCaptureError;
+  try{storageCapture=await vwt_captureRunStorage(runner);}catch(error){storageCaptureError=error;}
 
   try {
     if(!Array.isArray(runner.steps)||!runner.steps.length)throw new Error('Visual suite has no executable steps');
@@ -23567,6 +23800,15 @@ async function vwt_runLiveTestFromRunner(runnerId) {
     runnerLog("--- Test Run Aborted ---");
     runner.status = error.code==='ASSERTION_FAILED'?'FAILURE':'ERROR';
   } finally {
+    try{
+      if(storageCaptureError)throw storageCaptureError;
+      await vwt_persistRunResult(runner,storageCapture,runner.log.join('\n'));
+      runnerLog('Run result saved to this test.');
+    }catch(error){
+      runner.persistenceError=error.message;
+      const message=(runner.resultSaved?'Result saved; list refresh failed. ':'Result not saved. ')+error.message;
+      runnerLog(message);window.showMessage?.(message,'error');
+    }
     runner.isExecuting = false;
     vwt_updateMinimizeBarItem(runnerId);
     if (vwt_activeRunnerIdInModal === runnerId) {

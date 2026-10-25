@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const crypto = require('node:crypto');
 const path = require('node:path');
 const { createNativeTransport, SUPPORTS, MAX_BYTES, UUID, errorState } = require('./native.cjs');
+const conversations = require('./conversations.cjs');
 const { createSessionProof } = require('./session-proof.cjs');
 
 const COLLECTIONS = ['agent-boards', 'agent-sessions', 'agent-runs', 'agent-messages', 'agent-events'];
@@ -15,7 +16,7 @@ const digest = value => crypto.createHash('sha256').update(JSON.stringify(value)
 // Editable future task wording is separate from the executable graph. An
 // admitted run owns its immutable taskContext, even while the board is edited.
 const boardRuntime = b => ({ mode: b.mode, maxTurns: b.maxTurns, concurrency: b.concurrency, acceptanceWorkflowId: b.acceptanceWorkflowId, nodes: b.nodes.map(({ position, appearance, ...n }) => n), edges: b.edges, ...(b.projects?.length?{projects:b.projects.map(({id,path})=>({id,path}))}:{}) });
-const projectPath = (board,node,root) => node.projectId ? board.projects?.find(project=>project.id===node.projectId)?.path : root;
+const projectPath = (board,node,root) => (node.activeProjectId || node.projectId) ? board.projects?.find(project=>project.id===(node.activeProjectId || node.projectId))?.path : root;
 const runSnapshotFingerprint = run => digest([run.id, run.boardId, run.kind, run.maxTurns, run.requestFingerprint, run.acceptanceCriteria, run.taskContext || null]);
 function fail(code, message) { const error = Error(message); error.code = code; throw error; }
 function id(value, label) { if (typeof value !== 'string' || !KEY.test(value)) fail('VALIDATION', `${label} needs a simple identifier of at most 64 characters.`); return value; }
@@ -44,7 +45,8 @@ function normalizeAppearance(input) {
   }
   const zoom = input.zoom === undefined ? 1 : input.zoom, hue = input.hue === undefined ? 0 : input.hue;
   if (!Number.isFinite(zoom) || zoom < 1 || zoom > 3 || !Number.isFinite(hue) || hue < 0 || hue > 360) fail('VALIDATION', 'Picture zoom or hue is outside its allowed range.');
-  return { color, icon, avatar, zoom, hue };
+  const bubbleColor=input.bubbleColor??color;if(!/^#[a-f0-9]{6}$/i.test(bubbleColor))fail('VALIDATION','Chat bubble color must be a six-digit hex color.');
+  return { color, ...(input.bubbleColor!==undefined?{bubbleColor}:{}), icon, avatar, zoom, hue };
 }
 
 function legacyMessageInput(message) {
@@ -111,6 +113,7 @@ function normalizeBoard(input) {
     if (!node.position || !Number.isFinite(node.position.x) || !Number.isFinite(node.position.y) || Math.abs(node.position.x) > 1e6 || Math.abs(node.position.y) > 1e6) fail('VALIDATION', 'Agent positions must be finite canvas coordinates.');
     const result = { id: node.id, name: node.name, provider: node.provider, model, effort, permission, instructions: text(node.instructions ?? '', 'Explicit agent additions', 128 * 1024), position: { x: node.position.x, y: node.position.y } };
     if(node.projectId!==undefined&&node.projectId!==''){if(!projects.has(node.projectId))fail('VALIDATION','Assign the agent to a folder that exists on this board.');result.projectId=node.projectId;}
+    const assigned=node.projectIds??(node.projectId?[node.projectId]:[]);if(node.projectId&&Array.isArray(assigned)&&!assigned.includes(node.projectId))assigned.push(node.projectId);if(!Array.isArray(assigned)||assigned.some(p=>p!==''&&!projects.has(p)))fail('VALIDATION','Choose project folders on this board.');if(node.projectIds!==undefined||node.projectId!==undefined||node.activeProjectId!==undefined){result.projectIds=[...new Set(assigned)];result.activeProjectId=node.activeProjectId??node.projectId??'';}if(result.activeProjectId&&!result.projectIds.includes(result.activeProjectId))fail('VALIDATION','Active folder must be assigned to the agent.');
     if (node.appearance !== undefined) result.appearance = normalizeAppearance(node.appearance);
     if (node.provider === 'api') {
       const c = node.apiConfig || {};
@@ -164,6 +167,7 @@ function createService(options = {}) {
   const projectFolders = require('./project-folders.cjs').createProjectFolders(options.dataDir);
   let root = options.workspaceRoot ? fs.realpathSync(options.workspaceRoot) : null;
   let initialized = false, closed = false, transitioning = false, epoch = 0, chain = Promise.resolve(), pumpScheduled = false;
+  const generatedPreviews = new Map();
   const active = new Map(), quarantined = new Set(), acceptanceRuns = new Map(), admissions = new Map();
   const admissionFingerprint = (board, message) => digest([root, boardRuntime(board), message.id, message.boardId, message.agentId, message.from, message.to, message.role, message.text, message.runId, message.generation, message.sourceGeneration, message.parentMessageId, message.edgeId, message.taskContext || null, message.transportInput, message.runSnapshotFingerprint]);
   function admit(board, messages) { for (const m of messages) if (m.state === 'queued') admissions.set(m.id, admissionFingerprint(board, m)); }
@@ -208,7 +212,7 @@ function createService(options = {}) {
     return state;
   }
   async function state(boardId) { return (await read('agent-events', `${boardId}:cursor`))?.value || { sequence: 0, paused: false }; }
-  function newSessionValue(board, node, generation = 1) { return { boardId: board.id, agentId: node.id, provider: node.provider, workspaceRoot: root, workingDirectory:node.provider==='api'?root:projectPath(board,node,root), nativeSessionId: null, generation, status: 'idle', createdAt: now() }; }
+  function newSessionValue(board, node, generation = 1) { return { boardId: board.id, agentId: node.id, provider: node.provider, workspaceRoot: root, workingDirectory:node.provider==='api'?root:projectPath(board,node,root), activeProjectId:node.activeProjectId||node.projectId||'', name:'Conversation '+generation, nativeSessionId: null, generation, status: 'idle', createdAt: now() }; }
   function message(board, node, run, role, body, extra = {}) {
     return { id: crypto.randomUUID(), boardId: board.id, agentId: node.id, from: role === 'user' ? 'user' : node.id, to: node.id, role, text: body, createdAt: now(), state: 'queued', runId: run.id, runSnapshotFingerprint: runSnapshotFingerprint(run), ...(run.taskContext ? { taskContext: copy(run.taskContext) } : {}), ...extra };
   }
@@ -284,7 +288,7 @@ function createService(options = {}) {
           await refreshRun(board.id, m.runId); continue;
         }
         let transportInput;
-        try { transportInput = composeTransportInput(m, node); }
+        try { transportInput = composeTransportInput(m, node);if(node.provider!=='api'&&(node.projectIds||[]).length>1){const folders=node.projectIds.map(id=>projectFolders.assertAllowed(root,id?board.projects.find(p=>p.id===id).path:root));transportInput='[Project folders assigned by the user]\n'+folders.join('\n')+'\nUse these folders as needed for this task.\n\n'+transportInput;} }
         catch (error) {
           admissions.delete(m.id);
           await transaction(board.id, [mutation('agent-messages', m.id, { ...m, state: 'error', error: redact(error.message) }, mr)], [{ kind: 'input-rejected', runId: m.runId, messageId: m.id, error: redact(error.message) }]);
@@ -295,7 +299,7 @@ function createService(options = {}) {
         await transaction(board.id, [mutation('agent-messages', m.id, running, mr), mutation('agent-sessions', sr.id, { ...session, status: 'running', activeAttemptId: running.attemptId, lastError: null }, sr), mutation('agent-runs', rr.id, { ...rr.value, status: 'running', turns: rr.value.turns + 1 }, rr)], [{ kind: 'turn-started', runId: m.runId, messageId: m.id, agentId: node.id, generation: session.generation, provider: node.provider, nativeSessionId: session.nativeSessionId, instructionMode: node.instructions ? 'explicit-user-additions' : 'native-default' }]);
         admissions.delete(m.id);
         const binding = root;
-        const work = { boardId: board.id, agentId: node.id, runId: m.runId, messageId: m.id, generation: session.generation, controller, promise: null };
+        const work = { startedAt: running.startedAt, progress: { status: 'Starting provider…', text: '', updatedAt: running.startedAt }, boardId: board.id, agentId: node.id, runId: m.runId, messageId: m.id, generation: session.generation, controller, promise: null };
         active.set(agentKey, work);
         work.promise = Promise.resolve().then(() => executeTurn(board, node, session, running, controller.signal, binding)).catch(error => ({ status: controller.signal.aborted ? 'cancelled' : errorState(error.message), text: '', error: redact(error.message) })).then(result => serialized(async () => {
           try { if (capturedEpoch === epoch && binding === root) await finishTurn(board, node, session, running, result); }
@@ -310,9 +314,20 @@ function createService(options = {}) {
 
   async function executeTurn(board, node, session, m, signal, binding) {
     const input = m.transportInput;
+    const onProgress = update => {
+      const work=active.get(board.id+':'+node.id);
+      if(binding!==root||signal.aborted||!work||work.messageId!==m.id)return;
+      const progress={status:String(update.status||'Working…').slice(0,200),text:redact(String(update.text||'')).slice(0,MAX_BYTES),updatedAt:now()};
+      work.progress=progress;
+      if(Date.now()-(work.lastProgressEmit||0)<100)return;work.lastProgressEmit=Date.now();
+      // Ephemeral UI output is attempt-bound; it is never a second executable message.
+      try{emit({domain:'agents',type:'activity',workspaceRoot:binding,boardId:board.id,agentId:node.id,messageId:m.id,attemptId:m.attemptId,progress});}catch{}
+    };
+    onProgress({status:node.provider==='api'?'Waiting for the API reply (this connection returns text when complete)…':'Starting the native agent…'});
     const workingDirectory=node.provider==='api'?binding:projectFolders.assertAllowed(binding,projectPath(board,node,binding));
     if(node.provider!=='api'&&(session.workingDirectory||session.workspaceRoot)!==workingDirectory)fail('SESSION_RESET_REQUIRED','This conversation belongs to a different folder. Start a new conversation before working in another folder.');
-    if (node.provider !== 'api') return native.execute({ node, session, text: input, workspaceRoot: workingDirectory, signal, onSession: nativeSessionId => serialized(async () => {
+    const assignedDirectories=node.provider==='api'?[]:(node.projectIds||[]).map(id=>projectFolders.assertAllowed(binding,id?board.projects.find(p=>p.id===id).path:binding));
+    if (node.provider !== 'api') return native.execute({ node:{...node,additionalDirectories:assignedDirectories.filter(p=>p!==workingDirectory)}, session, text: input, workspaceRoot: workingDirectory, signal, onProgress, onSession: nativeSessionId => serialized(async () => {
       if (binding !== root || signal.aborted) return;
       const current = await sessionRecord(board.id, node.id);
       const input = await read('agent-messages', m.id);
@@ -368,8 +383,8 @@ function createService(options = {}) {
     }
     const turnEvidence = { messageId: running.id, agentId: node.id, generation: session.generation, status: result.status, nativeSessionId: nextSession.nativeSessionId, ...(result.invocation ? { invocation: result.invocation } : {}), ...(result.metadata ? { metadata: result.metadata } : {}), protocol: result.protocol || [], stderr: result.stderr || '', ...(safeError ? { error: safeError } : {}) };
     const nextRun = { ...rr.value, turnEvidence: [...(rr.value.turnEvidence || []), turnEvidence] };
-    if (result.status === 'completed' && assistant && rr.value.kind === 'goal' && board.mode === 'linked') {
-      const targets = board.edges.filter(e => e.enabled && e.source === node.id);
+    if (result.status === 'completed' && assistant && (rr.value.kind === 'collaboration' || (rr.value.kind === 'goal' && board.mode === 'linked'))) {
+      const targets = rr.value.recipientId ? (node.id===rr.value.starterId?[{id:'direct-'+rr.value.id,source:node.id,target:rr.value.recipientId}]:[]) : board.edges.filter(e=>e.enabled&&e.source===node.id);
       for (const edge of targets) {
         const target = board.nodes.find(n => n.id === edge.target), ts = await sessionRecord(board.id, target.id);
         if (!ts) continue;
@@ -401,7 +416,7 @@ function createService(options = {}) {
     if (acceptanceRuns.has(board.id)) fail('ACTIVE_ACCEPTANCE', 'Wait for or stop acceptance checks before starting more agent work.');
     if (!UUID.test(payload.requestId || '')) fail('VALIDATION', 'A UUID requestId is required for idempotent delivery.');
     let starters;
-    if (kind === 'manual') { text(payload.text, 'Message'); if (!payload.text.trim()) fail('VALIDATION', 'Enter a message.'); starters = [payload.agentId]; }
+    if (kind === 'manual' || kind === 'collaboration') { text(payload.text, 'Message'); if (!payload.text.trim()) fail('VALIDATION', 'Enter a message.'); starters = [payload.agentId]; }
     else {
       if (!board.goal.trim()) fail('VALIDATION', 'Write a project goal before running agents.');
       starters = payload.agentIds?.length ? payload.agentIds : board.nodes.slice(0, 1).map(n => n.id);
@@ -409,14 +424,14 @@ function createService(options = {}) {
     }
     if (!starters.every(a => board.nodes.some(n => n.id === a))) fail('VALIDATION', 'Choose agents belonging to this board.');
     const taskContext = kind === 'goal' ? { goal: board.goal, acceptanceCriteria: board.acceptanceCriteria } : null;
-    const fingerprint = digest({ boardId: board.id, kind, starters, text: kind === 'manual' ? payload.text : board.goal, ...(taskContext ? { taskContext } : {}) });
+    const fingerprint = digest({ boardId: board.id, kind, starters, recipientId:payload.recipientId||null, text: kind !== 'goal' ? payload.text : board.goal, ...(taskContext ? { taskContext } : {}) });
     const existing = await read('agent-runs', payload.requestId);
     if (existing) {
       if (existing.value.requestFingerprint !== fingerprint) fail('CONFLICT', 'This request ID was already used for different work.');
       const m = (await values('agent-messages', board.id)).find(r => r.value.runId === existing.id && r.value.role === 'user');
       return kind === 'manual' ? { message: m?.value, runId: existing.id } : { runId: existing.id };
     }
-    const run = { id: payload.requestId, boardId: board.id, kind, status: 'queued', acceptance: 'UNREVIEWED', acceptanceCriteria: board.acceptanceCriteria, ...(taskContext ? { taskContext } : {}), createdAt: now(), startSequence: (await state(board.id)).sequence + 1, turns: 0, maxTurns: kind === 'manual' ? 1 : board.maxTurns, requestFingerprint: fingerprint, turnEvidence: [] };
+    const run = { ...(payload.recipientId?{recipientId:payload.recipientId,starterId:payload.agentId}:{}), id: payload.requestId, boardId: board.id, kind, status: 'queued', acceptance: 'UNREVIEWED', acceptanceCriteria: board.acceptanceCriteria, ...(taskContext ? { taskContext } : {}), createdAt: now(), startSequence: (await state(board.id)).sequence + 1, turns: 0, maxTurns: kind === 'manual' ? 1 : Math.max(payload.recipientId?2:1,board.maxTurns), requestFingerprint: fingerprint, turnEvidence: [] };
     const changes = [mutation('agent-runs', run.id, run)], messages = [];
     for (const agentId of starters) {
       const node = board.nodes.find(n => n.id === agentId), sr = await sessionRecord(board.id, agentId);
@@ -426,7 +441,7 @@ function createService(options = {}) {
       if (quarantined.has(`${board.id}:${agentId}`)) fail('SESSION_RESET_REQUIRED', 'A previous turn could not persist its result. Review effects and explicitly create a new conversation before sending.');
       if (node.provider !== 'api' && session.status !== 'idle' && session.status !== 'running' && !session.nativeSessionId) fail('SESSION_RESET_REQUIRED', 'Previous native execution has no proven session identity. Review effects and explicitly create a new conversation; no fresh session was started.');
       if (!sr) changes.push(mutation('agent-sessions', `${board.id}:${agentId}`, session));
-      messages.push(message(board, node, run, 'user', kind === 'manual' ? payload.text : board.goal, { generation: session.generation }));
+      messages.push(message(board, node, run, 'user', kind !== 'goal' ? payload.text : board.goal, { generation: session.generation }));
     }
     await transaction(board.id, changes, [{ kind: 'run-queued', runId: run.id, status: 'queued', agentIds: starters }], messages);
     admit(board, messages);
@@ -466,7 +481,7 @@ function createService(options = {}) {
         if ((pending || acceptanceRuns.has(board.id)) && digest(boardRuntime(prior.value)) !== digest(boardRuntime(board))) fail('ACTIVE_RUN', 'Stop active or queued turns and acceptance checks before changing executable agent settings or links. Goal wording is snapshotted per run.');
         for (const old of prior.value.nodes) {
           const next = board.nodes.find(n => n.id === old.id), sr = await sessionRecord(board.id, old.id);
-          if (sr?.value.nativeSessionId && next && (['provider', 'instructions', 'permission', 'model', 'effort'].some(k => old[k] !== next[k])||projectPath(prior.value,old,root)!==projectPath(board,next,root))) fail('SESSION_RESET_REQUIRED', 'Create a new conversation before changing a native agent folder, provider, model, effort, permissions or instructions.');
+          if (sr?.value.nativeSessionId && next && (['provider', 'instructions', 'permission', 'model', 'effort'].some(k => old[k] !== next[k]))) fail('SESSION_RESET_REQUIRED', 'Create a new conversation before changing a native agent folder, provider, model, effort, permissions or instructions.');
           if (next && sr && !sr.value.nativeSessionId && old.provider !== next.provider && sr.value.status !== 'idle') fail('SESSION_RESET_REQUIRED', 'Create a new conversation before changing this provider.');
         }
       }
@@ -474,7 +489,13 @@ function createService(options = {}) {
       for (const node of board.nodes) {
         const sr = await sessionRecord(board.id, node.id);
         if (!sr) changes.push(mutation('agent-sessions', `${board.id}:${node.id}`, newSessionValue(board, node)));
-        else if (!sr.value.nativeSessionId && sr.value.status === 'idle' && (sr.value.provider !== node.provider||(sr.value.workingDirectory||root)!==(node.provider==='api'?root:projectPath(board,node,root)))) changes.push(mutation('agent-sessions', sr.id, { ...sr.value, provider: node.provider, workingDirectory:node.provider==='api'?root:projectPath(board,node,root) }, sr));
+        else if(node.provider!=='api'&&(sr.value.workingDirectory||root)!==projectPath(board,node,root)){
+          const directory=projectPath(board,node,root),cached=conversations.entries(sr.value).filter(c=>!c.archived&&c.provider===node.provider&&c.workingDirectory===directory).at(-1);
+          const next=cached||newSessionValue(board,node,conversations.nextGeneration(sr.value));
+          if(next.nativeSessionId&&!sessionProof.verify(next))fail('SESSION_MISMATCH','The saved conversation cannot be resumed on this computer. Start a new chat for this folder.');
+          changes.push(mutation('agent-sessions',sr.id,conversations.activate(sr.value,next),sr));
+        }
+        else if (!sr.value.nativeSessionId && sr.value.status === 'idle' && (sr.value.provider !== node.provider||(sr.value.workingDirectory||root)!==(node.provider==='api'?root:projectPath(board,node,root)))) changes.push(mutation('agent-sessions', sr.id, { ...sr.value, provider: node.provider, workingDirectory:projectPath(board,node,root) }, sr));
       }
       await transaction(board.id, changes, [{ kind: 'board-saved' }]);
       return { record: await read('agent-boards', board.id) };
@@ -490,6 +511,26 @@ function createService(options = {}) {
         if (records.length > 10000) fail('LIMIT', 'Board history exceeds one atomic deletion. Export and use workspace retention tools.');
         await call('transact', { records }); return { deleted: true };
       }
+      case 'previewGeneratedTests': {
+        const generated=require('./generated-tests.cjs');
+        const parsed=await generated.validateGeneratedTests(generated.parseGeneratedTests(payload.text,payload.filename));
+        const preview=await require('./test-import.cjs').previewTestImport(parsed,{read});
+        const token=crypto.randomUUID();if(generatedPreviews.size>=25)generatedPreviews.delete(generatedPreviews.keys().next().value);generatedPreviews.set(token,{...preview,boardId:board.id,root,epoch,created:Date.now()});
+        for(const [key,value] of generatedPreviews)if(Date.now()-value.created>15*60*1000)generatedPreviews.delete(key);
+        return {...preview,token};
+      }
+      case 'importGeneratedTests': {
+        const tokens=payload.tokens||[payload.token];
+        if(!Array.isArray(tokens)||!tokens.length||tokens.length>25||new Set(tokens).size!==tokens.length)fail('VALIDATION','Choose up to 25 distinct reviewed exports.');
+        const previews=tokens.map(token=>generatedPreviews.get(token));
+        if(previews.some(p=>!p||p.root!==root||p.epoch!==epoch||p.boardId!==board.id||Date.now()-p.created>15*60*1000))fail('STALE_PREVIEW','Choose the file again to review it in this workspace.');
+        if(payload.reviewed!==true)fail('REVIEW_REQUIRED','Review the test source before importing.');
+        const helper=require('./test-import.cjs');
+        const plan=await helper.planTestImport(previews,{read,mode:payload.mode||'library',bundleName:payload.bundleName,duplicatePolicy:payload.duplicatePolicy,duplicatePolicies:payload.duplicatePolicies});
+        const result=await helper.importTestPlan(plan,{transact:records=>call('transact',{records})});
+        for(const token of tokens)generatedPreviews.delete(token);
+        return result;
+      }
       case 'snapshot': {
         const after = payload.afterSequence ?? 0, limit = payload.limit ?? 200;
         if (!Number.isSafeInteger(after) || after < 0 || !Number.isInteger(limit) || limit < 1 || limit > 500) fail('VALIDATION', 'Snapshot cursor must be nonnegative and page size 1–500.');
@@ -500,26 +541,46 @@ function createService(options = {}) {
         const referenced = new Set(pageEvents.flatMap(e => [...(e.messageIds || []), ...(e.messageId ? [e.messageId] : [])]));
         const pageMessages = new Map(items.filter(x => x.kind === 'message').map(x => [x.value.id, x.value]));
         for (const m of messages) if (referenced.has(m.id)) pageMessages.set(m.id, m);
-        const sessions = (await values('agent-sessions', board.id)).map(({ value: { nativeSessionProof, ...session } }) => session);
-        return { board: br, sessions, runs: (await values('agent-runs', board.id)).map(r => r.value), messages: [...pageMessages.values()].sort((a, b) => a.sequence - b.sequence), events: pageEvents, cursor: items.at(-1)?.value.sequence ?? after, hasMore: page.length > limit, paused: s.paused, latestSequence: s.sequence, acceptanceRunning: acceptanceRuns.has(board.id) };
+        const sessions = (await values('agent-sessions', board.id)).map(({value}) => {const {nativeSessionProof,conversations:stored,...session}=value;return {...session,conversations:conversations.summaries(value)};});
+        return { activity: [...active.values()].filter(w=>w.boardId===board.id).map(w=>({agentId:w.agentId,messageId:w.messageId,startedAt:w.startedAt,...w.progress})), board: br, sessions, runs: (await values('agent-runs', board.id)).map(r => r.value), messages: [...pageMessages.values()].sort((a, b) => a.sequence - b.sequence), events: pageEvents, cursor: items.at(-1)?.value.sequence ?? after, hasMore: page.length > limit, paused: s.paused, latestSequence: s.sequence, acceptanceRunning: acceptanceRuns.has(board.id) };
       }
-      case 'send': return submit(board, payload, 'manual');
+      case 'send': {
+        const pending=(await values('agent-messages',board.id)).some(r=>['running','queued'].includes(r.value.state));
+        if(payload.recipientId){
+          if(payload.recipientId===payload.agentId||!board.nodes.some(n=>n.id===payload.recipientId))fail('VALIDATION','Choose another agent on this board.');
+          if(!pending){const edge=board.edges.find(e=>e.source===payload.agentId&&e.target===payload.recipientId);if(edge)edge.enabled=true;else board.edges.push({id:crypto.randomUUID(),source:payload.agentId,target:payload.recipientId,enabled:true});board.mode='linked';board.maxTurns=Math.max(2,board.maxTurns);await transaction(board.id,[mutation('agent-boards',br.id,board,br)],[{kind:'route-enabled',from:payload.agentId,to:payload.recipientId}]);}
+          payload.collaborate=true;
+        } else if(payload.collaborate&&!board.edges.some(e=>e.enabled&&e.source===payload.agentId))fail('VALIDATION','Choose a recipient in this chat, or connect this agent to another agent.');
+        return submit(board,payload,payload.collaborate?'collaboration':'manual');
+      }
       case 'runGoal': return submit(board, payload, 'goal');
       case 'pause': case 'resume': {
         const paused = action === 'pause';
         await transaction(board.id, [], [{ kind: paused ? 'paused' : 'resumed' }], [], { paused });
         if (!paused) schedule(); return { paused };
       }
-      case 'cancel': if (payload.runId && (await read('agent-runs', payload.runId))?.value?.boardId !== board.id) fail('NOT_FOUND', 'Run does not belong to this board.'); await cancelMatching(board.id, payload.runId); return { cancelled: true };
-      case 'newSession': {
-        const node = board.nodes.find(n => n.id === payload.agentId); if (!node) fail('NOT_FOUND', 'Agent was not found.');
-        const sr = await sessionRecord(board.id, node.id);
-        if (payload.expectedGeneration !== (sr?.value.generation || 1)) fail('CONFLICT', 'Conversation generation changed. Refresh before resetting.');
-        await cancelMatching(board.id, null, node.id);
-        const latest = await sessionRecord(board.id, node.id), next = newSessionValue(board, node, latest.value.generation + 1);
-        await transaction(board.id, [mutation('agent-sessions', latest.id, next, latest)], [{ kind: 'session-reset', agentId: node.id, generation: next.generation, previousNativeSessionId: latest.value.nativeSessionId }]);
-        quarantined.delete(`${board.id}:${node.id}`);
-        return next;
+      case 'cancel': if (payload.runId && (await read('agent-runs', payload.runId))?.value?.boardId !== board.id) fail('NOT_FOUND', 'Run does not belong to this board.'); if(payload.agentId&&!board.nodes.some(n=>n.id===payload.agentId))fail('NOT_FOUND','Agent was not found.');await cancelMatching(board.id, payload.runId,payload.agentId); return { cancelled: true };
+      case 'newSession': case 'selectConversation': case 'archiveConversation': case 'restoreConversation': case 'deleteConversation': case 'renameConversation': {
+        const node=board.nodes.find(n=>n.id===payload.agentId);if(!node)fail('NOT_FOUND','Agent was not found.');
+        if(action==='newSession')await cancelMatching(board.id,null,node.id);
+        const sr=await sessionRecord(board.id,node.id),current=sr.value;
+        if(action!=='newSession'&&([...active.values()].some(a=>a.boardId===board.id&&a.agentId===node.id)||(await values('agent-messages',board.id)).some(r=>r.value.agentId===node.id&&['queued','running'].includes(r.value.state))))fail('ACTIVE_RUN','This agent is working. Stop its run or wait, then change chats.');
+        if(action==='newSession'&&payload.expectedGeneration!==current.generation)fail('CONFLICT','Conversation generation changed. Refresh and try again.');
+        const generation=payload.generation??current.generation;
+        let all=conversations.entries(current),chosen=all.find(c=>c.generation===generation),next=current;
+        if(!chosen)fail('NOT_FOUND','Conversation was not found.');
+        let changes=[];
+        if(action==='newSession') {next=conversations.activate(current,newSessionValue(board,node,conversations.nextGeneration(current)));if(payload.name)next.name=text(payload.name,'Chat name',300);}
+        if(action==='selectConversation') {if(chosen.nativeSessionId&&!sessionProof.verify(chosen))fail('SESSION_MISMATCH','This saved native chat belongs to another installation. Start a new chat.');chosen.archived=false;next=conversations.activate(current,chosen);const project=board.projects?.find(p=>p.path===chosen.workingDirectory);node.activeProjectId=project?.id||'';node.projectId=node.activeProjectId;changes.push(mutation('agent-boards',br.id,board,br));}
+        if(action==='renameConversation') {chosen.name=text(payload.name,'Chat name',300);if(!chosen.name.trim())fail('VALIDATION','Give the chat a name.');next=conversations.activate({...current,conversations:all.filter(c=>c.generation!==current.generation)},current.generation===generation?chosen:current);}
+        if(action==='restoreConversation') {chosen.archived=false;next={...current,conversations:all.filter(c=>c.generation!==current.generation)};if(current.generation===generation)next.archived=false;}
+        if(action==='archiveConversation'||action==='deleteConversation') {
+          chosen.archived=true;
+          if(action==='deleteConversation') {all=all.filter(c=>c.generation!==generation);for(const r of await values('agent-messages',board.id))if(r.value.agentId===node.id&&r.value.generation===generation)changes.push({collection:'agent-messages',id:r.id,expectedRevision:r.revision,delete:true});}
+          if(current.generation===generation){const fresh=newSessionValue(board,node,conversations.nextGeneration(current));next={...fresh,conversations:all};}
+          else next={...current,conversations:all.filter(c=>c.generation!==current.generation)};
+        }
+        changes.push(mutation('agent-sessions',sr.id,next,sr));await transaction(board.id,changes,[{kind:'conversation-changed',agentId:node.id,generation:next.generation,operation:action}]);quarantined.delete(`${board.id}:${node.id}`);return action==='newSession'?next:conversations.summaries(next);
       }
       case 'exportBoard': return exportSafe({ schemaVersion: 1, board, sessions: (await values('agent-sessions', board.id)).map(r => r.value), messages: (await values('agent-messages', board.id)).map(r => r.value).sort((a, b) => a.sequence - b.sequence), events: (await values('agent-events', board.id)).map(r => r.value).filter(e => e.recordType !== 'cursor').sort((a, b) => a.sequence - b.sequence), runs: (await values('agent-runs', board.id)).map(r => r.value) });
       case 'runAcceptance': fail('INTERNAL', 'Acceptance dispatch must run outside the control lock.');
@@ -592,7 +653,7 @@ function createService(options = {}) {
   async function setWorkspace(nextRoot) {
     const candidate = nextRoot ? fs.realpathSync(nextRoot) : null;
     await drain();
-    await serialized(async () => { epoch++; root = candidate; initialized = false; transitioning = false; active.clear(); admissions.clear(); quarantined.clear(); });
+    await serialized(async () => { epoch++; root = candidate; initialized = false; transitioning = false; active.clear(); admissions.clear(); quarantined.clear(); generatedPreviews.clear(); });
     return { workspaceRoot: root };
   }
   async function close() { await drain(); await serialized(async () => { closed = true; root = null; epoch++; active.clear(); admissions.clear(); quarantined.clear(); }); }

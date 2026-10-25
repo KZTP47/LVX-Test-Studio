@@ -16,7 +16,7 @@ To build the app from source, follow the [developer setup](docs/DEVELOPMENT.md#r
 
 ## Make your first test
 
-1. From **Test suites**, choose **New test**.
+1. From **Test suites**, choose **New visual test**.
 2. Give the test a name and choose what you want to test.
 3. Add steps, such as opening a page, clicking a button or checking a value. Enter the result you expect.
 4. Save the test, then choose **Run**.
@@ -62,6 +62,10 @@ AI features need a working account. Choose installed Codex, Claude Code or Gemin
 
 Each open chat has a dotted line to its agent. Use **Maximize**, **Minimize** or the chat tabs to manage several chats. If a provider fails, choose **Repair connection** beside that agent or chat. It checks the installed tool and offers sign-in or setup actions without resending your message.
 
+Use **New chat** to start a separate conversation. The chat picker lets you return to earlier chats, name them, archive them or delete the selected chat. Under the agent’s appearance settings, choose its **Chat bubble color**. **Full screen** on the board fills the view with the board and its settings.
+
+Add project folders to the board, then assign one or more folders to each agent. Choose its active folder for the current conversation. Switching folders keeps a separate conversation for each folder, so returning to a folder can resume its earlier work. In a chat’s **Send to** picker, choose a specific agent to involve it directly.
+
 Review suggested changes before applying them. Run your tests to check the result.
 
 ## Save and share your work
@@ -87,3 +91,15 @@ Scheduled tests run while the desktop app is open.
 See the [developer guide](docs/DEVELOPMENT.md) and [support guide](docs/SUPPORT.md) for setup details. Report problems through the repository's issue tracker with your steps and the error. Remove private information from screenshots and logs.
 
 Licensed under [MIT](LICENSE). Other included software keeps its [own licences](THIRD_PARTY_NOTICES.md).
+
+## Choose how to create a test
+
+**New visual test** lets you build actions and checks as visible steps. **Add code test suite** opens the script editor for a test you write or paste. **Create Visual Web Test** lets you pick elements on a website. All three save tests in the same project.
+
+In the website tester, choose **Website URL** for staging, live or localhost addresses. Choose **Use website** to load it. If it requires a login, choose **Open website / sign in**, sign in yourself, then **Update preview after sign in**.
+
+Agent chats show when they are working and display output the provider makes available. Choose **Collaborate along connected arrows** to pass replies along the board's enabled connections; the chat shows who sent each message. **Import agent tests** lets you review an exported test file or a structured agent reply before saving it. A chat message saying tests were created does not itself import files.
+
+By default, importing agent tests creates **one named graph**. Open that graph and use its green **Start** node to run all its tests. Bundled tests stay inside the graph instead of filling the main test list. Identical saved tests are reused; changed tests offer keep, replace or copy choices. Choose the individual-test option if you want separate entries in the test library.
+
+If you leave an AI board with unsaved changes, a dialog lets you save, discard the drafts or stay. Running work adds a stop action. If an older saved sign-in cannot be opened on this computer, choose **Repair saved connection** to replace or forget just that sign-in. Other work remains available.

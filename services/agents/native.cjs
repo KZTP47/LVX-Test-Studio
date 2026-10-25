@@ -55,6 +55,8 @@ function buildInvocation(provider, { node, session, text }) {
   if (!SUPPORTS[provider]?.permissions.includes(node.permission || 'native')) throw Error(`${provider} cannot guarantee the selected permission policy.`);
   if (node.effort && !SUPPORTS[provider].effort) throw Error(`${provider} does not expose a supported effort override.`);
   let args;
+  const directories=[...new Set(node.additionalDirectories||[])];
+  if(directories.some(p=>typeof p!=='string'||!path.isAbsolute(p)||p.includes('\0')))throw Error('Assigned agent folders must be absolute directories.');
   const input = text;
   if (provider === 'codex') {
     args = ['exec'];
@@ -63,6 +65,7 @@ function buildInvocation(provider, { node, session, text }) {
     if (node.model) args.push('--model', node.model);
     if (node.effort) args.push('-c', `model_reasoning_effort="${node.effort}"`);
     if (node.instructions) args.push('-c', `developer_instructions=${JSON.stringify(node.instructions)}`);
+    if(directories.length)args.push('-c','sandbox_workspace_write.writable_roots='+JSON.stringify(directories));
     if (resume) args.push('resume', resume);
     args.push('--skip-git-repo-check', '--json', '-');
   } else if (provider === 'claude') {
@@ -71,8 +74,10 @@ function buildInvocation(provider, { node, session, text }) {
     if (node.model) args.push('--model', node.model);
     if (node.effort) args.push('--effort', node.effort);
     if (node.instructions) args.push(`--append-system-prompt=${node.instructions}`);
+    for(const directory of directories)args.push('--add-dir',directory);
   } else if (provider === 'gemini') {
     args = ['--output-format', 'stream-json'];
+    for(const directory of directories)args.push('--include-directories',directory);
     if (resume) args.push('--resume', resume);
     if (node.model) args.push('--model', node.model);
     // Runtime owns the exact persisted input, including any explicit Gemini
@@ -136,7 +141,7 @@ function createNativeTransport({ resolve = resolveExecutable, spawnProcess = spa
     });
   }
 
-  async function execute({ node, session, text, workspaceRoot, signal, onSession }) {
+  async function execute({ node, session, text, workspaceRoot, signal, onSession, onProgress }) {
     const executable = executableFor(node.provider);
     if (!executable) return { status: 'error', text: '', error: `Official ${node.provider} CLI is unavailable. Install it and use its native login.`, protocol: [] };
     const invocation = buildInvocation(node.provider, { node, session, text });
@@ -152,6 +157,7 @@ function createNativeTransport({ resolve = resolveExecutable, spawnProcess = spa
       }
       function accept(event) {
         protocol.push(event);
+        const previousOutput=output;
         const id = event.thread_id || event.session_id;
         if (id) {
           if (!UUID.test(id) || (nativeSessionId && nativeSessionId !== id) || (session?.nativeSessionId && session.nativeSessionId !== id)) { identityFailure = true; failure = 'Provider returned a mismatched native session ID. Create a new conversation explicitly.'; }
@@ -192,6 +198,13 @@ function createNativeTransport({ resolve = resolveExecutable, spawnProcess = spa
           if (event.type === 'error' && event.severity !== 'warning') failure = event.message || 'Gemini turn failed.';
           if (event.type === 'tool_result' && event.status === 'error' && /permission|approval|denied/i.test(event.error?.message || '')) failure = event.error.message;
           if (event.type === 'result') { completed = event.status === 'success'; if (!completed) failure = event.error?.message || event.error?.type || 'Gemini turn failed.'; }
+        }
+        if (!identityFailure && onProgress) {
+          // Expose assistant messages and coarse tool activity only. Provider
+          // reasoning/thinking blocks and tool command/output are not chat text.
+          const tool=event.item?.type==='command_execution'||['tool_use','tool_result'].includes(event.type)||event.message?.content?.some(b=>b.type==='tool_use');
+          const status=output!==previousOutput?'Writing reply…':tool?'Using a tool…':event.type==='turn.completed'||event.type==='result'?'Finishing reply…':'Agent is working…';
+          try{onProgress({status,text:output});}catch{}
         }
         if (identityFailure) void stop('protocol');
       }

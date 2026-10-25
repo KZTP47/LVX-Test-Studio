@@ -122,6 +122,7 @@
   const suites=context.suites||window.LVXApp?.getSuites?.()||window.testSuites||[];
   for(const node of snapshot.nodes||[])if(node.data?.suiteId){const suite=node.data.suite||await context.resolveSuite?.(node.data.suiteId)||suites.find(s=>s.id===node.data.suiteId);if(!suite)throw Error(`Suite ${node.data.suiteId} is unavailable. Reload available suites.`);node.data={...node.data,suite:clone(suite)};}
   const protectedWorkflow=await protect(snapshot,'Visual workflow');
+  if(window.LVXReviewImported&&!await window.LVXReviewImported(protectedWorkflow))return {status:'CANCELLED',cancelled:true};
   const {waitForCompletion=false,...executionOptions}=options;
   const run=await invoke('runWorkflow',{workflow:protectedWorkflow,...executionOptions});
   const editor=authoringEditor||context.editor;const session=mountRun(run,protectedWorkflow,editor&&snapshot.nodes.every(node=>editor.nodes.some(candidate=>candidate.id===node.id))?editor:null);context.onRun?.(run,protectedWorkflow);
@@ -158,7 +159,7 @@
   if(node.type==='ai-unit-test')extras+=`<label>Optional inline source code<textarea data-extra="sourceCode">${esc(d.sourceCode||'')}</textarea></label>`;
   if(['unit-test-runner','ai-unit-test','code-review','log-collector','ai-log-summary'].includes(node.type))extras+=`<label><input type="checkbox" data-extra="overwrite" ${d.overwrite?'checked':''}> Replace an existing generated file when approved</label>`;
   if(node.type==='push-deploy')extras+=`<label><input type="checkbox" data-extra="enabled" ${d.enabled===true?'checked':''}> Enable this deployment step</label><p class="mg-hint">Deployment also requires explicit deployment approval in the connected review session.</p>`;
-  const details=document.createElement('details');details.className='mg-execution-details';details.innerHTML=`<summary>Execution and failure handling</summary><div class="grid">${extras}${input('Retry attempts','retryAttempts',typeof storedRetry==='object'?storedRetry.maxAttempts??1:storedRetry??1,'number','min="1" max="10"')}${input('Retry delay (ms)','retryDelay',storedRetry?.backoffMs??0,'number','min="0" max="60000"')}<label>When this node fails<select data-extra="onFailure"><option value="stop" ${storedFailure!=='continue'?'selected':''}>Stop dependent execution</option><option value="continue" ${storedFailure==='continue'?'selected':''}>Continue independent work</option></select></label>${input('Exclusive resource names (comma separated)','resources',Array.isArray(storedResources)?storedResources.join(', '):String(storedResources))}</div>`;
+  const details=document.createElement('details');details.className='mg-execution-details';details.innerHTML=`<summary>Execution and failure handling</summary><div class="grid">${extras}${input('Total attempts (including first run)','retryAttempts',typeof storedRetry==='object'?storedRetry.maxAttempts??1:storedRetry??1,'number','min="1" max="21"')}${input('Retry delay (ms)','retryDelay',storedRetry?.backoffMs??0,'number','min="0" max="60000"')}<label>When this node fails<select data-extra="onFailure"><option value="stop" ${storedFailure!=='continue'?'selected':''}>Stop dependent execution</option><option value="continue" ${storedFailure==='continue'?'selected':''}>Continue independent work</option></select></label>${input('Exclusive resource names (comma separated)','resources',Array.isArray(storedResources)?storedResources.join(', '):String(storedResources))}</div>`;
   const footer=inner.querySelector(':scope > .flex.justify-end');
   const formBody=inner.querySelector(':scope > .overflow-y-auto');
   if(formBody)formBody.appendChild(details);else inner.insertBefore(details,footer||error);
@@ -175,7 +176,7 @@
    const before=clone(node);
    try{
     const extras=Object.fromEntries(Array.from(details.querySelectorAll('[data-extra]')).map(field=>[field.dataset.extra,field.type==='checkbox'?field.checked:field.type==='number'?Number(field.value):field.value]));
-    if(extras.retryAttempts<1)throw Error('Retry attempts must be at least one.');
+    if(!Number.isInteger(extras.retryAttempts)||extras.retryAttempts<1||extras.retryAttempts>21)throw Error('Total attempts must be a whole number from 1 to 21 (the first run plus up to 20 retries).');
     const priorRetry=node.retry??node.data.retry;const retry=priorRetry&&typeof priorRetry==='object'?{...priorRetry}:{};if(node.retry!==undefined||extras.retryAttempts!==1||extras.retryDelay!==0)node.retry={...retry,maxAttempts:extras.retryAttempts,backoffMs:extras.retryDelay};node.onFailure=extras.onFailure;node.resources=extras.resources.split(',').map(s=>s.trim()).filter(Boolean);
     for(const key of ['cwd','engine','overwrite','enabled','sourceCode'])if(Object.hasOwn(extras,key))node.data[key]=extras[key];
     await original?.call(save,event);

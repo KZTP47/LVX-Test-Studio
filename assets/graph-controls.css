@@ -1,0 +1,23 @@
+/* Preserve the original Aero controls and make the chosen graph tool explicit. */
+#ve-viewport-controls [data-ve-tool][aria-pressed="true"] {
+  background: linear-gradient(180deg, #dff5ff 0%, #67c9ff 48%, #2a9fe9 100%) !important;
+  color: #073551 !important;
+  border: 2px solid #0067a5 !important;
+  box-shadow: inset 0 1px 0 #fff, 0 0 0 1px #fff !important;
+  font-weight: 700;
+}
+#ve-viewport-controls [data-ve-tool][aria-pressed="true"]::after {
+  content: "\2713";
+  margin-left: auto;
+  font-weight: 800;
+}
+#ve-viewport-controls [data-ve-tool]:focus-visible {
+  outline: 3px solid #004f8d;
+  outline-offset: 3px;
+}
+:is(.theme-dark, [data-theme="dark"]) #ve-viewport-controls [data-ve-tool][aria-pressed="true"] {
+  background: linear-gradient(180deg, #125678, #08374f) !important;
+  color: #effbff !important;
+  border-color: #74d8ff !important;
+  box-shadow: inset 0 1px 0 #508eab, 0 0 0 1px #173248 !important;
+}

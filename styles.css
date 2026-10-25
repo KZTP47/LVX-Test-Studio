@@ -1302,3 +1302,28 @@ input::placeholder, textarea::placeholder { color:#415668; opacity:1; }
 .runtime-setup-dialog [data-rs="chat"] section { margin-top:12px; }
 .agent-board .ab-setup-tools { align-self:end; margin:0; font-size:11px; }
 @media(max-width:600px) { .runtime-setup-dialog .rs-body { padding:12px; } .runtime-setup-dialog >header { padding:12px; } .runtime-setup-dialog h2 { font-size:20px; } }
+/* A point-of-use review fits the current app appearance and keeps its actions visible. */
+.lvx-import-review { width:min(850px,94vw); max-height:90vh; padding:24px; color:var(--aero-text-primary,#123c5a); background:var(--aero-card-bg,#f7fbff); border:1px solid #87aac7; border-radius:10px; }
+.lvx-import-review::backdrop { background:rgba(0,20,35,.55); }
+.lvx-import-review h2 { font-size:1.4rem; margin:0 0 12px; }
+.lvx-import-review p { margin:12px 0; }
+.lvx-import-review pre { max-height:52vh; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; padding:14px; background:#fff; color:#153d59; border:1px solid #9bbbd3; }
+.theme-dark .lvx-import-review { background:#183346; color:#e2f2ff; }
+.lvx-recovery-dialog { width:min(720px,94vw); max-height:90vh; overflow:auto; padding:24px; border:1px solid #93c8de; border-radius:10px; background:#edf8ff; color:#123b58; }
+.lvx-recovery-dialog::backdrop { background:rgba(0,17,29,.65); }
+.lvx-recovery-dialog h2 { font-size:22px; font-weight:700; margin:0 0 14px; }
+.lvx-recovery-dialog h3 { font-size:17px; font-weight:700; margin:18px 0 10px; overflow-wrap:anywhere; }
+.lvx-recovery-dialog p { margin:12px 0; line-height:1.5; }
+.lvx-recovery-dialog section { padding:14px 0; border-bottom:1px solid #93b3c5; }
+.lvx-recovery-dialog label { display:grid; gap:8px; }
+.lvx-recovery-dialog input { width:100%; padding:10px; background:#fff; color:#123b58; border:1px solid #7096af; border-radius:5px; }
+.lvx-recovery-dialog .studio-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:16px; }
+.lvx-recovery-dialog button { min-height:38px; padding:8px 13px; border-radius:5px; }
+.lvx-recovery-dialog [role=alert] { color:#a22323; overflow-wrap:anywhere; }
+.lvx-recovery-dialog pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+.theme-dark .lvx-recovery-dialog { background:#0b2e3a; color:#def6ff; }
+.theme-dark .lvx-recovery-dialog input { background:#173e4b; color:#f0fbff; }
+.theme-dark .lvx-recovery-dialog [role=alert] { color:#ffb2b2; }
+.lvx-connection-notice { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:10px; border:1px solid #88b9ce; border-radius:6px; margin:8px 0; }
+.lvx-message-error { max-width:min(560px,calc(100vw - 32px)); white-space:normal; overflow-wrap:anywhere; z-index:180000; }
+.lvx-message-dismiss { display:block; margin-top:10px; padding:5px 10px; border:1px solid currentColor; border-radius:4px; }

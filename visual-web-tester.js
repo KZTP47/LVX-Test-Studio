@@ -296,6 +296,8 @@ function openVisualWebTester() {
   document.getElementById('vwt-logs').value = '';
   for(const id of ['vwt-html-file','vwt-css-files','vwt-js-files','vwt-project-files','vwt-update-file']){const el=document.getElementById(id);if(el)el.value='';}
   vwt_setSourceMode('files');
+  const address=document.getElementById('vwt-website-url');if(address)address.value='';
+  vwt_targetNotice('Choose Files or folder, Website URL, or Git repository to begin.');vwt_updateWebsiteActions();
   vwt_initializeToolbox();
   vwt_renderCanvas();
   vwt_renderPropertiesPanel();
@@ -311,7 +313,7 @@ function openVisualWebTesterForEdit(suite) {
   vwt_files.html = suite.website_html_content || null;
   vwt_files.css = suite.website_css_contents || [];
   vwt_files.js = suite.website_js_contents || [];
-  vwt_target=suite.website_target?JSON.parse(JSON.stringify(suite.website_target)):null;
+  vwt_target=suite.website_target?JSON.parse(JSON.stringify(suite.website_target)):suite.website_url?{version:1,kind:'url',url:suite.website_url}:null;
   vwt_targetEdited=false;
   vwt_setSourceMode(vwt_target?.source?.type==='repository'?'repository':vwt_target?.kind==='url'&&!vwt_target?.source?'url':'files');
   if(document.getElementById('vwt-repository-url'))document.getElementById('vwt-repository-url').value=vwt_target?.source?.repository||'';
@@ -402,6 +404,8 @@ function vwt_readFileAsText(file) {
 function vwt_setSourceMode(mode){
   vwt_sourceMode=['files','repository','url'].includes(mode)?mode:'files';
   const select=document.getElementById('vwt-source-kind');if(select)select.value=vwt_sourceMode;
+  const modal=document.getElementById('visual-web-tester-modal');if(modal)modal.dataset.vwtSourceMode=vwt_sourceMode;
+  for(const button of document.querySelectorAll?.('[data-vwt-source]')||[])button.setAttribute('aria-pressed',String(button.dataset.vwtSource===vwt_sourceMode));
   for(const name of ['files','repository','url']){const panel=document.getElementById('vwt-source-'+name);if(panel)panel.hidden=name!==vwt_sourceMode;}
 }
 function vwt_targetNotice(message,error=false){
@@ -451,6 +455,7 @@ async function vwt_checkRunningTarget(){
 }
 function vwt_suiteSource(suite){
   if(suite.website_target)return JSON.parse(JSON.stringify(suite.website_target));
+  if(suite.website_url)return {version:1,kind:'url',url:suite.website_url};
   return vwt_buildWebsiteHTML({html:suite.website_html_content,css:suite.website_css_contents||[],js:suite.website_js_contents||[]});
 }
 function vwt_currentSource(){return vwt_target||vwt_buildWebsiteHTML(vwt_files);}
@@ -474,6 +479,7 @@ function vwt_renderTargetControls(){
   const refresh=document.getElementById('vwt-refresh-source');if(refresh)refresh.disabled=!target?.source?.id||vwt_targetBusy;
   const stop=document.getElementById('vwt-stop-project');if(stop){stop.disabled=!target?.source?.id||vwt_stoppingProject;stop.textContent=vwt_targetBusy&&!vwt_stoppingProject?'Cancel startup / stop website':'Stop project website';}
   const warnings=document.getElementById('vwt-source-warnings');if(warnings)warnings.textContent=(target?.warnings||[]).join('\n');
+  vwt_updateWebsiteActions();
 }
 async function vwt_readAsset(file,path){
   if(/\.(?:html?|css|[cm]?js|json|map|svg|txt|xml|webmanifest|md|csv|ts|tsx|jsx|vue|svelte)$/i.test(path)||String(file.type||'').startsWith('text/'))return {path,content:await vwt_readFileAsText(file),encoding:'utf8'};
@@ -518,7 +524,29 @@ async function vwt_targetOperation(operation,{interrupt=false,sourceId=vwt_targe
 function vwt_confirmSourceReplacement(){return !vwt_targetEdited||confirm('Replace the current website source? File edits made only in this test will be replaced. Your test steps stay unchanged.');}
 async function vwt_chooseProjectFolder(){if(!vwt_allowSourceChange()||!vwt_confirmSourceReplacement())return;return vwt_targetOperation(async()=>{if(!window.electronAPI?.studioOps?.choosePath)throw Error('Choose folder requires the LVX desktop application.');return window.electronAPI.studioOps.choosePath({kind:'web-project'});});}
 async function vwt_loadRepository(){if(!vwt_allowSourceChange())return;const url=document.getElementById('vwt-repository-url')?.value.trim(),ref=document.getElementById('vwt-repository-ref')?.value.trim();if(!url){vwt_targetNotice('Enter a repository URL first.',true);return;}if(!vwt_confirmSourceReplacement())return;return vwt_targetOperation(()=>vwt_previewInvoke('target:repository',{url,ref}));}
-async function vwt_loadWebsite(){if(!vwt_allowSourceChange())return;try{const url=new URL(document.getElementById('vwt-website-url')?.value.trim());if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error();if(!vwt_confirmSourceReplacement())return;vwt_target={version:1,kind:'url',url:url.href,label:url.hostname};vwt_targetEdited=false;vwt_updateFilesPreview();vwt_targetNotice('Website selected. Reload Preview to load it.');}catch{vwt_targetNotice('Enter a full http:// or https:// website address without a password.',true);}}
+async function vwt_loadWebsite(){
+  if(!vwt_allowSourceChange())return;
+  let url;try{url=new URL(document.getElementById('vwt-website-url')?.value.trim());if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error();}
+  catch{vwt_targetNotice('Enter a full http:// or https:// website address without a password. For a local app, include its port, for example http://localhost:3000.',true);return;}
+  if(!vwt_confirmSourceReplacement())return;
+  vwt_clearCreatorPreview();vwt_target={version:1,kind:'url',url:url.href,label:url.hostname};vwt_targetEdited=false;vwt_updateFilesPreview();
+  const generation=vwt_targetGeneration;
+  try{await vwt_renderIframe();}catch(error){if(generation===vwt_targetGeneration)vwt_targetNotice('Could not load the website. '+error.message+' Check the address, internet/VPN connection, or start the local server, then choose Use website again.',true);}
+}
+function vwt_updateWebsiteActions(){
+  const ready=!!vwt_remoteSessions.get(document.getElementById('vwt-iframe'))&&!vwt_targetBusy;
+  for(const id of ['vwt-website-signin','vwt-website-refresh']){const button=document.getElementById(id);if(button)button.disabled=!ready;}
+}
+async function vwt_showWebsite(){
+  try{const id=vwt_remoteSessions.get(document.getElementById('vwt-iframe'));if(!id)throw Error('Choose Use website first.');await vwt_previewInvoke('show',{id});vwt_targetNotice('Website opened. After signing in or navigating there, choose Update preview after sign in.');}
+  catch(error){vwt_targetNotice(error.message,true);}
+}
+async function vwt_refreshWebsiteSnapshot(){
+  const iframe=document.getElementById('vwt-iframe'),id=vwt_remoteSessions.get(iframe),generation=vwt_targetGeneration;
+  if(!id){vwt_targetNotice('Choose Use website first.',true);return;}
+  try{const result=await vwt_previewInvoke('snapshot',{id});if(generation!==vwt_targetGeneration||vwt_remoteSessions.get(iframe)!==id)return;vwt_setStaticPreview(iframe,result.html,true);vwt_targetNotice('Preview updated: '+(result.url||vwt_target?.url||'website')+'. Add test steps, then Run Live Test.');}
+  catch(error){if(generation===vwt_targetGeneration)vwt_targetNotice('Could not update the preview. '+error.message+' Choose Use website to open it again.',true);}
+}
 async function vwt_refreshSource(){if(!vwt_target?.source?.id)return;if(vwt_targetEdited&&!confirm('Read the original folder or repository again? This replaces file edits made only in this test. Your test steps stay unchanged.'))return;return vwt_targetOperation(()=>vwt_previewInvoke('target:refresh',{sourceId:vwt_target.source.id}));}
 async function vwt_startProject(){
   if(vwt_targetBusy)return;
@@ -572,11 +600,14 @@ async function vwt_renderIframe() {
     const ready=await vwt_checkRunningTarget();if(generation!==vwt_targetGeneration||target!==vwt_target)return;
     if(!ready)throw Error(vwt_target.project?.requiresServer?'Start the project server below before loading its preview.':'Add an HTML start page and select it before reloading.');
     const iframe=document.getElementById('vwt-iframe');
-    await vwt_openRemote(iframe,vwt_target);if(generation===vwt_targetGeneration)vwt_targetNotice('Preview loaded. Add test steps, then Run Live Test.');return;
+    const ticket=++vwt_operationTicket;vwt_targetBusy=true;vwt_updateWebsiteActions();vwt_targetNotice('Loading website in its isolated browser…');
+    try{const result=await vwt_openRemote(iframe,target);if(generation===vwt_targetGeneration&&ticket===vwt_operationTicket)vwt_targetNotice((target.kind==='url'&&!target.source?'Website loaded: '+(result.url||target.url)+'. ':'Preview loaded. ')+'Add test steps, then Run Live Test.');return result;}
+    finally{if(generation===vwt_targetGeneration&&ticket===vwt_operationTicket){vwt_targetBusy=false;vwt_updateWebsiteActions();}}
   }
   const htmlContent = vwt_buildWebsiteHTML(vwt_files);
   if (!htmlContent) {
-    vwt_log("Error: No HTML content to render.");
+    vwt_targetNotice('No website selected yet. Choose Files or folder, Website URL, or Git repository above.',true);
+    vwt_log("No website selected. Choose a website source first.");
     return;
   }
   const iframe = document.getElementById('vwt-iframe');
@@ -1110,7 +1141,7 @@ let vwt_activeRunnerIdInModal = null;
  * Main entry point to start a new test run or maximize an existing one.
  */
 function vwt_openLiveRunner(suite) {
-  if (!suite || suite.language !== 'website' || suite.website_method !== 'upload') {
+  if (!suite || suite.language !== 'website' || (suite.website_method !== 'upload' && !suite.vwt_steps_json)) {
     console.error("Invalid suite for Live Runner.");
     return;
   }
@@ -1248,6 +1279,35 @@ function vwt_closeLiveRunner(fromModalOrRunnerId) {
 /**
  * The core test execution logic for a given runner.
  */
+function vwt_runDefinition(value){
+  const transient=new Set(['last_run_status','last_run_time','last_run_log','dateCreated','dateModified']);
+  const stable=item=>Array.isArray(item)?item.map(stable):item&&typeof item==='object'?Object.fromEntries(Object.keys(item).sort().map(key=>[key,stable(item[key])])):item;
+  return JSON.stringify(stable(Object.fromEntries(Object.entries(value||{}).filter(([key])=>!transient.has(key)))));
+}
+async function vwt_captureRunStorage(runner){
+  const storage=await window.LVXApp?.getStorage()||window.currentStorage;
+  if(!storage?.transport?.call||typeof storage.commitUpdate!=='function'||typeof storage.queue!=='function')throw Error('Revision-protected storage is unavailable. Reconnect the workspace to save run results.');
+  await storage.guard();
+  const workspaceRoot=storage.workspaceRoot,record=await storage.transport.call('read',{collection:'suites',id:runner.suite.id});
+  if(!record)throw Error('This test was deleted. Its run result will stay in this window only.');
+  const current=typeof storage.suite==='function'?storage.suite(record):record.value;
+  if(vwt_runDefinition(current)!==vwt_runDefinition(runner.suite))throw Error('This test changed since the runner was opened. Reopen it before saving a new run result.');
+  return {storage,workspaceRoot,record:JSON.parse(JSON.stringify(record))};
+}
+async function vwt_persistRunResult(runner,capture,log){
+  const {storage,workspaceRoot,record}=capture;
+  const updates={last_run_status:runner.status,last_run_time:new Date().toISOString(),last_run_log:log};
+  const sameStorage=async()=>{if((await window.LVXApp?.getStorage()||window.currentStorage)!==storage||storage.workspaceRoot!==workspaceRoot)throw Error('Workspace storage changed during the run. The result was not written to another workspace.');};
+  await storage.queue(async()=>{
+    await sameStorage();await storage.guard();await sameStorage();
+    const latest=await storage.transport.call('read',{collection:'suites',id:runner.suite.id});
+    if(!latest)throw Error('This test was deleted during the run. Its saved list was not changed.');
+    if(latest.revision!==record.revision)throw Error('This test changed during the run. Reopen it and run again; its newer saved version was preserved.');
+    await sameStorage();await storage.commitUpdate(runner.suite.id,updates,record);
+  });
+  Object.assign(runner.suite,updates);runner.resultSaved=true;
+  try{await window.LVXApp?.refreshSuites?.();}catch(error){throw Error('Run result was saved, but the test list could not refresh: '+error.message);}
+}
 async function vwt_runLiveTestFromRunner(runnerId) {
   if (!runnerId) runnerId = vwt_activeRunnerIdInModal;
   const runner = activeTestRunners.get(runnerId);
@@ -1274,8 +1334,11 @@ async function vwt_runLiveTestFromRunner(runnerId) {
     document.getElementById('vwt-runner-logs').value = '';
   }
   runner.log.length = 0;
+  runner.resultSaved=false;runner.persistenceError=null;
 
   runnerLog("--- Starting Live Test Run ---");
+  let storageCapture,storageCaptureError;
+  try{storageCapture=await vwt_captureRunStorage(runner);}catch(error){storageCaptureError=error;}
 
   try {
     if(!Array.isArray(runner.steps)||!runner.steps.length)throw new Error('Visual suite has no executable steps');
@@ -1321,6 +1384,15 @@ async function vwt_runLiveTestFromRunner(runnerId) {
     runnerLog("--- Test Run Aborted ---");
     runner.status = error.code==='ASSERTION_FAILED'?'FAILURE':'ERROR';
   } finally {
+    try{
+      if(storageCaptureError)throw storageCaptureError;
+      await vwt_persistRunResult(runner,storageCapture,runner.log.join('\n'));
+      runnerLog('Run result saved to this test.');
+    }catch(error){
+      runner.persistenceError=error.message;
+      const message=(runner.resultSaved?'Result saved; list refresh failed. ':'Result not saved. ')+error.message;
+      runnerLog(message);window.showMessage?.(message,'error');
+    }
     runner.isExecuting = false;
     vwt_updateMinimizeBarItem(runnerId);
     if (vwt_activeRunnerIdInModal === runnerId) {

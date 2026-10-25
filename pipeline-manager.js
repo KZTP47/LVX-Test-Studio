@@ -6,6 +6,20 @@
  */
 
 let pipelines = [];
+let workspacePipelines = [], workspacePipelineRefresh = 0;
+async function refreshWorkspacePipelines() {
+    const api=window.electronAPI?.studioOps,generation=++workspacePipelineRefresh;
+    if(!api)return;
+    try{
+        const status=await api.invoke('host','status');
+        const result=status.workspaceRoot?await api.invoke('workspace','list',{collection:'workflows',workspaceRoot:status.workspaceRoot}):{records:[]};
+        if(generation!==workspacePipelineRefresh)return;
+        workspacePipelines=(result.records||[]).filter(record=>record.value?.hiddenFromLibrary!==true&&Array.isArray(record.value?.nodes)&&Array.isArray(record.value?.edges));
+        renderPipelinesList();
+    }catch(error){if(generation===workspacePipelineRefresh){window.LVXPipelineLibraryError=error.message;workspacePipelines=[];renderPipelinesList();}}
+}
+window.refreshWorkspacePipelines=refreshWorkspacePipelines;
+window.electronAPI?.studioOps?.onEvent?.(event=>{if((event.domain==='workspace'&&event.type==='changed')||(event.domain==='host'&&event.type==='workspace'))void refreshWorkspacePipelines();});
 let currentEditingPipeline = null;
 let pipelineStages = []; // Renamed from 'steps' to 'stages' for internal clarity
 let selectedStageIndex = null;
@@ -13,6 +27,7 @@ let selectedStageIndex = null;
 function initializePipelineManager() {
     loadPipelines();
     renderPipelinesList();
+    void refreshWorkspacePipelines();
     console.log("Pipeline Manager Initialized");
 }
 
@@ -42,10 +57,18 @@ function renderPipelinesList() {
 
     container.innerHTML = '';
 
+    for(const record of workspacePipelines){
+        const row=document.createElement('div');row.className='aero-button p-2 rounded text-sm mb-2 lvx-saved-workflow';row.dataset.workflowId=record.id;
+        const label=document.createElement('strong');label.textContent=record.value.name||'Saved graph workflow';
+        const actions=document.createElement('div');actions.className='flex gap-2 mt-2';
+        for(const [run,text]of [[false,'Open graph'],[true,'Run graph']]){const button=document.createElement('button');button.type='button';button.className='aero-button-'+(run?'success':'purple')+' px-2 py-1 text-xs';button.textContent=text;button.onclick=()=>window.LVXStudio.openGraph(record.id,{run}).catch(error=>window.showMessage?.(error.message,'error'));actions.append(button);}
+        row.append(label,actions);container.append(row);
+    }
+
     if (pipelines.length === 0) {
-        container.innerHTML = `
+        container.insertAdjacentHTML('beforeend', `
             <div class="text-center p-4">
-                <p class="text-xs aero-text-muted mb-2">No pipelines yet.</p>
+                <p class="text-xs aero-text-muted mb-2">${workspacePipelines.length?'Create another pipeline:':'No pipelines yet.'}</p>
                 <div class="flex gap-2 justify-center">
                     <button onclick="openPipelineEditor()" class="aero-button-success text-xs py-1 px-2 rounded">
                         + New Linear Pipeline
@@ -54,7 +77,7 @@ function renderPipelinesList() {
                         + New Graph Pipeline
                     </button>
                 </div>
-            </div>`;
+            </div>`);
         return;
     }
 

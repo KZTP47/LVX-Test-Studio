@@ -190,7 +190,7 @@
       "rule": "literal-credential",
       "line": 1983,
       "matchSha256": "e6baa35b09f581acf02d3f15a693766ed5d44d5cfb0c675d97c42359b2154bea",
-      "fileSha256": "e9dc5b25572c3c66f0027af222241527b7c6eaea8f1dc4eabd909511b91ab746",
+      "fileSha256": "c9cf1369f69670e75f2b297904892ac81360fef0431ff4e6520dd766fa872f54",
       "reason": "Reviewed UI field/schema/error-map text, not a stored user credential or literal authentication value."
     },
     {
@@ -382,7 +382,7 @@
       "rule": "literal-credential",
       "line": 449,
       "matchSha256": "a95b6eb0a91a013ff230bdda524f412043041e31ec1513fa36dffd6ec9f990c5",
-      "fileSha256": "03d5d5e009dc2bf7974829bb69dde02f7b9ac640bb173fd9f0e6818828dc99a3",
+      "fileSha256": "0e7ba7b966433fe26bd141f1378b66e978e84aff19e97045c35afeeb722e4c14",
       "reason": "Reviewed UI field/schema/error-map text, not a stored user credential or literal authentication value."
     },
     {
@@ -422,7 +422,7 @@
       "rule": "literal-credential",
       "line": 2846,
       "matchSha256": "b495c35ed693ae776653d4cb22d394d6d20fd140cdf81f3e5b6028ae979f7204",
-      "fileSha256": "695a27ce549f937e2ec90dd1b3ca47da317e3a264b78289ed7ee0a9fa49fa6ee",
+      "fileSha256": "70a93a6b378cd03c4477032672915f6537898cc7306ab82f7fc149f28de43d3a",
       "reason": "Reviewed UI field/schema/error-map text, not a stored user credential or literal authentication value."
     },
     {
@@ -878,7 +878,7 @@
       "rule": "literal-credential",
       "line": 65,
       "matchSha256": "1acf51ff1172ff47cfe936669401b22d6b577003ad00c2c71f8cd7cef6cc7f97",
-      "fileSha256": "91dcfd9374a496e92240fa83375c04bb5ef9714c8713dcc9907a2219cf2032c0",
+      "fileSha256": "ba7a9afa93ac869b74f7533d5510cfca7eeca3e0dc846f1531f7210328efaa8a",
       "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
     },
     {
@@ -1056,6 +1056,30 @@
       "matchSha256": "093866188144b0216fb125431572e8ac2df8980dfeeb6ebeb3d9f3987d1e4c1d",
       "fileSha256": "790cbe3473d097d27916728ae63e8acaa22471c55e8725e4c6f28fb4562c3d67",
       "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/nine-agent-fixes.test.cjs",
+      "rule": "literal-credential",
+      "line": 45,
+      "matchSha256": "0966a94c162647e376bbaadc3371bd4188e25aa708592eecdbf40d335a990132",
+      "fileSha256": "a749ccd5a532c202b5f20be1bd1d4c81d5622bc40f6cad26a5f965e85878e9ab",
+      "reason": "Explicit nonfunctional PRIVATE CONTROL value is a negative import-parser test proving credential-shaped data is rejected; no provider/account credential."
+    },
+    {
+      "file": "tests/nine-web-fixes.test.cjs",
+      "rule": "credential-in-url",
+      "line": 31,
+      "matchSha256": "efc73ada644e4e69185b1a2307f978a55401fcb13d55ac16f094875b3887bacb",
+      "fileSha256": "c7f72f0ec747334039a7becdf8c7a28a6a09fcad29a0f5add934819b605d0740",
+      "reason": "example.invalid URL with synthetic private/password words tests rejection of credentials in a website URL before network access; no real service or login."
+    },
+    {
+      "file": "tests/nexus-recovery.test.cjs",
+      "rule": "literal-credential",
+      "line": 20,
+      "matchSha256": "faed357b902195369e199451d1dbc55ebee8c888adf0c3bef151ab91ab289a14",
+      "fileSha256": "c00aeff5eda2da9339bd8464bb664837d65cab531469d260c9667f3d8bb3ff99",
+      "reason": "Explicit EXISTING-LOCAL-FIXTURE synthetic value verifies OS storage failure preserves an existing local setting; no real credential or account."
     }
   ],
   "gitleaksExamples": [

@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.11.0
+
+- Repaired old graph runners and made Select/Pan selection visible.
+- Added named, archived and deletable AI conversations, colored bubbles, multiple project folders and direct recipients.
+- Made board full screen focus on the canvas and settings.
+- Added reusable agent-test imports as one graph with one Start node.
+- Added persistent save/discard/stop dialogs and per-connection repair for older sign-ins.
+
+
+## 0.10.0 — Visible AI work and runnable imported tests
+
+- Show elapsed AI activity and provider-visible native output; make directed collaboration explicit and readable in chat.
+- Maximize a chat across the application view while preserving other chats and drafts.
+- Review and import generated tests from agent replies or exported JSON files.
+- List saved workspace graphs in the original pipeline sidebar, with Open and Run actions.
+- Run JavaScript and generated async Playwright suites through native engines; review imported executable content before running.
+- Save Visual Runner results back to test cards so an earlier error does not hide a later passing run.
+- Expose staging/live website URLs, sign-in and refresh in the visual website tester.
+- Explain visual tests versus code suites, and guide optional task and graph review setup.
+- Add three self-contained, runnable graph examples.
+
 ## 0.9.2 — Mascot preview
 
 - Hover over the mascot beside the title to see the full illustration in a larger floating window. Keyboard focus or a click opens it too; Escape closes it.

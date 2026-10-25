@@ -21,7 +21,7 @@ const workspaceKey = (value) =>
     .replace(/\/+$/, "")
     .toLowerCase();
 
-const appearanceOf = node => ({ color: '#49cde5', icon: 'robot', avatar: '', zoom: 1, hue: 0, ...node?.appearance });
+const appearanceOf = node => ({ bubbleColor:node?.appearance?.color||'#49cde5', color: '#49cde5', icon: 'robot', avatar: '', zoom: 1, hue: 0, ...node?.appearance });
 const safeAvatar = value => typeof value === 'string' && value.length <= 350000 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : '';
 const WORKSPACE_FOLDER = '__workspace__';
 export function projectCards(board, workspaceRoot) {
@@ -72,7 +72,7 @@ export function validateDraft(board) {
   for (const node of board.nodes) {
     if (ids.has(node.id)) errors.push("Agent IDs must be unique.");
     ids.add(node.id);
-    if(node.projectId&&!projects.has(node.projectId))errors.push('Every agent folder assignment must refer to a folder on this board.');
+    if((node.projectIds||[node.projectId]).filter(Boolean).some(id=>!projects.has(id)))errors.push('Every agent folder assignment must refer to a folder on this board.');
     if (!String(node.name || "").trim())
       errors.push("Every agent needs a name.");
     if (!Object.hasOwn(PROVIDERS, node.provider))
@@ -284,6 +284,7 @@ export function createBoardController({
     baseRevision: null,
     dirty: false,
     selectedAgentId: "",
+    activity: [],
     sessions: [],
     runs: [],
     messages: [],
@@ -364,6 +365,7 @@ export function createBoardController({
       } else if (state.baseRevision !== snapshot.board.revision)
         state.conflict = true;
     }
+    state.activity = snapshot.activity || [];
     state.sessions = snapshot.sessions || [];
     state.runs = (snapshot.runs || []).sort((a, b) =>
       String(a.createdAt || "").localeCompare(String(b.createdAt || "")),
@@ -548,17 +550,18 @@ export function createBoardController({
   }
   let sendAttempt = null,
     goalAttempt = null;
-  async function send(agentId, text) {
+  async function send(agentId, text, collaborate = false, recipientId = null) {
     if (!text.trim()) throw Error("Write a message first.");
     const boardId = await ensureSaved();
     if (
       !sendAttempt ||
       sendAttempt.boardId !== boardId ||
       sendAttempt.agentId !== agentId ||
-      sendAttempt.text !== text
+      sendAttempt.text !== text || sendAttempt.collaborate !== collaborate || sendAttempt.recipientId !== recipientId
     )
-      sendAttempt = { boardId, agentId, text, requestId: idFactory() };
+      sendAttempt = { boardId, agentId, text, collaborate, recipientId, requestId: idFactory() };
     const result = await call("send", sendAttempt);
+    if(collaborate||recipientId){const snap=await call("snapshot",{boardId,limit:200});state.draft.mode=snap.board.value.mode;state.draft.edges=clone(snap.board.value.edges);state.record=snap.board;state.baseRevision=snap.board.revision;}
     await refresh({ all: true });
     sendAttempt = null;
     return result;
@@ -632,6 +635,7 @@ export function createBoardController({
   }
   return {
     state,
+    ensureSaved,
     task,
     edit,
     save,
@@ -725,8 +729,8 @@ export function mountAgentBoard(
     <header class="ab-heading"><div><h2 tabindex="-1">${icon("network")} AI Agent Board</h2><p>Open Chat on several agents to keep their conversations side by side. Dotted lines show which agent owns each chat.</p></div><span class="ab-revision" data-ab="revision"></span></header>
     <p class="ab-start-guide">Choose a folder → add an agent → assign its folder → save your board → open Chat or run a goal. Native agents work in their assigned folders; API agents only chat.</p>
     <div class="ab-notice" data-ab="notice" role="status" aria-live="polite"></div>
-    <div class="ab-confirm" data-ab="confirm" hidden></div>
-    <div class="ab-toolbar ab-board-tools">${select("Saved boards", "saved-board", [["", "Choose a board"]])}${button("load", "Open board", "folder")}${button("new", "New board", "plus")}${button("save", "Save board", "save", 'class="ab-primary"')}${button("discard", "Discard draft", "undo")}${button("delete-board", "Delete board", "trash")}${button("export", "Export full history", "download")}${button("export-draft", "Export draft", "download")}</div>
+    <dialog class="ab-confirm" data-ab="confirm" hidden aria-label="Confirm change"></dialog>
+    <div class="ab-toolbar ab-board-tools">${select("Saved boards", "saved-board", [["", "Choose a board"]])}${button("load", "Open board", "folder")}${button("new", "New board", "plus")}${button("save", "Save board", "save", 'class="ab-primary"')}${button("discard", "Discard draft", "undo")}${button("delete-board", "Delete board", "trash")}${button("export", "Export full history", "download")}${button("export-draft", "Export draft", "download")}${button("import-tests", "Import agent tests", "download")}${button("request-tests", "Ask for importable tests", "code")}</div>
     <div class="ab-goal-strip"><p data-ab="goal-readout"></p>${button("edit-goal", "Edit goal", "target")}</div>
     <details class="ab-settings"><summary>${icon("target")} Project goal and collaboration</summary>
       <div class="ab-form-grid">${field("Board name", "board-name")}${select(
@@ -742,7 +746,7 @@ export function mountAgentBoard(
       <p class="ab-help">Run goal shares your goal and acceptance criteria with the selected starters and linked recipients. Full assistant replies follow enabled arrows within the turn limit. Manual chat sends your message unchanged without automatic goal context; linked checks run only when you choose Run checks.</p>
     </details>
     <div class="ab-toolbar ab-run-tools">${select("Start goal with", "goal-starter", [["", "All agents"]])}${button("goal", "Run goal", "play", 'class="ab-run"')}${button("pause", "Pause queue", "pause")}${button("resume", "Resume queue", "play")}${button("stop", "Stop runs", "stop", 'class="ab-danger"')}${button("checks", "Run checks", "check")}${button("refresh", "Refresh history", "refresh")}</div>
-    <p class="ab-run-status" data-ab="run-status">No run yet. Transport and linked check results appear separately.</p>
+    <div class="ab-collaboration"><label>Chat delivery <select name="chat-routing"><option value="single">Only the agent I message</option><option value="linked">Collaborate along connected arrows</option></select></label><p data-ab="routing-help">Chat sends to one agent. Choose collaboration to forward completed replies to linked agents, within the turn limit.</p><details><summary>Messages between agents <span data-ab="peer-count">0</span></summary><div data-ab="peer-feed" aria-live="polite"></div></details></div><p class="ab-run-status" data-ab="run-status">No run yet. Transport and linked check results appear separately.</p>
     <p class="ab-help">Drag empty board space to pan. Ctrl+wheel zooms. Connected agents receive full replies; use Run checks to test their work.</p>
     <div class="ab-workspace">
       <section class="ab-map" aria-label="Agent canvas and connections">
@@ -759,8 +763,8 @@ export function mountAgentBoard(
           <div class="ab-toolbar">${select("Selected agent", "agent-selection", [["", "No agents"]])}${button("select-agent", "Open agent", "comment")}</div>
           <div data-ab="agent-editor" hidden>
             <div class="ab-form-grid">${field("Agent name", "agent-name")}${select("Provider", "agent-provider", Object.entries(PROVIDERS))}</div>
-            ${select('Work in folder','agent-project',[['','Current workspace']])}<p class="ab-help" data-ab="agent-folder-hint"></p><p class="ab-help">To move an existing native conversation, use New conversation first, then save the folder change. Earlier messages stay in history.</p>
-            <details class="ab-appearance" open><summary>How this agent looks</summary><div class="ab-form-grid">${field("Node color", "agent-color", "color")}${select("Fallback icon", "agent-icon", [["robot","Robot"],["code","Code"],["shield","Shield"],["book","Book"],["target","Target"],["network","Network"]])}${field("Picture zoom", "agent-picture-zoom", "range", 'min="1" max="3" step="0.1"')}${field("Picture hue", "agent-picture-hue", "range", 'min="0" max="360" step="1"')}</div><label class="ab-field">Profile picture from this computer<input name="agent-picture" type="file" accept="image/png,image/jpeg,image/webp"></label>${button("clear-picture", "Use fallback icon", "robot")}<p class="ab-help">PNG, JPEG or WebP, up to 256 KB. Pictures are saved with this board.</p></details>
+            <fieldset class="ab-folder-assignments"><legend>Folders this agent can work in</legend><div data-ab="agent-folders"></div></fieldset>${select('Active folder for this chat','agent-project',[['','Current workspace']])}<p class="ab-help" data-ab="agent-folder-hint"></p><p class="ab-help">Assign any number of folders below. Each chat has an active folder. Switching folders keeps that folder’s previous native conversation ready to resume.</p>
+            <details class="ab-appearance" open><summary>How this agent looks</summary><div class="ab-form-grid">${field("Node color", "agent-color", "color")}${field("Chat bubble color", "agent-bubble-color", "color")}${select("Fallback icon", "agent-icon", [["robot","Robot"],["code","Code"],["shield","Shield"],["book","Book"],["target","Target"],["network","Network"]])}${field("Picture zoom", "agent-picture-zoom", "range", 'min="1" max="3" step="0.1"')}${field("Picture hue", "agent-picture-hue", "range", 'min="0" max="360" step="1"')}</div><label class="ab-field">Profile picture from this computer<input name="agent-picture" type="file" accept="image/png,image/jpeg,image/webp"></label>${button("clear-picture", "Use fallback icon", "robot")}<p class="ab-help">PNG, JPEG or WebP, up to 256 KB. Pictures are saved with this board.</p></details>
             <p class="ab-provider-hint" data-ab="provider-hint"></p>
             <details><summary>Model, instructions and permissions</summary><div class="ab-form-grid">${field("Model (blank = provider default)", "agent-model")}${field("Effort (blank = provider default)", "agent-effort")}${select("Native permissions", "agent-permission", [["native", "Provider native policy"]])}</div>${area("Optional instructions sent with this agent", "agent-instructions", 'placeholder="Leave blank to use the native agent without added instructions."')}<p class="ab-help">These are your explicit instructions. The board adds no hidden role or planning prompt. Native permission requests can block a turn; read the chat evidence to recover.</p></details>
             <div data-ab="api-fields" hidden><div class="ab-form-grid">${select(
@@ -810,6 +814,8 @@ export function mountAgentBoard(
     rendering = false;
   let fullscreenPlaceholder = null, fullscreenFocus = null, panelDrag = null, panelZ = 1;
   const chatDrafts = new Map();
+  let chatEnteredFullscreen = false, closeImportDialog = null;
+  let maximizedChatId = '', chatFocusReturn = null;
   const folderStatuses=new Map();let selectedProjectId=WORKSPACE_FOLDER,tasksMount=null,tasksKey='',tasksEpoch=0;
   const inspector = root.querySelector('.ab-inspector');
   // Keep the existing accessible, complete transcript and provenance inspector.
@@ -913,6 +919,7 @@ export function mountAgentBoard(
     q("confirm").hidden = false;
     q("confirm").innerHTML =
       `<p>${esc(text)}</p>${button("confirm", "Confirm", "check")}${button("cancel-confirm", "Keep current state", "close")}`;
+    q("confirm").showModal();q("confirm").oncancel=event=>{event.preventDefault();pendingConfirm=null;q("confirm").close();q("confirm").hidden=true;};
     q("confirm").querySelector("button").focus();
   }
   function downloadJSON(name, value) {
@@ -1036,7 +1043,8 @@ export function mountAgentBoard(
       q('project-status').textContent=status.summary;
       for(const action of ['project-approve','project-remove','project-disconnect'])root.querySelector('.ab-project-editor [data-ab-action="'+action+'"]').disabled=!!project.isWorkspace||state.busy>0;
       root.querySelector('[data-ab-action="add-project"]').disabled=typeof chooseProjectFolder!=='function'||state.busy>0;
-      options('agent-project',[['','Current workspace'],...(board.projects||[]).map(p=>[p.id,p.name])],node?.projectId||'');
+      options('agent-project',[['','Current workspace'],...(board.projects||[]).map(p=>[p.id,p.name])],node?.activeProjectId||node?.projectId||'');
+      const assigned=node?.projectIds||[node?.projectId||''];q('agent-folders').innerHTML=folders.map(p=>'<label><input type="checkbox" data-folder-assignment="'+esc(p.id===WORKSPACE_FOLDER?'':p.id)+'" '+(assigned.includes(p.id===WORKSPACE_FOLDER?'':p.id)?'checked':'')+'>'+esc(p.name)+'</label>').join('');
       options(
         "goal-starter",
         [["", "All agents"], ...agents],
@@ -1078,11 +1086,12 @@ export function mountAgentBoard(
         setValue("agent-instructions", node.instructions);
         setValue("agent-x", node.position.x);
         setValue("agent-y", node.position.y);
-        const assigned=folders.find(p=>p.id===(node.projectId||WORKSPACE_FOLDER));
+        const assigned=folders.find(p=>p.id===(node.activeProjectId||node.projectId||WORKSPACE_FOLDER));
         q('agent-folder-hint').textContent=node.provider==='api'
           ? `API chat only. ${assigned?.name||'Current workspace'} is a folder label; this provider has no local file tools.`
           : `${assigned?.path||workspaceRoot} · ${folderStatus(assigned||folders[0]).summary}`;
         const appearance = appearanceOf(node);
+        setValue('agent-bubble-color',appearance.bubbleColor);
         setValue('agent-color', /^#[a-f0-9]{6}$/i.test(appearance.color) ? appearance.color : '#49cde5');
         setValue('agent-icon', appearance.icon);
         setValue('agent-picture-zoom', appearance.zoom);
@@ -1222,14 +1231,15 @@ export function mountAgentBoard(
           : "default model";
       element.querySelector(".ab-node-provider").textContent =
         PROVIDERS[node.provider] + " · " + modelLabel;
-      const assigned=projectCards(board,workspaceRoot).find(p=>p.id===(node.projectId||WORKSPACE_FOLDER));
+      const assigned=projectCards(board,workspaceRoot).find(p=>p.id===(node.activeProjectId||node.projectId||WORKSPACE_FOLDER));
       element.querySelector('.ab-node-folder').textContent=(node.provider==='api'?'Folder label: ':'Works in: ')+(assigned?.name||'Missing folder');
       const session = sessionFor(node.id);
       element.querySelector(".ab-node-state").textContent =
         session?.status || "Ready for a new conversation";
       const message = state.messages
-        .filter((m) => m.agentId === node.id && m.role === "assistant")
+        .filter((m) => m.agentId === node.id && m.generation===(session?.generation||1) && m.role === "assistant")
         .at(-1);
+      element.querySelector(".ab-node-preview").style.setProperty("--bubble-color",appearance.bubbleColor);
       element.querySelector(".ab-node-preview").textContent = message
         ? message.text.slice(0, 65) +
           (message.text.length > 65 ? "… (open full chat)" : "")
@@ -1282,9 +1292,10 @@ export function mountAgentBoard(
     for(const el of existing.values())el.remove();
     const map=new Map(folders.map(p=>[p.id,p]));
     q('project-links').innerHTML=board.nodes.map(node=>{
-      const project=map.get(node.projectId||WORKSPACE_FOLDER);if(!project)return '';
+      return (node.projectIds||[node.projectId||'']).map(id=>{const project=map.get(id||WORKSPACE_FOLDER);if(!project)return '';
       const path=connectionPath(node,project),label=node.provider==='api'?'folder label · chat only':'works in';
       return `<g data-project-link="${esc(node.id)}"><title>${esc(node.name)} ${label} ${esc(project.name)}</title><path d="${path.d}"/><text x="${path.x}" y="${path.y}" text-anchor="middle">${label}</text></g>`;
+      }).join('');
     }).join('');
   }
   function renderConnections() {
@@ -1323,14 +1334,24 @@ export function mountAgentBoard(
     if (state.record) void controller.refresh({all:true}).catch(controller.fail);
   }
   function layoutChatWindow(el, panel) {
-    if(panel.maximized){const canvas=q('canvas');el.style.left='8px';el.style.top='8px';el.style.width=Math.max(1,canvas.clientWidth-16)+'px';el.style.height=Math.max(1,canvas.clientHeight-16)+'px';return;}
+    if(panel.maximized){el.style.left='0px';el.style.top='0px';el.style.width=window.innerWidth+'px';el.style.height=window.innerHeight+'px';return;}
     const canvas=q('canvas'),width=Math.min(panel.width,Math.max(1,canvas.clientWidth)),height=Math.min(panel.height,Math.max(1,canvas.clientHeight));
     el.style.width=width+'px';el.style.height=height+'px';
     el.style.left=Math.max(0,Math.min(panel.x,canvas.clientWidth-width))+'px';
     el.style.top=Math.max(0,Math.min(panel.y,canvas.clientHeight-height))+'px';
   }
   function renderChatWindows() {
+    if(destroyed)return;
     const holder = q('chat-windows'), board = state.draft;
+    const maximizedPanel=(board.panels||[]).find(p=>p.maximized&&!p.minimized);
+    const maximized=!!maximizedPanel,previousMaximizedId=maximizedChatId;
+    const entering=maximized&&maximizedChatId!==maximizedPanel.agentId;
+    const leaving=!maximized&&!!maximizedChatId;
+    if(entering)chatFocusReturn=document.activeElement;
+    maximizedChatId=maximizedPanel?.agentId||'';
+    root.classList.toggle('ab-chat-focus',maximized);
+    if(maximized&&!fullscreenPlaceholder){chatEnteredFullscreen=true;toggleFullscreen();}
+    else if(!maximized&&chatEnteredFullscreen){chatEnteredFullscreen=false;toggleFullscreen(true);}
     const panels = (board.panels || []).filter(p => board.nodes.some(n => n.id === p.agentId));
     const existing = new Map([...holder.children].map(el => [el.dataset.chatAgent, el]));
     for (const panel of panels) {
@@ -1339,7 +1360,7 @@ export function mountAgentBoard(
       if (!el) {
         el = document.createElement('section'); el.className = 'ab-chat-window'; el.dataset.chatAgent = panel.agentId;
         el.setAttribute('role','region');
-        el.innerHTML = `<header class="ab-window-title" data-chat-drag><strong></strong><div>${button('chat-maximize','Maximize','expand')}${button('chat-minimize','Minimize','minus')}${button('chat-close','Close','close')}</div></header><div class="ab-window-connection"><p class="ab-window-status"></p>${button('repair-connection','Repair connection','plug',`data-node-id="${esc(node.id)}"`)}</div><div class="ab-window-messages" role="region" tabindex="0" aria-label="Complete conversation"></div><form class="ab-window-compose"><label>Message<textarea rows="2" placeholder="Write a message. Ctrl+Enter sends."></textarea></label><button type="submit">${icon('comment')}<span>Send</span></button><button type="button" class="ab-setup-tools" data-ab-action="setup-tools" title="Download and set up test tools">${icon('download')}<span>Set up</span></button></form><button type="button" class="ab-resize-handle" aria-label="Resize conversation" title="Drag to resize; arrow keys also resize">${icon('expand')}</button>`;
+        el.innerHTML = `<header class="ab-window-title" data-chat-drag><strong></strong><div>${button('chat-maximize','Maximize','expand')}${button('chat-minimize','Minimize','minus')}${button('chat-close','Close','close')}</div></header><div class="ab-conversation-tools"><label>Chat <select data-conversation aria-label="Choose conversation"></select></label><label><input type="checkbox" data-archived-chats> Show archived</label>${button('conversation-new','New chat','plus')}${button('conversation-stop','Stop agent','stop')}${button('conversation-rename','Rename','edit')}${button('conversation-archive','Archive','folder')}${button('conversation-delete','Delete','trash')}</div><div class="ab-window-connection"><p class="ab-window-status"></p><label class="ab-window-delivery">Send to <select data-chat-routing aria-label="Chat message delivery"><option value="single">This agent only</option><option value="linked">This agent, then linked agents</option></select></label>${button('repair-connection','Repair connection','plug',`data-node-id="${esc(node.id)}"`)}</div><p class="ab-window-error" role="alert" hidden></p><div class="ab-window-activity" aria-live="polite" hidden></div><div class="ab-window-messages" role="region" tabindex="0" aria-label="Complete conversation"></div><form class="ab-window-compose"><label>Message<textarea rows="2" placeholder="Write a message. Ctrl+Enter sends."></textarea></label><button type="submit">${icon('comment')}<span>Send</span></button><button type="button" class="ab-setup-tools" data-ab-action="setup-tools" title="Download and set up test tools">${icon('download')}<span>Set up</span></button></form><button type="button" class="ab-resize-handle" aria-label="Resize conversation" title="Drag to resize; arrow keys also resize">${icon('expand')}</button>`;
         holder.append(el);
       }
       el.hidden = panel.minimized;
@@ -1353,32 +1374,48 @@ export function mountAgentBoard(
       el.querySelector('header strong').textContent = node.name;
       el.style.setProperty('--agent-color', /^#[a-f0-9]{6}$/i.test(appearanceOf(node).color) ? appearanceOf(node).color : '#49cde5');
       layoutChatWindow(el,panel);
+      const error=el.querySelector('.ab-window-error');error.hidden=!state.error;error.textContent=state.error;
       el.querySelector('.ab-window-status').textContent = `${PROVIDERS[node.provider]} · ${sessionFor(node.id)?.status || 'new conversation'} · ${state.hasMore ? 'loading more history…' : 'complete loaded history'}`;
-      const messages = state.messages.filter(m => m.agentId === node.id || m.from === node.id || m.to === node.id);
+      const pending=state.messages.find(m=>m.agentId===node.id&&['queued','running'].includes(m.state));
+      const progress=(state.activity||[]).find(a=>a.agentId===node.id&&a.messageId===pending?.id);
+      const activity=el.querySelector('.ab-window-activity');activity.hidden=!pending;
+      if(pending){const seconds=Math.max(0,Math.floor((Date.now()-Date.parse(pending.startedAt||pending.createdAt))/1000));activity.innerHTML='<span class="ab-working-dot" aria-hidden="true"></span><strong></strong><small></small><pre></pre>';activity.querySelector('strong').textContent=pending.state==='queued'?'Queued — waiting for a free agent':progress?.status||'Agent is working…';activity.querySelector('small').textContent=' '+seconds+'s elapsed · Provider-visible replies appear below as they arrive.';activity.querySelector('pre').textContent=progress?.text||'';}
+      const session=sessionFor(node.id),generation=session?.generation||1;
+      const messages = state.messages.filter(m => (m.agentId===node.id&&m.generation===generation)||(m.role==='peer'&&m.from===node.id&&m.sourceGeneration===generation));
+      const chats=session?.conversations||[{generation,name:'Conversation '+generation,active:true}],selector=el.querySelector('[data-conversation]'),showArchived=el.querySelector('[data-archived-chats]').checked;selector.innerHTML=chats.filter(c=>!c.archived||showArchived).map(c=>'<option value="'+c.generation+'" '+(c.generation===generation?'selected':'')+'>'+esc(c.name)+(c.archived?' (archived)':'')+'</option>').join('');
       const transcript = el.querySelector('.ab-window-messages');
       const signature = JSON.stringify(messages), nearBottom = transcript.scrollHeight-transcript.scrollTop-transcript.clientHeight<80;
       if (transcript.dataset.signature !== signature) {
         transcript.dataset.signature = signature;
         transcript.replaceChildren();
         for (const message of messages) {
-          const article = document.createElement('article'); article.className = 'ab-window-message'; article.dataset.messageId = message.id;
+          const article = document.createElement('article'); article.className = 'ab-window-message'; article.dataset.messageId = message.id;article.dataset.role=message.role;const speaker=board.nodes.find(n=>n.id===(message.role==='peer'?message.from:node.id));article.style.setProperty('--bubble-color',appearanceOf(speaker).bubbleColor);
           const heading = document.createElement('strong'), body = document.createElement('pre');
           heading.textContent = `${friendlyMessageRoute(message,board.nodes)} · ${message.state || ''}`;
           body.textContent = message.text;
           article.append(heading,body);
+          if(message.role==='assistant'&&message.state==='completed'){const review=document.createElement('button');review.type='button';review.dataset.abAction='import-tests';review.dataset.messageId=message.id;review.textContent='Review / import generated tests';article.append(review);}
           if (message.error) { const error = document.createElement('p'); error.textContent = message.error; article.append(error); }
           transcript.append(article);
         }
         if (!messages.length) transcript.textContent = 'No messages yet. Send a message or run the shared goal.';
         if (nearBottom) transcript.scrollTop = transcript.scrollHeight;
       }
-      const textarea = el.querySelector('textarea'), key = `${board.id}:${node.id}`;
-      if (document.activeElement !== textarea) textarea.value = chatDrafts.get(key) || '';
+      const routing=el.querySelector('[data-chat-routing]'),selection=routing.dataset.selection||f('chat-routing').value;routing.innerHTML='<option value="single">This agent only</option><option value="linked">This agent, then linked agents</option>'+board.nodes.filter(n=>n.id!==node.id).map(n=>'<option value="recipient:'+esc(n.id)+'">'+esc(node.name)+' → '+esc(n.name)+'</option>').join('');routing.value=selection;
+      const textarea = el.querySelector('textarea'), key = `${board.id}:${node.id}:${sessionFor(node.id)?.generation||1}`;
+      if (textarea.dataset.conversationKey!==key || document.activeElement !== textarea) textarea.value = chatDrafts.get(key) || '';textarea.dataset.conversationKey=key;
       el.querySelector('button[type="submit"]').disabled = state.busy > 0;
     }
     for (const el of existing.values()) el.remove();
     q('chat-dock').innerHTML = panels.map(p => button('chat-restore',board.nodes.find(n=>n.id===p.agentId).name + (p.minimized?' · restore chat':' · show chat'),'comment',`data-node-id="${esc(p.agentId)}"`)).join('');
+    const peers=state.messages.filter(m=>m.role==='peer');
+    q('peer-count').textContent=String(peers.length);
+    const feed=q('peer-feed');const peerKey=JSON.stringify(peers);if(feed.dataset.signature!==peerKey){feed.dataset.signature=peerKey;feed.replaceChildren();for(const peer of peers){const item=document.createElement('details'),summary=document.createElement('summary'),body=document.createElement('pre');summary.textContent=friendlyMessageRoute(peer,board.nodes)+' · '+peer.state;body.textContent=peer.text;item.append(summary,body);feed.append(item);}if(!peers.length)feed.textContent='No agent-to-agent messages yet. Connect agents, enable linked routing, then choose collaboration or Run goal. A single chat reply is not proof that another agent received it.';}
+    const routing=f('chat-routing');if(routing.dataset.board!==board.id){routing.value=board.mode==='linked'?'linked':'single';routing.dataset.board=board.id;}
+    q('routing-help').textContent=routing.value==='linked'?'Replies will follow enabled arrows. Each delivered peer message is shown here and in both chats. The board must use linked routing.':'Only the selected agent receives a chat message. To involve other agents, choose collaboration or Run goal.';
     renderChatLinks();
+    if(entering)holder.querySelector('.ab-chat-maximized [data-ab-action="chat-maximize"]')?.focus({preventScroll:true});
+    if(leaving){const prior=chatFocusReturn;chatFocusReturn=null;if(prior?.isConnected&&prior.getClientRects().length&&getComputedStyle(prior).visibility!=='hidden')prior.focus({preventScroll:true});else q('nodes').querySelector('[data-agent-id="'+CSS.escape(previousMaximizedId)+'"] [data-ab-action="node-chat"]')?.focus({preventScroll:true});}
   }
   function renderChatLinks(){
     const canvas=q('canvas'),svg=q('chat-links'),origin=canvas.getBoundingClientRect();
@@ -1393,6 +1430,12 @@ export function mountAgentBoard(
     }
     svg.innerHTML=lines.join('');
   }
+  async function reviewGeneratedTests(messageId) {
+    if(closeImportDialog)return;
+    const {mountAgentTestImport}=await import('./agent-test-import.js');
+    closeImportDialog=await mountAgentTestImport({root,controller,invoke,workspaceRoot,tell,messageId,state,onClose:()=>{closeImportDialog=null;}});
+  }
+  function requestChatName(value){return new Promise(resolve=>{const d=document.createElement('dialog');d.className='ab-save-dialog';const form=document.createElement('form');form.method='dialog';const label=document.createElement('label');label.textContent='Chat name';const input=document.createElement('input');input.value=value;input.required=true;input.maxLength=300;label.append(input);const save=document.createElement('button');save.textContent='Save name';save.type='submit';const cancel=document.createElement('button');cancel.textContent='Cancel';cancel.type='button';const close=v=>{d.close();d.remove();resolve(v);};cancel.onclick=()=>close(null);form.onsubmit=e=>{e.preventDefault();if(input.value.trim())close(input.value.trim());};d.oncancel=e=>{e.preventDefault();close(null);};form.append(label,save,cancel);d.append(form);root.append(d);d.showModal();input.focus();});}
   function restoreMaximizedChat(){
     const panel=(state.draft.panels||[]).find(p=>p.maximized&&!p.minimized);
     if(!panel)return false;
@@ -1424,7 +1467,15 @@ export function mountAgentBoard(
     if (!fullscreenPlaceholder) return;
     if (event.key === 'Escape') {event.preventDefault();toggleFullscreen(true);return;}
     if (event.key !== 'Tab') return;
-    const items = [...root.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex="0"]')].filter(el=>el.getClientRects().length&&!el.closest('[hidden]'));
+    const maximized=root.querySelector('.ab-chat-maximized:not([hidden])');
+    const scope=maximized||root;
+    const items = [...scope.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex="0"]')].filter(el=>el.getClientRects().length&&!el.closest('[hidden]')&&getComputedStyle(el).visibility!=='hidden');
+    if(maximized){
+      event.preventDefault();
+      const current=items.indexOf(document.activeElement),direction=event.shiftKey?-1:1;
+      const next=current<0?(event.shiftKey?items.length-1:0):(current+direction+items.length)%items.length;
+      items[next]?.focus({preventScroll:true});return;
+    }
     const first=items[0],last=items.at(-1);
     if (event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
     else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
@@ -1622,12 +1673,14 @@ export function mountAgentBoard(
       }
       case 'project-disconnect':
         if(selectedProjectId===WORKSPACE_FOLDER)throw Error('The current workspace is the default folder.');
-        controller.edit(board=>{for(const node of board.nodes)if(node.projectId===selectedProjectId)delete node.projectId;});tell('Assigned agents now use the current workspace in this draft. Save to apply; native conversations may need New conversation first.');break;
+        controller.edit(board=>{for(const node of board.nodes){node.projectIds=(node.projectIds||[node.projectId||'']).filter(p=>p!==selectedProjectId);if(node.projectId===selectedProjectId||node.activeProjectId===selectedProjectId){node.projectId='';node.activeProjectId='';if(!node.projectIds.includes(''))node.projectIds.push('');}}});tell('Folder disconnected. Save to apply. Each agent keeps its earlier folder chats available.');break;
       case 'project-remove':{
         const id=target.dataset.folderId||selectedProjectId;if(id===WORKSPACE_FOLDER)throw Error('The current workspace card stays on this board.');
         const project=(state.draft.projects||[]).find(p=>p.id===id);if(!project)throw Error('Choose a project folder first.');
-        requestConfirm(`Remove ${project.name} from this board? Assigned agents will return to the current workspace. The folder and its files stay on your computer.`,()=>{controller.edit(board=>{board.projects=board.projects.filter(p=>p.id!==id);for(const node of board.nodes)if(node.projectId===id)delete node.projectId;});selectedProjectId=WORKSPACE_FOLDER;render();});break;
+        requestConfirm(`Remove ${project.name} from this board? Assigned agents will return to the current workspace. The folder and its files stay on your computer.`,()=>{controller.edit(board=>{board.projects=board.projects.filter(p=>p.id!==id);for(const node of board.nodes){node.projectIds=(node.projectIds||[node.projectId||'']).filter(p=>p!==id);if(node.projectId===id||node.activeProjectId===id){node.projectId='';node.activeProjectId='';}}});selectedProjectId=WORKSPACE_FOLDER;render();});break;
       }
+      case 'request-tests': {const id=selected()?.id;if(!id)throw Error('Select an agent first.');openChat(id);const text='Create tests for my project and return an LVX test bundle in a fenced json block: {"format":"lvx-tests","records":[{"collection":"suites","id":"unique-test-id","value":{"name":"Clear test name","language":"playwright","code":"// executable LVX test body using page, assert and artifacts"}}]}. Use LVX test-body code, not @playwright/test imports. Include workflows with schemaVersion:1, nodes and edges when helpful. Do not claim tests are saved in LVX: I will use Review / import generated tests to inspect and save them.';chatDrafts.set(state.draft.id+':'+id+':'+(sessionFor(id)?.generation||1),text);renderChatWindows();tell('Editable request placed in the selected chat. Add the website or project details, then send.');break;}
+      case 'import-tests': await reviewGeneratedTests(target.dataset.messageId); break;
       case 'fullscreen': toggleFullscreen(); break;
       case 'setup-tools': {const id=target.closest('[data-chat-agent]')?.dataset.chatAgent||selected()?.id;await window.LVXSetup?.open({agentContext:{boardId:state.record?.id,agentId:id}});break;}
       case 'toggle-inspector': root.classList.toggle('ab-inspector-open'); break;
@@ -1653,6 +1706,12 @@ export function mountAgentBoard(
         }
         break;
       }
+      case 'conversation-stop': await controller.action('cancel',{agentId:target.closest('[data-chat-agent]').dataset.chatAgent});tell('Stop requested. Your chat messages and drafts are kept.');break;
+      case 'conversation-new': case 'conversation-archive': case 'conversation-delete': case 'conversation-rename': {
+        const agentId=target.closest('[data-chat-agent]').dataset.chatAgent,session=sessionFor(agentId);
+        const perform=async()=>{if(action==='conversation-new')await controller.newSession(agentId);else {let name;if(action==='conversation-rename'){name=await requestChatName(session?.name||'Conversation '+session.generation);if(!name)return;}await controller.action({'conversation-archive':'archiveConversation','conversation-delete':'deleteConversation','conversation-rename':'renameConversation'}[action],{agentId,generation:session.generation,name});}await controller.refresh({all:true});tell(action==='conversation-delete'?'Chat deleted.':'Chat updated.');};
+        if(action==='conversation-delete')requestConfirm('Delete this chat and its messages? This cannot be undone. Other chats and project files are kept.',()=>run(perform));else await perform();break;
+      }
       case 'chat-maximize': {
         const agentId=target.closest('[data-chat-agent]').dataset.chatAgent;
         controller.edit(board=>{const panel=board.panels.find(p=>p.agentId===agentId),maximize=!panel.maximized;for(const other of board.panels)other.maximized=false;panel.maximized=maximize;});
@@ -1661,7 +1720,7 @@ export function mountAgentBoard(
       case 'chat-close': case 'chat-minimize': {
         const agentId = target.closest('[data-chat-agent]').dataset.chatAgent;
         const textarea = target.closest('[data-chat-agent]').querySelector('textarea');
-        chatDrafts.set(`${state.draft.id}:${agentId}`,textarea.value);
+        chatDrafts.set(`${state.draft.id}:${agentId}:${sessionFor(agentId)?.generation||1}`,textarea.value);
         controller.edit(board => { board.panels = (board.panels || []).filter(p => action !== 'chat-close' || p.agentId !== agentId); const panel = board.panels.find(p=>p.agentId===agentId); if (panel) panel.minimized=true; });
         break;
       }
@@ -1710,13 +1769,13 @@ export function mountAgentBoard(
       case "confirm": {
         const callback = pendingConfirm;
         pendingConfirm = null;
-        q("confirm").hidden = true;
+        q("confirm").close();q("confirm").hidden = true;
         callback?.();
         break;
       }
       case "cancel-confirm":
         pendingConfirm = null;
-        q("confirm").hidden = true;
+        q("confirm").close();q("confirm").hidden = true;
         break;
       case "add": {
         const id = uuid(),
@@ -1928,13 +1987,13 @@ export function mountAgentBoard(
     const input = event.target,
       name = input.name;
     if(name==='agent-project'){
-      updateNode(node=>{if(input.value)node.projectId=input.value;else delete node.projectId;});return;
+      updateNode(node=>{node.activeProjectId=input.value;node.projectId=input.value;node.projectIds||=[];if(!node.projectIds.includes(input.value))node.projectIds.push(input.value);});return;
     }
     if(name==='project-name'&&selectedProjectId!==WORKSPACE_FOLDER){editProject(project=>{project.name=input.value;});return;}
     if(['project-x','project-y'].includes(name)&&input.value!==''&&Number.isFinite(input.valueAsNumber)){editProject(project=>{project.position[name==='project-x'?'x':'y']=input.valueAsNumber;});return;}
     const chat = input.closest('[data-chat-agent]');
-    if (chat && input.tagName === 'TEXTAREA') { chatDrafts.set(`${state.draft.id}:${chat.dataset.chatAgent}`,input.value); return; }
-    const cosmetics = {'agent-color':['color',String],'agent-icon':['icon',String],'agent-picture-zoom':['zoom',Number],'agent-picture-hue':['hue',Number]};
+    if (chat && input.tagName === 'TEXTAREA') { chatDrafts.set(`${state.draft.id}:${chat.dataset.chatAgent}:${sessionFor(chat.dataset.chatAgent)?.generation||1}`,input.value); return; }
+    const cosmetics = {'agent-bubble-color':['bubbleColor',String],'agent-color':['color',String],'agent-icon':['icon',String],'agent-picture-zoom':['zoom',Number],'agent-picture-hue':['hue',Number]};
     if (cosmetics[name]) { const [key,convert]=cosmetics[name]; updateNode(node => { node.appearance={...appearanceOf(node),[key]:convert(input.value)}; }); return; }
     if (boardFields[name]) {
       const [key, convert] = boardFields[name];
@@ -1995,6 +2054,11 @@ export function mountAgentBoard(
     }
   }
   const onChange = (event) => {
+    if(event.target.hasAttribute('data-chat-routing')){event.target.dataset.selection=event.target.value;return;}
+    if(event.target.hasAttribute('data-archived-chats')){renderChatWindows();return;}
+    if(event.target.hasAttribute('data-conversation')){const agentId=event.target.closest('[data-chat-agent]').dataset.chatAgent,generation=Number(event.target.value);run(async()=>{await controller.action('selectConversation',{agentId,generation});await controller.load(state.record.id,{discard:true});});return;}
+    if(event.target.hasAttribute('data-folder-assignment')){const id=event.target.dataset.folderAssignment;updateNode(node=>{const ids=new Set(node.projectIds||[node.projectId||'']);if(event.target.checked)ids.add(id);else ids.delete(id);node.projectIds=[...ids];if(!ids.has(node.activeProjectId||node.projectId||'')){node.activeProjectId=node.projectIds[0]||'';node.projectId=node.activeProjectId;}});return;}
+    if(event.target.name==='chat-routing'){renderChatWindows();return;}
     if(event.target.name==='project-selection'){selectedProjectId=event.target.value;render();return;}
     if (event.target.name === 'agent-picture') {
       const file = event.target.files?.[0], agentId = state.selectedAgentId, boardId = state.draft.id;
@@ -2019,8 +2083,8 @@ export function mountAgentBoard(
   const onSubmit = (event) => {
     if (event.target.matches('.ab-window-compose')) {
       event.preventDefault();
-      const window = event.target.closest('[data-chat-agent]'), agentId = window.dataset.chatAgent, input = window.querySelector('textarea'), text = input.value, draftKey = `${state.draft.id}:${agentId}`;
-      run(async () => { await controller.send(agentId,text); if(input.value===text){input.value='';chatDrafts.delete(draftKey);}tell('Message queued.'); }); return;
+      const window = event.target.closest('[data-chat-agent]'), agentId = window.dataset.chatAgent, input = window.querySelector('textarea'), text = input.value, draftKey = `${state.draft.id}:${agentId}:${sessionFor(agentId)?.generation||1}`;
+      run(async () => { const delivery=window.querySelector('[data-chat-routing]').value;await controller.send(agentId,text,delivery==='linked'||delivery.startsWith('recipient:'),delivery.startsWith('recipient:')?delivery.slice(10):null); if(input.value===text){input.value='';chatDrafts.delete(draftKey);}tell('Message queued.'); }); return;
     }
     if (event.target !== q("compose")) return;
     event.preventDefault();
@@ -2032,7 +2096,7 @@ export function mountAgentBoard(
       return;
     }
     run(async () => {
-      await controller.send(agentId, text);
+      await controller.send(agentId,text,f('chat-routing').value==='linked');
       if (input.value === text) input.value = "";
       tell("Message queued.");
     });
@@ -2214,6 +2278,7 @@ export function mountAgentBoard(
       void resetScheduler.request();
       return;
     }
+    if(event?.domain==='agents'&&event.type==='activity'&&workspaceKey(event.workspaceRoot)===workspaceKey(workspaceRoot)&&event.boardId===state.record?.id){void controller.refresh().catch(controller.fail);return;}
     if (resetScheduler.pending) return;
     if (
       !acceptsAgentEvent(
@@ -2231,6 +2296,7 @@ export function mountAgentBoard(
       80,
     );
   });
+  const activityClock=setInterval(()=>{if(destroyed)return;if(state.messages.some(m=>['queued','running'].includes(m.state)))void controller.refresh().catch(controller.fail);},1000);
   const chatViewportObserver=new ResizeObserver(()=>{for(const panel of state.draft.panels||[]){const el=q('chat-windows').querySelector('[data-chat-agent=\"'+CSS.escape(panel.agentId)+'\"]');if(el)layoutChatWindow(el,panel);}renderChatLinks();});chatViewportObserver.observe(q('canvas'));
   render();
   const ready=run(async () => { await controller.initialize(); if (initialBoardId) await controller.load(initialBoardId);if(initialToolsOpen)await openTasks(); });
@@ -2239,9 +2305,22 @@ export function mountAgentBoard(
     loadBoard:id=>controller.task(()=>{assertTaskToolsSettled();return controller.load(id);}),
     openTasks,
     hasUnsavedChanges:()=>state.dirty||taskToolsPending(),
+    navigationState:()=>({boardDirty:state.dirty,taskDirty:!!tasksMount?.hasUnsavedChanges?.(),running:!!state.activity?.length||state.messages.some(m=>['running','queued'].includes(m.state))||!!tasksMount?.isBusy?.(),busy:state.busy>0}),
+    async prepareLeave(choice){
+      if(!['save','discard','stop-save','stop-discard'].includes(choice))return false;
+      if(choice.startsWith('stop-')){if(state.record)await controller.action('cancel');if(tasksMount?.controller?.state?.checkRunId)await tasksMount.controller.cancelChecks?.();await controller.refresh({all:true});}
+      if(state.messages.some(m=>['running','queued'].includes(m.state))||tasksMount?.isBusy?.())throw Error('Work is still stopping. Wait a moment, then choose Continue again.');
+      if(choice.endsWith('save')){if(tasksMount?.controller){const c=tasksMount.controller;if(c.state.missionDirty)await c.saveMission();if(c.state.taskDirty)await c.saveTask();}if(state.dirty&&!await openSaveDialog())return false;}
+      else {tasksMount?.controller?.discard();if(state.record)await controller.load(state.record.id,{discard:true});else {state.dirty=false;controller.newBoard();}}
+      return !state.dirty&&!tasksMount?.hasUnsavedChanges?.();
+    },
     destroy() {
+      destroyed = true;
+      chatEnteredFullscreen = false;
+      root.classList.remove('ab-chat-focus');
       tasksEpoch++;tasksMount?.destroy?.();if(!tasksMount?.destroy)tasksMount?.unmount?.();
       closeSaveDialog?.();
+      closeImportDialog?.();clearInterval(activityClock);
       toggleFullscreen(true);
       destroyed = true;
       resetScheduler.destroy();

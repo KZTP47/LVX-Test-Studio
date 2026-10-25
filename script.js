@@ -317,6 +317,30 @@ async function executeDesktopCode(engine, code, inputFiles = [], contextVariable
 }
 window.cancelDesktopRuns=async()=>{for(const id of window.LVXActiveRuns||[])await window.electronAPI.studioOps.invoke('execution','cancel',{id});};
 
+// Imported tests are reviewed at the point of use, with the exact definition
+// and workspace bound to the approval. Cancelling never starts a process.
+window.LVXReviewImported = async function (definition) {
+    const api=window.electronAPI?.studioOps;if(!api)return true;
+    const binding=(await api.invoke('host','status')).workspaceRoot;
+    const review=await api.invoke('host','inspectImport',{definition,workspaceRoot:binding});
+    if(!review.hashes.length)return true;
+    return new Promise(resolve=>{
+        const dialog=document.createElement('dialog');dialog.className='lvx-import-review';dialog.setAttribute('aria-labelledby','lvx-import-review-title');
+        const heading=document.createElement('h2');heading.id='lvx-import-review-title';heading.textContent='Review this imported test';
+        const help=document.createElement('p');help.textContent='Imported tests can run code on your computer. Check the source and website or file targets below. Trust only work you recognise. This approval covers this exact saved content.';
+        const source=document.createElement('pre');source.tabIndex=0;source.textContent=JSON.stringify(definition,null,2);
+        const status=document.createElement('p');status.setAttribute('role','alert');
+        const actions=document.createElement('div');actions.className='studio-actions';
+        const cancel=document.createElement('button');cancel.type='button';cancel.className='aero-button-gray';cancel.textContent='Cancel';
+        const approve=document.createElement('button');approve.type='button';approve.className='aero-button-success';approve.textContent='Trust and continue';
+        const previous=document.activeElement;
+        const finish=value=>{dialog.close();dialog.remove();previous?.focus();resolve(value);};
+        cancel.onclick=()=>finish(false);dialog.oncancel=event=>{event.preventDefault();finish(false);};
+        approve.onclick=async()=>{approve.disabled=true;try{await api.invoke('host','trustImportDefinition',{definition,hashes:review.hashes,workspaceRoot:binding});finish(true);}catch(error){status.textContent=error.message;approve.disabled=false;}};
+        actions.append(cancel,approve);dialog.append(heading,help,source,status,actions);document.body.append(dialog);dialog.showModal();cancel.focus();
+    });
+};
+
 async function executePythonCode(code, inputFiles = [], contextVariables = {}, executionOptions = {}) {
     if (window.electronAPI?.studioOps) return executeDesktopCode('python', code, inputFiles, contextVariables, executionOptions);
     const execute = async () => {
@@ -596,6 +620,21 @@ function loadExecutionConfig() {
     }
     updateExecutionDisplay();
 }
+
+window.addEventListener?.('lvx-credentials-migrated', () => {
+    if (!executionConfig) return;
+    const previous = executionConfig;
+    loadExecutionConfig();
+    // An open form may contain the user's edits. Refresh only unchanged fields
+    // whose saved value was repaired, so Save cannot restore an obsolete ref.
+    const modal = document.getElementById('execution-settings-modal');
+    if (modal && !modal.classList.contains('hidden')) {
+        for (const [field, key] of [['jdoodle-client-id','jdoodleClientId'],['jdoodle-client-secret','jdoodleClientSecret'],['robot-backend-url','robotBackendUrl'],['robot-api-url','robotApiUrl']]) {
+            const input = document.getElementById(field);
+            if (input && input.value === String(previous[key] || '')) input.value = executionConfig[key] || '';
+        }
+    }
+});
 
 function updateExecutionDisplay() {
     const modeText = executionConfig.mode === 'real' ? 'Real Execution' : 'Simulated';
@@ -1299,7 +1338,7 @@ function renderViews() {
     allViewsBtn.innerHTML = `
  <div class="flex justify-between items-center">
  <span class="font-semibold">All Views</span>
- <span class="text-xs aero-badge-info">${testSuites.length}</span>
+ <span class="text-xs aero-badge-info">${testSuites.filter(s=>s.hiddenFromLibrary!==true).length}</span>
  </div>
  `;
     allViewsBtn.onclick = () => switchView(null);
@@ -1307,7 +1346,7 @@ function renderViews() {
 
     // Individual views
     views.forEach(view => {
-        const suitesInView = testSuites.filter(s => s.view_id === view.id);
+        const suitesInView = testSuites.filter(s => s.hiddenFromLibrary!==true && s.view_id === view.id);
         const viewBtn = document.createElement('div');
         viewBtn.className = `${currentViewId === view.id ? 'aero-button-primary' : 'aero-button hover:aero-button-primary'
             } p-3 rounded transition duration-200 mb-2`;
@@ -1533,9 +1572,9 @@ function renderTestSuites(suites) {
     window.testSuites = suites;
 
     // Filter by current view first
-    let filteredSuites = suites;
+    let filteredSuites = suites.filter(s=>s.hiddenFromLibrary!==true);
     if (currentViewId !== null) {
-        filteredSuites = suites.filter(s => s.view_id === currentViewId);
+        filteredSuites = filteredSuites.filter(s => s.view_id === currentViewId);
     }
 
     // Apply search filter
@@ -1718,7 +1757,7 @@ function openAddSuiteModal() {
     const modalTitle = document.getElementById('modal-title');
     if (modalTitle) {
         const envName = window.environmentManager ? window.environmentManager.getActiveEnvironment().name : '';
-        modalTitle.innerHTML = `Add New Test Suite <span class="text-sm font-normal text-gray-400 ml-2">Env: ${escapeHtml(envName)}</span>`;
+        modalTitle.innerHTML = `Add code test suite <span class="text-sm font-normal text-gray-400 ml-2">Env: ${escapeHtml(envName)}</span>`;
     }
 
     const suiteForm = document.getElementById('suite-form');
@@ -2597,7 +2636,10 @@ async function executeSuiteCore(suite) {
         const validationSource=window.ExecutionValidation.getSuiteValidationSource(suite),validationMode=window.ExecutionValidation.getSuiteValidationMode(suite.language,validationSource);
         const executionOptions = {...(validationMode==='python-assertions'?{validationCode:validationSource}:{}),parameters:{...envInputs.parameters,...(suite.parameters||{})},parameterSchema:{...envInputs.parameterSchema,...(suite.parameter_schema||suite.parameterSchema||{})}};
         let result;
-        if (suite.language === 'python') {
+        if (suite.language === 'javascript') {
+            if(!window.electronAPI?.studioOps)throw Error('JavaScript suites run in the Windows desktop app. Open LVX Test Studio to run this test.');
+            result = await executeDesktopCode('javascript',codeToExecute,suite.input_files??suite.inputFiles??[],suite.contextVariables||{},executionOptions);
+        } else if (suite.language === 'python') {
             result = await executePythonCode(codeToExecute, suite.input_files ?? suite.inputFiles ?? [], suite.contextVariables || {}, executionOptions);
         } else if (suite.language === 'robot') {
             if (executionConfig.robotType === 'browser') {
@@ -2623,7 +2665,9 @@ async function executeSuiteCore(suite) {
             result = await executeWebsiteIntegration(suiteWithEnv);
             }
         } else if (suite.language === 'playwright') {
-            if (window.electronAPI && window.electronAPI.runPlaywrightTest) {
+            if (window.electronAPI?.studioOps) {
+                result = await executeDesktopCode('playwright',codeToExecute,suite.input_files??suite.inputFiles??[],suite.contextVariables||{},executionOptions);
+            } else if (window.electronAPI && window.electronAPI.runPlaywrightTest) {
                 // Call Electron Backend
                 const backendResult = await window.electronAPI.runPlaywrightTest(codeToExecute);
                 result = {
@@ -2819,6 +2863,7 @@ async function runDataDrivenTest(suite, dataSet, silent = false, inputs = {}) {
 
 async function runTestSuite(suiteId, silent = false, inputs = {}) {
     const suiteForPlan=testSuites.find(suite=>suite.id===suiteId);
+    if(suiteForPlan&&!silent&&window.LVXReviewImported&&!await window.LVXReviewImported(suiteForPlan))return {status:'CANCELLED',log:'Imported test review cancelled. No test was started.'};
     const mock=suiteForPlan?.mock_builder;
     if(mock&&(mock.mocks?.length||mock.setupSteps?.length||mock.teardownSteps?.length||mock.fileData?.rows?.length)&&window.electronAPI?.studioOps&&window.LVXMachinaGraph){
       return window.LVXMachinaGraph.runWorkflow({schemaVersion:1,name:suiteForPlan.name,nodes:[{id:'suite-'+suiteId,type:'test-suite',data:{suite:suiteForPlan,suiteId,name:suiteForPlan.name}}],edges:[]},{waitForCompletion:true,parameters:inputs});
@@ -2839,7 +2884,7 @@ async function runTestSuite(suiteId, silent = false, inputs = {}) {
     }
 
     // *** NEW LOGIC: Reroute Visual Web Tests to the Live Runner ***
-    if (suite.language === 'website' && suite.website_method === 'upload' && !silent) {
+    if (suite.language === 'website' && (suite.website_method === 'upload' || suite.vwt_steps_json) && !silent) {
         if (typeof vwt_openLiveRunner === 'function') {
             vwt_openLiveRunner(suite);
             return { status: 'PENDING', log: 'Opened in Visual Runner' };
@@ -3081,10 +3126,16 @@ function showMessage(text, type = 'info') {
     };
 
     messageBox.className = `fixed top-5 right-5 z-50 transition-all duration-300 ${classes[type]} px-6 py-3 rounded-lg shadow-lg`;
+    clearTimeout(messageBox._lvxHideTimer);
     messageBox.textContent = text;
+    messageBox.setAttribute('role',type==='error'?'alert':'status');
+    messageBox.classList.toggle('lvx-message-error',type==='error');
+    if(type==='error'){
+        const dismiss=document.createElement('button');dismiss.type='button';dismiss.className='lvx-message-dismiss';dismiss.textContent='Dismiss';dismiss.onclick=()=>{messageBox.style.transform='translateX(150%)';};messageBox.appendChild(dismiss);
+    }
     messageBox.style.transform = 'translateX(0)';
 
-    setTimeout(() => {
+    if(type!=='error')messageBox._lvxHideTimer=setTimeout(() => {
         messageBox.style.transform = 'translateX(150%)';
     }, 3000);
 }

@@ -213,6 +213,7 @@ class VisualEditor {
 
     loadGraph(graphData = {}) {
         const copy=JSON.parse(JSON.stringify(graphData));
+        this.runnerMigrationWarnings=window.GraphEngine?.normalizeRunnerReferences(copy)||[];
         this.graphMetadata={...copy};delete this.graphMetadata.nodes;delete this.graphMetadata.edges;
         this.nodes=(copy.nodes||[]).map((node,index)=>({...node,type:String(node.type||node.data?.type||'test-suite').replace(/_/g,'-'),data:node.data||{},position:node.position||{x:node.x||100+index*350,y:node.y||100}}));
         this.edges=(copy.edges||[]).map((edge,index)=>({...edge,id:edge.id||'imported-edge-'+index}));
@@ -964,6 +965,7 @@ ${summaryText || 'No summary generated.'}
         const toolButtons = this.container.querySelectorAll('[data-ve-tool]');
         toolButtons.forEach(button => {
             if (!button?.classList) return;
+            button.setAttribute('aria-pressed', String(button.dataset?.veTool === this.activeTool));
             if (button.dataset?.veTool === this.activeTool) {
                 button.classList.add('active');
             } else {
@@ -1081,15 +1083,14 @@ ${summaryText || 'No summary generated.'}
 
         savedRetryTargets.forEach(row => {
             if (!row || !validNodeIds.has(row.nodeId)) return;
-            const parsedAttempts = parseInt(row.attempts, 10);
-            retryAttemptsByNodeId.set(row.nodeId, parsedAttempts > 0 ? parsedAttempts : 1);
+            retryAttemptsByNodeId.set(row.nodeId, row.attempts ?? 0);
         });
 
         const retryRows = retryCandidateNodes
             .filter(node => !disabledRetryNodeIds.has(node.id))
             .map(node => ({
                 nodeId: node.id,
-                attempts: retryAttemptsByNodeId.get(node.id) || 1
+                attempts: retryAttemptsByNodeId.get(node.id) ?? 0
             }));
 
         return {
@@ -1370,8 +1371,8 @@ ${summaryText || 'No summary generated.'}
         zoomControls.id = 've-viewport-controls';
         zoomControls.className = 've-zoom-controls';
         zoomControls.innerHTML = `
-            <button type="button" data-ve-tool="select" title="Select and move nodes">${window.LVXIcons?.svg("select")||''} Select</button>
-            <button type="button" data-ve-tool="pan" title="Hand tool">${window.LVXIcons?.svg("hand")||''} Pan</button>
+            <button type="button" data-ve-tool="select" aria-pressed="true" title="Select and move nodes">${window.LVXIcons?.svg("select")||''} Select</button>
+            <button type="button" data-ve-tool="pan" aria-pressed="false" title="Hand tool">${window.LVXIcons?.svg("hand")||''} Pan</button>
             <button type="button" id="ve-zoom-in-btn" title="Zoom in">${window.LVXIcons?.svg("plus")||''}</button>
             <button type="button" id="ve-zoom-out-btn" title="Zoom out">${window.LVXIcons?.svg("minus")||''}</button>
             <button type="button" id="ve-reset-view-btn" title="Reset view">${window.LVXIcons?.svg("refresh")||''} Reset</button>
@@ -1484,7 +1485,7 @@ ${summaryText || 'No summary generated.'}
         if (!list) return;
 
         list.innerHTML = '';
-        this.availableSuites.forEach(suite => {
+        this.availableSuites.filter(suite => suite.hiddenFromLibrary !== true).forEach(suite => {
             const item = document.createElement('div');
             item.className = 've-palette-item aero-card';
             item.draggable = true;
@@ -1859,6 +1860,7 @@ ${summaryText || 'No summary generated.'}
             e.stopPropagation();
             if (confirm('Delete this connection?')) {
                 this.edges = this.edges.filter(ed => ed !== edge);
+                window.GraphEngine?.normalizeRunnerReferences({nodes:this.nodes,edges:this.edges});
                 this.render();
                 this._commitHistoryState();
             }
@@ -2026,6 +2028,7 @@ ${summaryText || 'No summary generated.'}
     deleteNode(id) {
         this.nodes = this.nodes.filter(n => n.id !== id);
         this.edges = this.edges.filter(e => e.source !== id && e.target !== id);
+        window.GraphEngine?.normalizeRunnerReferences({nodes:this.nodes,edges:this.edges});
         if (this.selectedNodeId === id) {
             this.selectedNodeId = null;
         }
@@ -2446,7 +2449,7 @@ ${summaryText || 'No summary generated.'}
                         <div class="flex items-center justify-between mb-3 gap-4">
                             <div>
                                 <h4 class="text-lg font-semibold" style="color: #052e16;">Jobs to retry running upon fail</h4>
-                                <p class="text-xs" style="color: rgba(5, 46, 22, 0.78);">Retries are applied only to the nodes connected directly after this runner.</p>
+                                <p class="text-xs" style="color: rgba(5, 46, 22, 0.78);">A job runs once by default. Choose 0–20 extra tries after failure. Only directly connected jobs are listed; stopping a run stops its retries too.</p>
                             </div>
                             <button id="cfg-runner-add-retry" class="aero-button-success py-2 px-4 rounded-lg" ${retryCandidateNodes.length === 0 ? 'disabled' : ''}>Add Another</button>
                         </div>
@@ -2468,6 +2471,7 @@ ${summaryText || 'No summary generated.'}
                         </div>
 
                         <div id="cfg-runner-log-path-group">
+                            ${config.logDestinationMigration ? `<p role="status" class="text-sm mb-3" style="color:#052e16;">This older graph used a log folder from another location. Logs now go to <strong>${this._escapeHTML(config.logPath)}</strong> inside your selected workspace. You can change that destination below. The previous location is retained in the graph settings.</p>` : ''}
                             <label class="block text-sm font-semibold mb-2" style="color: #052e16;">Destination to save logs to</label>
                             <input type="text" id="cfg-runner-log-path" value="${this._escapeHTML(config.logPath || '')}" placeholder="logs/runner.log or logs/" class="w-full aero-input p-3 rounded-lg font-mono text-sm" style="background: rgba(255,255,255,0.82); color: #111827; border-color: rgba(20, 83, 45, 0.4);">
                             <p class="text-xs mt-2" style="color: rgba(5, 46, 22, 0.78);">Paths stay inside the selected workspace. A folder receives a separate log file for each run.</p>
@@ -2562,7 +2566,7 @@ ${summaryText || 'No summary generated.'}
                         </div>
                         <div>
                             <label class="block text-xs font-semibold mb-1" style="color: #052e16;">Retry attempts</label>
-                            <input type="number" min="1" max="20" value="${this._escapeHTML(row.attempts || 1)}" class="cfg-runner-retry-attempts w-full aero-input p-2 rounded-lg text-sm font-mono" style="background: rgba(255,255,255,0.86); color: #111827; border-color: rgba(20, 83, 45, 0.35);">
+                            <input type="number" min="0" max="20" step="1" required value="${this._escapeHTML(row.attempts ?? 0)}" aria-label="Extra retries after failure" class="cfg-runner-retry-attempts w-full aero-input p-2 rounded-lg text-sm font-mono" style="background: rgba(255,255,255,0.86); color: #111827; border-color: rgba(20, 83, 45, 0.35);">
                         </div>
                         <button type="button" class="cfg-runner-remove-retry rounded-full w-10 h-10 font-bold" data-index="${index}" style="background: #ea580c; color: white; border: 2px solid rgba(124, 45, 18, 0.75);">X</button>
                     </div>
@@ -2605,8 +2609,7 @@ ${summaryText || 'No summary generated.'}
                     const index = rowEl ? parseInt(rowEl.dataset.index, 10) : -1;
                     if (index < 0 || index >= retryRows.length) return;
 
-                    const attemptsValue = parseInt(inputEl.value, 10);
-                    retryRows[index].attempts = Number.isFinite(attemptsValue) && attemptsValue > 0 ? attemptsValue : 1;
+                    retryRows[index].attempts = inputEl.value;
                 };
             });
 
@@ -2634,7 +2637,7 @@ ${summaryText || 'No summary generated.'}
 
                 if (!nextAvailableNode) return;
 
-                retryRows.push({ nodeId: nextAvailableNode.id, attempts: 1, showSubtree: false });
+                retryRows.push({ nodeId: nextAvailableNode.id, attempts: 0, showSubtree: false });
                 renderRetryRows();
             };
         }
@@ -2646,12 +2649,15 @@ ${summaryText || 'No summary generated.'}
 
         modal.querySelector('#cfg-runner-cancel').onclick = () => modal.remove();
         modal.querySelector('#cfg-runner-save').onclick = () => {
+            for(const input of rowsContainer.querySelectorAll('.cfg-runner-retry-attempts')) {
+                if(!input.checkValidity()) { input.reportValidity(); input.focus(); return; }
+            }
             const parsedRetryTargets = Array.from(rowsContainer.querySelectorAll('.cfg-runner-retry-row')).map(rowEl => {
                 const nodeIdValue = rowEl.querySelector('.cfg-runner-retry-node')?.value || '';
-                const attemptsValue = parseInt(rowEl.querySelector('.cfg-runner-retry-attempts')?.value, 10);
+                const attemptsValue = Number(rowEl.querySelector('.cfg-runner-retry-attempts')?.value);
                 return {
                     nodeId: nodeIdValue,
-                    attempts: Number.isFinite(attemptsValue) && attemptsValue > 0 ? attemptsValue : 1
+                    attempts: attemptsValue
                 };
             }).filter(row => row.nodeId);
 
@@ -2663,6 +2669,7 @@ ${summaryText || 'No summary generated.'}
             node.data.logPath = modal.querySelector('#cfg-runner-log-path').value.trim();
             node.data.saveIndividualNodeLogs = modal.querySelector('#cfg-runner-save-node-logs').checked;
             node.data.captureAIContext = modal.querySelector('#cfg-runner-capture-ai').checked;
+            node.data.runnerSettingsVersion = 1;
             node.data.stopNodeId = modal.querySelector('#cfg-runner-stop-node').value || '';
             node.data.name = 'Start Runner Node';
 

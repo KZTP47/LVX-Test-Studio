@@ -35,6 +35,8 @@
   const body=options.body==null?undefined:String(options.body);
   const hasReference=REFERENCE_TEST(String(url))||REFERENCE_TEST(JSON.stringify(headers))||REFERENCE_TEST(body||'');
   if(!hasReference)return fetch(url,options);
+  const unavailable=pendingIssues().find(issue=>[String(url),JSON.stringify(headers),body||''].some(value=>value.includes(issue.reference)));
+  if(unavailable)throw Error('The saved sign-in for '+unavailable.label+' needs re-entry. Open Repair saved connection. Your other connections are available.');
   if(options.signal?.aborted)throw new DOMException('The request was cancelled.','AbortError');
   const requestId=crypto.randomUUID();
   const payload={requestId,url:String(url),method:options.method||'GET',headers,timeoutMs:Number(options.timeout||30000),...(body!==undefined?{body}:{})};
@@ -43,13 +45,52 @@
   finally{if(abort)options.signal.removeEventListener('abort',abort);}
  }
  function REFERENCE_TEST(value){return /secret:[a-f0-9-]{36}/.test(value);}
+ const recoveryKey='lvx_credential_recovery';
+ function recoveryRecords(){try{return JSON.parse(localStorage.getItem(recoveryKey)||'[]');}catch{return [];}}
+ function saveRecovery(records){localStorage.setItem(recoveryKey,JSON.stringify(records));}
+ function atPath(value,path){for(const part of path)value=value?.[part];return value;}
+ function setPath(value,path,next){let target=value;for(const part of path.slice(0,-1))target=target[part];target[path.at(-1)]=next;}
+ function referencePaths(value,reference,path=[]){if(value===reference)return [path];if(!value||typeof value!=='object')return [];return Object.entries(value).flatMap(([key,child])=>referencePaths(child,reference,[...path,key]));}
+ function pendingIssues(){return recoveryRecords().filter(record=>{if(record.resolvedAt)return false;try{return referencePaths(JSON.parse(localStorage.getItem(record.storageKey)),record.reference).length>0;}catch{return false;}}).map(({encrypted,...record})=>record);}
+ function emit(name){window.dispatchEvent?.(typeof Event==='function'?new Event(name):{type:name});}
+ function publishIssues(){window.LVXCredentialIssues=pendingIssues();emit('lvx-credential-issues');}
+ async function recoverLegacy(value,key){
+  const issues=recoveryRecords();
+  async function walk(item,path=[],labels=[]){
+   if(item&&typeof item==='object'&&item.__lvxEncrypted){
+    try{return await protect(item,key+'.'+path.join('.'));}catch(error){
+     if(!/legacy.*credential|credential.*legacy/i.test(error.message))throw error;
+     const id=crypto.randomUUID(),reference='secret:'+id;
+     issues.push({id,reference,storageKey:key,path,label:[...labels,path.at(-1)||'Saved sign-in'].filter(Boolean).join(' / '),encrypted:structuredClone(item),createdAt:new Date().toISOString()});
+     return reference;
+    }
+   }
+   if(Array.isArray(item)){const result=[];for(let i=0;i<item.length;i++)result.push(await walk(item[i],[...path,i],labels));return result;}
+   if(item&&typeof item==='object'){const result={},nextLabels=item.name?[...labels,String(item.name).slice(0,100)]:labels;for(const [field,child]of Object.entries(item))result[field]=await walk(child,[...path,field],nextLabels);return result;}
+   return item;
+  }
+  const result=await walk(value);
+  // Stage recovery metadata until protection and the settings revision check succeed.
+  return {value:result,issues};
+ }
+ async function repair(id,replacement,{retryOriginal=false,forget=false}={}){
+  const records=recoveryRecords(),record=records.find(item=>item.id===id&&!item.resolvedAt);if(!record)throw Error('This saved connection has already been repaired. Refresh the list.');
+  const original=localStorage.getItem(record.storageKey);if(!original)throw Error('The saved connection no longer exists.');let value=JSON.parse(original);const locations=referencePaths(value,record.reference);
+  if(!locations.length)throw Error('This connection changed. Refresh the list before repairing it.');
+  let next='';
+  if(retryOriginal)next=await protect(record.encrypted,record.label);
+  else if(!forget){if(typeof replacement!=='string'||!replacement.trim())throw Error('Enter the replacement credential, or choose Forget saved sign-in.');next=(await invoke('security','storeSecret',{label:record.label.slice(0,120),value:replacement})).reference;}
+  if(localStorage.getItem(record.storageKey)!==original)throw Error('This connection changed while it was being repaired. Try again; the newer settings were preserved.');
+  for(const location of locations){if(location.length)setPath(value,location,next);else value=next;}localStorage.setItem(record.storageKey,JSON.stringify(value));record.resolvedAt=new Date().toISOString();saveRecovery(records);publishIssues();emit('lvx-credentials-migrated');return {repaired:true,forgotten:forget,updatedReferences:locations.length};
+ }
  async function migrate(keys=['execution_config','storage_config','cicd_backend_config','notification_integrations','lvx_pipelines','lvx_unit_tests','sharing_backend_config','test_environments']){
   if(!window.electronAPI?.studioOps)return {migrated:0,desktop:false};
   if(localStorage.length!==undefined)for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(/^(?:versions_|suite_versions_)/.test(key)&&!keys.includes(key))keys.push(key);}
   let migrated=0;const errors=[];
-  for(const key of keys){const original=localStorage.getItem(key);if(!original)continue;try{const protectedValue=JSON.stringify(await protect(JSON.parse(original),key));if(protectedValue!==original){localStorage.setItem(key,protectedValue);migrated++;}}catch(error){errors.push({key,message:error.message});}}
+  for(const key of keys){const original=localStorage.getItem(key);if(!original)continue;try{let value=JSON.parse(original),safe,recovery;try{safe=await protect(value,key);}catch(error){if(!JSON.stringify(value).includes('"__lvxEncrypted"'))throw error;recovery=await recoverLegacy(value,key);safe=await protect(recovery.value,key);}const protectedValue=JSON.stringify(safe);if(localStorage.getItem(key)!==original)throw Error('Settings changed while saved sign-ins were being upgraded. Retry to preserve the newer settings.');if(protectedValue!==original){if(recovery)saveRecovery(recovery.issues);localStorage.setItem(key,protectedValue);migrated++;}}catch(error){errors.push({key,message:error.message});}}
+  publishIssues();
   if(errors.length){const error=new Error('Some saved credentials could not be protected. Open Setup & diagnostics before using saved connections.');error.details=errors;throw error;}
-  return {migrated,desktop:true};
+  return {migrated,desktop:true,issues:pendingIssues()};
  }
- window.LVXCredentials=Object.freeze({protect,request,migrate,isReference:reference});
+ window.LVXCredentials=Object.freeze({protect,request,migrate,repair,issues:pendingIssues,isReference:reference});
 })();

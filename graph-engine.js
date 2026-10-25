@@ -22,15 +22,58 @@ class GraphEngine {
 
     static nodeTypes() { return ['script','test-suite','security-scan','security-gate','git-repo','unit-test-runner','ai-unit-test','ai-log-summary','log-collector','start-runner','wait-delay','api-performance','api-contract','code-review','website-ux-auto-tester','push-deploy']; }
 
+    // Old editors kept retry/stop references after deleting nodes or connections.
+    // Remove only obsolete references; malformed live policies still need fixing.
+    static normalizeRunnerReferences(workflow) {
+        const nodes = Array.isArray(workflow.nodes) ? workflow.nodes : [], edges = Array.isArray(workflow.edges) ? workflow.edges : [];
+        const ids = new Set(nodes.filter(Boolean).map(node => node.id)), warnings = [];
+        for (const node of nodes) {
+            if (!node || GraphEngine.normalizeNodeType(node.type || node.data?.type) !== 'start-runner' || !node.data || typeof node.data !== 'object') continue;
+            const config = node.data, downstream = new Set(), queue = [node.id];
+            if (config.runnerSettingsVersion == null && config.downloadLogs === true && typeof config.logPath === 'string' && /^(?:[a-z]:[\\/]|\\\\|\/)/i.test(config.logPath)) {
+                const relativePath = 'logs/' + String(node.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+                config.logDestinationMigration = {originalPath:config.logPath,relativePath};
+                config.logPath = relativePath;
+                config.runnerSettingsVersion = 1;
+                warnings.push(`Runner ${node.id}: logs from this older graph will be saved inside this workspace at ${relativePath}. The previous destination is retained in its settings.`);
+            }
+            while (queue.length) {
+                const current = queue.shift();
+                for (const edge of edges.filter(edge => edge?.source === current)) {
+                    if (edge.target !== node.id && !downstream.has(edge.target)) { downstream.add(edge.target); queue.push(edge.target); }
+                }
+            }
+            if (config.stopNodeId && (!ids.has(config.stopNodeId) || !downstream.has(config.stopNodeId))) {
+                config.stopNodeId = ''; warnings.push(`Runner ${node.id}: a removed stop boundary was cleared.`);
+            }
+            const disabled = new Set(Array.isArray(config.disabledRetryNodeIds) ? config.disabledRetryNodeIds.filter(id => ids.has(id)) : []);
+            if (Array.isArray(config.disabledRetryNodeIds)) config.disabledRetryNodeIds = [...disabled];
+            if (!Array.isArray(config.retryTargets)) continue;
+            const seen = new Map();
+            config.retryTargets = config.retryTargets.filter(target => {
+                if (target && typeof target.nodeId === 'string' && (!ids.has(target.nodeId) || !downstream.has(target.nodeId) || disabled.has(target.nodeId))) {
+                    warnings.push(`Runner ${node.id}: a removed or disabled retry target was cleared.`); return false;
+                }
+                if (!target || typeof target !== 'object') return true;
+                if (target.attempts == null) target.attempts = 0;
+                if (seen.has(target.nodeId) && JSON.stringify(seen.get(target.nodeId)) === JSON.stringify(target)) return false;
+                seen.set(target.nodeId, target); return true;
+            });
+        }
+        return warnings;
+    }
+
     static executionPlan(workflow, options = {}) {
-        const copy=JSON.parse(JSON.stringify(workflow)), runners=copy.nodes.filter(n=>GraphEngine.normalizeNodeType(n.type)==='start-runner'), assignments={}, scopes=new Map();
+        const validation=GraphEngine.validate(workflow);
+        if(!validation.valid) throw new Error(validation.errors.join(' '));
+        const copy=validation.workflow, runners=copy.nodes.filter(n=>GraphEngine.normalizeNodeType(n.type)==='start-runner'), assignments={}, scopes=new Map();
         const outgoing=id=>copy.edges.filter(e=>e.source===id).map(e=>e.target);
         const scopeFor=runner=>{if(scopes.has(runner.id))return scopes.get(runner.id);const ids=new Set([runner.id]),distances=new Map([[runner.id,0]]),queue=[runner.id];while(queue.length){const id=queue.shift();if(id===runner.data.stopNodeId)continue;for(const next of outgoing(id))if(!ids.has(next)){ids.add(next);distances.set(next,distances.get(id)+1);queue.push(next);}}const result={ids,distances};scopes.set(runner.id,result);return result;};
         let allowed=null;
         if(options.selectedNodeId||options.selectedNodeIds?.length){const selected=options.selectedNodeIds||[options.selectedNodeId];if(!Array.isArray(selected)||selected.some(id=>!copy.nodes.some(n=>n.id===id)))throw Error('Selected node does not exist.');allowed=new Set(selected);const visit=id=>copy.edges.filter(e=>e.target===id).forEach(e=>{if(!allowed.has(e.source)){allowed.add(e.source);visit(e.source);}});selected.forEach(visit);}
         else if(runners.length){const selected=options.runnerId?runners.filter(r=>r.id===options.runnerId):runners;if(!selected.length)throw Error('Selected runner does not exist.');allowed=new Set();for(const runner of selected)for(const id of scopeFor(runner).ids)allowed.add(id);}
         else if(options.runnerId)throw Error('Selected runner does not exist.');
-        for(const node of copy.nodes){let nearest=null,distance=Infinity;for(const runner of runners){const d=scopeFor(runner).distances.get(node.id);if(d!=null&&d<distance){nearest=runner;distance=d;}}if(nearest){assignments[node.id]=nearest.id;const target=nearest.data.retryTargets?.find(t=>t.nodeId===node.id);if(target&&!node.retry&&!node.data.retry)node.retry={maxAttempts:Number(target.attempts)+1,backoffMs:Number(target.backoffMs||0)};}}
+        for(const node of copy.nodes){let nearest=null,distance=Infinity;for(const runner of runners){const d=scopeFor(runner).distances.get(node.id);if(d!=null&&d<distance){nearest=runner;distance=d;}}if(nearest){assignments[node.id]=nearest.id;const target=nearest.data.retryTargets?.find(t=>t.nodeId===node.id);if(target&&!node.retry&&!node.data.retry&&node.executionPolicy?.retryAttempts==null)node.retry={maxAttempts:Number(target.attempts)+1,backoffMs:Number(target.backoffMs??0)};}}
         if(allowed){copy.nodes=copy.nodes.filter(n=>allowed.has(n.id));copy.edges=copy.edges.filter(e=>allowed.has(e.source)&&allowed.has(e.target));}
         return {workflow:copy,runnerAssignments:Object.fromEntries(Object.entries(assignments).filter(([id])=>copy.nodes.some(n=>n.id===id)))};
     }
@@ -142,6 +185,7 @@ class GraphEngine {
         const outputEntries=sortedNodes.flatMap(node=>Object.entries(context.results[node.id]?.artifacts||{}).map(([name,value])=>({producer:node.id,runId:context.results[node.id].runId||null,name,value})));
         const outputCounts=outputEntries.reduce((counts,item)=>{counts[item.name]=(counts[item.name]||0)+1;return counts;},Object.create(null));
         const artifacts=Object.fromEntries(outputEntries.map(item=>[outputCounts[item.name]>1?`${item.producer}.${item.name}`:item.name,item.value]));
+        if (options.signal?.aborted) overallStatus = 'CANCELLED';
         return {
             status: overallStatus,
             duration: Date.now() - context.startTime,
@@ -239,7 +283,9 @@ class GraphEngine {
     static matchesType(value, type) { return type === 'any' || (type === 'array' ? Array.isArray(value) : type === 'object' ? !!value && typeof value === 'object' && !Array.isArray(value) : typeof value === type); }
 
     static validate(workflow, { strict = false } = {}) {
+        if (!workflow || typeof workflow !== 'object' || Array.isArray(workflow)) return {valid:false,errors:['Choose a workflow containing nodes and connections.'],warnings:[],workflow:{schemaVersion:1,nodes:[],edges:[]}};
         const migrated = JSON.parse(JSON.stringify(workflow || {})), errors = [];
+        const warnings = GraphEngine.normalizeRunnerReferences(migrated);
         if (migrated.schemaVersion != null && migrated.schemaVersion !== 1) errors.push('Unsupported workflow schema version.');
         migrated.schemaVersion = 1;
         if (!Array.isArray(migrated.nodes) || !migrated.nodes.length) errors.push('Add at least one workflow step.');
@@ -250,23 +296,24 @@ class GraphEngine {
             if(!node || typeof node!=='object') {errors.push('Each step must contain a valid configuration.');continue;}
             if(typeof node.id!=='string'||!node.id.trim()||node.id.length>128)errors.push('Step IDs must be nonempty strings of at most 128 characters.');
             node.type = GraphEngine.normalizeNodeType(node.type || node.data?.type);
-            if (!node.data || typeof node.data !== 'object') errors.push(`Step ${node.id || '(unnamed)'} needs configuration.`);
+            if (!node.data || typeof node.data !== 'object' || Array.isArray(node.data)) errors.push(`Step ${node.id || '(unnamed)'} needs configuration.`);
             if (!GraphEngine.nodeTypes().includes(node.type)) errors.push(`Step ${node.id} has unsupported type ${node.type}.`);
             if (strict && node.type==='script' && (!node.data?.engine || (!node.data.code && !node.data.projectPath))) errors.push(`Step ${node.id} needs an engine and code or project.`);
             if(strict&&node.data?.engine&&!['javascript','playwright','python','robot','java','csharp','jest','junit','nunit','pytest'].includes(node.data.engine))errors.push(`Step ${node.id} needs a supported execution engine.`);
             if(strict&&node.type==='script'&&['jest','junit','nunit','pytest'].includes(node.data?.engine)&&!node.data.projectPath)errors.push(`Step ${node.id} needs its native project directory.`);
             if(node.type==='start-runner'){
                 if(node.data?.stopNodeId&&!migrated.nodes.some(n=>n.id===node.data.stopNodeId&&n.id!==node.id))errors.push(`Runner ${node.id} has an invalid stop boundary.`);
-                if(node.data?.retryTargets!=null&&(!Array.isArray(node.data.retryTargets)||node.data.retryTargets.some(t=>!migrated.nodes.some(n=>n.id===t.nodeId)||!Number.isInteger(Number(t.attempts))||Number(t.attempts)<0||Number(t.attempts)>20)))errors.push(`Runner ${node.id} needs valid retry targets with 0–20 retries.`);
+                const targets=node.data?.retryTargets;
+                if(targets!=null&&(!Array.isArray(targets)||targets.some(t=>!t||typeof t.nodeId!=='string'||!migrated.nodes.some(n=>n?.id===t.nodeId&&n.id!==node.id)||typeof t.attempts==='boolean'||String(t.attempts).trim()===''||!Number.isInteger(Number(t.attempts))||Number(t.attempts)<0||Number(t.attempts)>20||!Number.isFinite(Number(t.backoffMs??0))||Number(t.backoffMs??0)<0||Number(t.backoffMs??0)>60000)||new Set(targets.map(t=>t?.nodeId)).size!==targets.length))errors.push(`Runner ${node.id}: choose each connected retry target once and use a whole number from 0 to 20 retries (0 means run once).`);
             }
             if(!['stop','continue'].includes(node.onFailure||node.data?.onFailure||'stop'))errors.push(`Step ${node.id} must stop or continue after failure.`);
-            const retry=node.retry||node.data?.retry||{},attempts=Number(retry.maxAttempts??1),backoff=Number(retry.backoffMs??0);
-            if(!Number.isInteger(attempts)||attempts<1||attempts>10||!Number.isFinite(backoff)||backoff<0||backoff>60000)errors.push(`Step ${node.id} needs 1–10 attempts and 0–60000ms retry backoff.`);
+            const retry=node.retry||node.data?.retry||(node.executionPolicy?.retryAttempts!=null?{maxAttempts:Number(node.executionPolicy.retryAttempts)+1}:{}),attempts=Number(retry.maxAttempts??1),backoff=Number(retry.backoffMs??0);
+            if(!Number.isInteger(attempts)||attempts<1||attempts>21||!Number.isFinite(backoff)||backoff<0||backoff>60000)errors.push(`Step ${node.id} needs 1–21 attempts and 0–60000ms retry backoff.`);
             const resources=node.resources||node.data?.resources||[];
             if(!Array.isArray(resources)||resources.some(value=>typeof value!=='string'||!value.trim()))errors.push(`Step ${node.id} needs nonempty resource lock names.`);
         }
         if (Array.isArray(migrated.nodes) && Array.isArray(migrated.edges)) try { new GraphEngine()._getTopologicalSort(migrated.nodes, migrated.edges); } catch (error) { errors.push(error.message); }
-        return { valid: errors.length === 0, errors, workflow: migrated };
+        return { valid: errors.length === 0, errors, warnings, workflow: migrated };
     }
 }
 

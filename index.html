@@ -12,6 +12,8 @@
     <link rel="stylesheet" href="assets/agent-connection.css">
   <link rel="stylesheet" href="assets/agent-projects.css">
   <link rel="stylesheet" href="assets/visual-web-targets.css">
+  <link rel="stylesheet" href="assets/graph-controls.css">
+  <link rel="stylesheet" href="assets/agent-test-import.css">
 
   <!-- Monaco Editor -->
   <link rel="stylesheet" href="assets/vendor/monaco/vs/editor/editor.main.css">
@@ -97,7 +99,7 @@
             </button>
             <!-- 👆 Ny knapp för unit tester 👆 -->
             <button id="openAddSuiteModal" onclick="openAddSuiteModal()" class="aero-button-success py-2 px-4 rounded-lg shadow-lg transition duration-200">
-              + Add New Test Suite
+              + Add code test suite
             </button>
 
             <label for="import-file-input" class="aero-button-info py-2 px-4 rounded-lg shadow-lg transition duration-200 cursor-pointer flex items-center">
@@ -141,7 +143,8 @@
             <div class="w-40">
               <select id="language-filter" aria-label="Filter suites by language" class="w-full aero-button p-2 rounded-lg" onchange="filterSuites()">
                 <option value="">All Languages</option>
-                <option value="python">Python</option>
+                <option value="javascript">JavaScript (Node.js)</option>
+            <option value="python">Python</option>
                 <option value="robot">Robot Framework</option>
                 <option value="java">Java</option>
                 <option value="csharp">C#</option>
@@ -583,8 +586,13 @@
             <h3 class="text-lg font-semibold aero-text-secondary mb-3">1. Load Website</h3>
             <div class="vwt-target-controls space-y-3 aero-glass-panel p-3 rounded">
               <p class="text-sm">Choose your website, load its preview, then add the steps you want to test.</p>
-              <label for="vwt-source-kind">Where is your website?</label>
-              <select id="vwt-source-kind" class="aero-input" onchange="vwt_setSourceMode(this.value)">
+              <span id="vwt-source-label">Where is your website?</span>
+              <div class="vwt-source-choices" role="group" aria-labelledby="vwt-source-label" role="group" aria-label="Website source">
+                <button type="button" class="aero-button-primary" data-vwt-source="files" aria-pressed="true" onclick="vwt_setSourceMode('files')">Files or folder</button>
+                <button type="button" class="aero-button-primary" data-vwt-source="url" aria-pressed="false" onclick="vwt_setSourceMode('url')">Website URL</button>
+                <button type="button" class="aero-button-primary" data-vwt-source="repository" aria-pressed="false" onclick="vwt_setSourceMode('repository')">Git repository</button>
+              </div>
+              <select aria-hidden="true" tabindex="-1" id="vwt-source-kind" class="aero-input" onchange="vwt_setSourceMode(this.value)">
                 <option value="files">Files or folder</option><option value="repository">Git repository</option><option value="url">Website address</option>
               </select>
               <div id="vwt-source-files">
@@ -602,9 +610,15 @@
                 <p class="text-xs">Downloads a separate copy using Git. Private repositories use your computer's Git sign-in. Nothing is installed or run yet.</p>
               </div>
               <div id="vwt-source-url" hidden>
-                <label for="vwt-website-url">Staging or live website URL</label><input type="url" id="vwt-website-url" class="aero-input" placeholder="https://staging.example.com">
+                <label for="vwt-website-url">Staging, live or local website address</label><input type="url" id="vwt-website-url" class="aero-input" placeholder="https://staging.example.com" aria-describedby="vwt-website-url-help" onkeydown="if(event.key==='Enter'){event.preventDefault();vwt_loadWebsite();}">
                 <button type="button" class="aero-button-primary" onclick="vwt_loadWebsite()">Use website</button>
-                <p class="text-xs">Tests interact with the real website. Use a test account and test data when actions change anything.</p>
+                <p id="vwt-website-url-help" class="text-xs">Paste a full address, such as https://example.com, your staging address or http://localhost:3000, then choose Use website. No source files are needed.</p>
+                <p class="text-xs">Tests use the actual website, including its scripts and network requests. Use a test account and test data when actions change anything.</p>
+                <div class="vwt-url-actions">
+                  <button type="button" id="vwt-website-signin" class="aero-button-info" onclick="vwt_showWebsite()" disabled>Open website / sign in</button>
+                  <button type="button" id="vwt-website-refresh" class="aero-button-gray" onclick="vwt_refreshWebsiteSnapshot()" disabled>Update preview after sign in</button>
+                </div>
+                <p class="text-xs">If a sign-in page appears, open the website, sign in there and update this preview. Sign-in stays in this workspace's isolated website session; it is never included in exported tests.</p>
               </div>
               <div id="vwt-source-status" class="text-sm" role="status" aria-live="polite">Choose files, a folder, a repository or a website address to begin.</div>
               <div id="vwt-files-preview" class="text-xs aero-text-muted p-2 aero-modal rounded">No files yet.</div>
@@ -742,7 +756,7 @@
 
   <div id="suite-modal" class="hidden fixed inset-0 z-[70] flex items-center justify-center aero-modal-backdrop modal-open" onclick="if (event.target.id === 'suite-modal') closeEditorModal()">
     <div class="aero-modal p-6 sm:p-8 w-full max-w-5xl max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
-      <h3 id="modal-title" class="text-3xl font-bold mb-6 aero-text-primary">Add New Test Suite</h3>
+      <h3 id="modal-title" class="text-3xl font-bold mb-6 aero-text-primary">Add code test suite</h3>
       <form id="suite-form" onsubmit="saveSuite(event)">
         <input type="hidden" id="suite-id">
 
@@ -768,6 +782,7 @@
           <label for="suite_language" class="block text-sm font-medium aero-text-secondary mb-1">Programming Language /
             Framework</label>
           <select id="suite_language" class="w-full aero-input p-3 rounded-lg" onchange="updateCodeEditor()">
+            <option value="javascript">JavaScript (Node.js)</option>
             <option value="python">Python</option>
             <option value="java">Java</option>
             <option value="csharp">C#</option>
@@ -2832,7 +2847,8 @@ user2,pass456,user2@test.com"></textarea>
               <label class="block text-sm font-medium aero-text-secondary mb-2">Language</label>
               <select id="security-scan-language" class="w-full aero-input p-3 rounded-lg">
                 <option value="javascript">JavaScript</option>
-                <option value="python">Python</option>
+                <option value="javascript">JavaScript (Node.js)</option>
+            <option value="python">Python</option>
                 <option value="robot">Robot Framework</option>
               </select>
             </div>

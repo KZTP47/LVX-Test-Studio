@@ -15,7 +15,8 @@ function createStudioHost({app, BrowserWindow, ipcMain, dialog, safeStorage, ses
   function saveImports(value){fs.mkdirSync(path.dirname(importFile()),{recursive:true});const temp=importFile()+'.'+crypto.randomUUID()+'.tmp';fs.writeFileSync(temp,JSON.stringify(value));fs.renameSync(temp,importFile());}
   const {executableHashes}=require('./imported-executables.cjs');
   async function recordImported(value){const all=imports(),key=workspaceRoot;all[key]||={};for(const hash of await executableHashes(value))all[key][hash]={trusted:false,importedAt:new Date().toISOString()};saveImports(all);}
-  async function checkImported(value){const known=imports()[workspaceRoot]||{};for(const hash of await executableHashes(value))if(known[hash]&&!known[hash].trusted)throw Error('Review and trust the imported executable content in Project & backup before running it.');}
+  async function inspectImport(value){const known=imports()[workspaceRoot]||{};return (await executableHashes(value)).filter(hash=>known[hash]&&!known[hash].trusted).sort();}
+  async function checkImported(value){const hashes=await inspectImport(value);if(hashes.length){const error=Error('Review and trust the imported executable content in Project & backup before running it.');error.code='IMPORT_REVIEW_REQUIRED';error.details={hashes};throw error;}}
   async function checkFixtureDependencies(payload){const ids=new Set([payload.fixtureId,...(payload.workflow?.nodes||[]).map(n=>n.data?.fixtureId)].filter(Boolean));if(!ids.size)return;for(const fixture of await init().execution.handle('fixtures',{}))if(ids.has(fixture.id))await checkImported(fixture);}
   const entry = pathToFileURL(path.join(__dirname, '..', 'index.html')).href;
   const windows = () => BrowserWindow.getAllWindows().filter(w => !w.isDestroyed() && !w.webContents.isDestroyed() && w.webContents.getURL().split('#')[0] === entry);
@@ -220,6 +221,13 @@ function createStudioHost({app, BrowserWindow, ipcMain, dialog, safeStorage, ses
         if(action==='protectConfiguration'){require('./security').validatePayload(payload);return protectNative(payload.value,payload.label);}
         if(action==='pendingImports')return Object.entries(imports()[workspaceRoot]||{}).filter(([,v])=>!v.trusted).map(([hash,v])=>({hash,...v}));
         if(action==='checkImported'){await checkImported(payload);return {allowed:true};}
+        if(action==='inspectImport'){await trusted(payload);return {hashes:await inspectImport(payload.definition)};}
+        if(action==='trustImportDefinition'){
+          await trusted(payload);const binding=workspaceRoot,hashes=await inspectImport(payload.definition);
+          if(!Array.isArray(payload.hashes)||JSON.stringify([...payload.hashes].sort())!==JSON.stringify(hashes))throw Error('The imported test changed after its review. Open the review again.');
+          if(binding!==workspaceRoot)throw Error('Workspace changed during import review.');
+          const all=imports();for(const hash of hashes)all[binding][hash].trusted=true;saveImports(all);return {trusted:true,hashes};
+        }
         if(action==='trustImport'){await trusted();if(!/^[a-f0-9]{64}$/.test(payload.hash||''))throw Error('Select an imported executable item.');const all=imports();if(!all[workspaceRoot]?.[payload.hash])throw Error('Imported content was not found.');all[workspaceRoot][payload.hash].trusted=true;saveImports(all);return {trusted:true,hash:payload.hash};}
         throw new Error('Unknown host action.');
       }

@@ -102,3 +102,25 @@ launch if exceeded. Native output is bounded at 8 MiB and 20 minutes per turn;
 crossing either boundary produces an explicit limit/partial outcome. Provider-installed
 tools, native permissions, account limits and CLI updates can still block actual
 work and are reported without silently creating a fresh conversation.
+
+## Visible work and importing agent tests
+
+A running attempt exposes an ephemeral, attempt-bound activity snapshot. Native
+provider events show completed assistant message text and coarse tool activity;
+reasoning blocks, tool commands and tool output are not turned into chat text.
+The API adapter reports that it is waiting when that endpoint returns only a
+complete response. A one-second clock keeps elapsed time visible. The final
+message and existing protocol evidence remain the durable execution receipt.
+
+Chat delivery can be one agent or explicit directed collaboration. Collaborative
+chat forwards only successful complete replies over enabled arrows, inside the
+saved turn budget; manual chat retains its single-turn behavior. Actual peer
+records identify sender, recipient, state and full forwarded text in both chats
+and the board's Messages between agents section.
+
+Import agent tests previews selected JSON exports or structured reply bundles.
+It validates supported test source and workflow shapes without evaluating code,
+checks dependencies and conflicts, and saves all chosen exports in one revision
+checked transaction only after review. It never overwrites existing records or
+runs imported content. Project archives containing additional data such as
+baselines should use the complete Project & backup import flow instead.
