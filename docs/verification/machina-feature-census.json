@@ -1,0 +1,624 @@
+{
+  "schemaVersion": 1,
+  "archiveSha256": "924f1b90bd2412ba888c9926d0d9b8f0ae92bfca064908aad05b57efc1eafab5",
+  "method": "Required observable outcome inventory; source/code paths and independently runnable evidence. Status requires current aggregate verifier, not this file alone.",
+  "features": [
+    {
+      "id": "NODE-ai-log-summary",
+      "outcome": "ai-log-summary",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js",
+        "services/machina/runtime.cjs"
+      ],
+      "evidence": [
+        "tests/machina-runtime.test.cjs",
+        "tests/machina-graph.test.cjs",
+        "docs/verification/machina-e2e-results.json"
+      ]
+    },
+    {
+      "id": "NODE-ai-unit-test",
+      "outcome": "ai-unit-test",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js",
+        "services/machina/runtime.cjs"
+      ],
+      "evidence": [
+        "tests/machina-runtime.test.cjs",
+        "tests/machina-graph.test.cjs",
+        "docs/verification/machina-e2e-results.json"
+      ]
+    },
+    {
+      "id": "NODE-api-contract",
+      "outcome": "api-contract",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js",
+        "services/machina/runtime.cjs"
+      ],
+      "evidence": [
+        "tests/machina-runtime.test.cjs",
+        "tests/machina-graph.test.cjs",
+        "docs/verification/machina-e2e-results.json"
+      ]
+    },
+    {
+      "id": "NODE-api-performance",
+      "outcome": "api-performance",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js",
+        "services/machina/runtime.cjs"
+      ],
+      "evidence": [
+        "tests/machina-runtime.test.cjs",
+        "tests/machina-graph.test.cjs",
+        "docs/verification/machina-e2e-results.json"
+      ]
+    },
+    {
+      "id": "NODE-code-review",
+      "outcome": "code-review",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js",
+        "services/machina/runtime.cjs"
+      ],
+      "evidence": [
+        "tests/machina-runtime.test.cjs",
+        "tests/machina-graph.test.cjs",
+        "docs/verification/machina-e2e-results.json"
+      ]
+    },
+    {
+      "id": "NODE-git-repo",
+      "outcome": "git-repo",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js",
+        "services/machina/runtime.cjs"
+      ],
+      "evidence": [
+        "tests/machina-runtime.test.cjs",
+        "tests/machina-graph.test.cjs",
+        "docs/verification/machina-e2e-results.json"
+      ]
+    },
+    {
+      "id": "NODE-log-collector",
+      "outcome": "log-collector",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js",
+        "services/machina/runtime.cjs"
+      ],
+      "evidence": [
+        "tests/machina-runtime.test.cjs",
+        "tests/machina-graph.test.cjs",
+        "docs/verification/machina-e2e-results.json"
+      ]
+    },
+    {
+      "id": "NODE-push-deploy",
+      "outcome": "push-deploy",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js",
+        "services/machina/runtime.cjs"
+      ],
+      "evidence": [
+        "tests/machina-runtime.test.cjs",
+        "tests/machina-graph.test.cjs",
+        "docs/verification/machina-e2e-results.json"
+      ]
+    },
+    {
+      "id": "NODE-security-gate",
+      "outcome": "security-gate",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js",
+        "services/machina/runtime.cjs"
+      ],
+      "evidence": [
+        "tests/machina-runtime.test.cjs",
+        "tests/machina-graph.test.cjs",
+        "docs/verification/machina-e2e-results.json"
+      ]
+    },
+    {
+      "id": "NODE-security-scan",
+      "outcome": "security-scan",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js",
+        "services/machina/runtime.cjs"
+      ],
+      "evidence": [
+        "tests/machina-runtime.test.cjs",
+        "tests/machina-graph.test.cjs",
+        "docs/verification/machina-e2e-results.json"
+      ]
+    },
+    {
+      "id": "NODE-start-runner",
+      "outcome": "start-runner",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js",
+        "services/machina/runtime.cjs"
+      ],
+      "evidence": [
+        "tests/machina-runtime.test.cjs",
+        "tests/machina-graph.test.cjs",
+        "docs/verification/machina-e2e-results.json"
+      ]
+    },
+    {
+      "id": "NODE-unit-test-runner",
+      "outcome": "unit-test-runner",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js",
+        "services/machina/runtime.cjs"
+      ],
+      "evidence": [
+        "tests/machina-runtime.test.cjs",
+        "tests/machina-graph.test.cjs",
+        "docs/verification/machina-e2e-results.json"
+      ]
+    },
+    {
+      "id": "NODE-wait-delay",
+      "outcome": "wait-delay",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js",
+        "services/machina/runtime.cjs"
+      ],
+      "evidence": [
+        "tests/machina-runtime.test.cjs",
+        "tests/machina-graph.test.cjs",
+        "docs/verification/machina-e2e-results.json"
+      ]
+    },
+    {
+      "id": "NODE-website-ux-auto-tester",
+      "outcome": "website-ux-auto-tester",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js",
+        "services/machina/runtime.cjs"
+      ],
+      "evidence": [
+        "tests/machina-runtime.test.cjs",
+        "tests/machina-graph.test.cjs",
+        "docs/verification/machina-e2e-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-01",
+      "outcome": "Mock templates and all variable substitutions",
+      "implementation": [
+        "mock-runtime.js",
+        "mock-builder.js"
+      ],
+      "evidence": [
+        "docs/verification/machina-e2e-results.json",
+        "docs/verification/regression-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-02",
+      "outcome": "Visual setup/teardown with real supported effects",
+      "implementation": [
+        "mock-runtime.js",
+        "mock-builder.js"
+      ],
+      "evidence": [
+        "docs/verification/machina-e2e-results.json",
+        "docs/verification/regression-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-03",
+      "outcome": "File row selection/sampling and column mapping",
+      "implementation": [
+        "mock-runtime.js",
+        "mock-builder.js"
+      ],
+      "evidence": [
+        "docs/verification/machina-e2e-results.json",
+        "docs/verification/regression-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-04",
+      "outcome": "Undo/redo and node selection/deletion",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js"
+      ],
+      "evidence": [
+        "docs/verification/machina-e2e-results.json",
+        "docs/verification/regression-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-05",
+      "outcome": "Pan/select/zoom/reset graph tools",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js"
+      ],
+      "evidence": [
+        "docs/verification/machina-e2e-results.json",
+        "docs/verification/regression-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-06",
+      "outcome": "Connection admission feedback and graph validation",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js"
+      ],
+      "evidence": [
+        "docs/verification/machina-e2e-results.json",
+        "docs/verification/regression-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-07",
+      "outcome": "Run selected node with ancestor dependencies",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js"
+      ],
+      "evidence": [
+        "docs/verification/machina-e2e-results.json",
+        "docs/verification/regression-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-08",
+      "outcome": "AI Unit Test assisted/automated generation/source strategy/fallback",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js"
+      ],
+      "evidence": [
+        "docs/verification/machina-e2e-results.json",
+        "docs/verification/regression-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-09",
+      "outcome": "Git missing-branch fail/create/base policy",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js"
+      ],
+      "evidence": [
+        "docs/verification/machina-e2e-results.json",
+        "docs/verification/regression-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-10",
+      "outcome": "Minimizable pipeline/review sessions and histories",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js"
+      ],
+      "evidence": [
+        "docs/verification/machina-e2e-results.json",
+        "docs/verification/regression-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-11",
+      "outcome": "Legacy file/folder import + collision/history remapping",
+      "implementation": [
+        "legacy-importer.js",
+        "services/workspace/machina.cjs",
+        "machina-data.js"
+      ],
+      "evidence": [
+        "docs/verification/machina-e2e-results.json",
+        "docs/verification/regression-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-12",
+      "outcome": "Saved session exports and automatic persisted retention policies",
+      "implementation": [
+        "legacy-importer.js",
+        "services/workspace/machina.cjs",
+        "machina-data.js"
+      ],
+      "evidence": [
+        "docs/verification/machina-e2e-results.json",
+        "docs/verification/regression-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-13",
+      "outcome": "Application save/run/new/search/undo/redo/delete shortcuts",
+      "implementation": [
+        "machina-product.js",
+        "studio-workbench.js"
+      ],
+      "evidence": [
+        "docs/verification/machina-e2e-results.json",
+        "docs/verification/regression-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-14",
+      "outcome": "Optional dark theme with light default preserved",
+      "implementation": [
+        "machina-product.js",
+        "studio-workbench.js"
+      ],
+      "evidence": [
+        "docs/verification/machina-e2e-results.json",
+        "docs/verification/regression-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-15",
+      "outcome": "Robot website starter/help",
+      "implementation": [
+        "machina-product.js",
+        "studio-workbench.js"
+      ],
+      "evidence": [
+        "docs/verification/machina-e2e-results.json",
+        "docs/verification/regression-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-16",
+      "outcome": "Preserve advanced assertions/no-code/visual tests/security/versioning/collaboration/notifications/CI/reporting/native engines/datasets as actual supported capabilities",
+      "implementation": [
+        "visual-editor.js",
+        "machina-graph-bridge.js"
+      ],
+      "evidence": [
+        "docs/verification/machina-e2e-results.json",
+        "docs/verification/regression-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-17",
+      "outcome": "Python assertion validation in legacy expected-output field and exact text mode",
+      "implementation": [
+        "execution-validation.js",
+        "script.js",
+        "services/execution/python-child.py"
+      ],
+      "evidence": [
+        "docs/verification/regression-results.json",
+        "scripts/e2e.cjs",
+        "scripts/roadmap-e2e.cjs",
+        "scripts/machina-e2e.cjs"
+      ]
+    },
+    {
+      "id": "FEATURE-18",
+      "outcome": "Safe modal backdrop closure after genuine outside click, never selection drag",
+      "implementation": [
+        "modal-backdrop.js",
+        "studio-accessibility.js"
+      ],
+      "evidence": [
+        "docs/verification/regression-results.json",
+        "scripts/e2e.cjs",
+        "scripts/roadmap-e2e.cjs",
+        "scripts/machina-e2e.cjs"
+      ]
+    },
+    {
+      "id": "FEATURE-16a",
+      "outcome": "Advanced assertion operators and typed value validation",
+      "implementation": [
+        "advanced-assertions.js",
+        "studio-model.js"
+      ],
+      "evidence": [
+        "docs/verification/regression-results.json",
+        "scripts/e2e.cjs",
+        "scripts/roadmap-e2e.cjs",
+        "scripts/machina-e2e.cjs"
+      ]
+    },
+    {
+      "id": "FEATURE-16b",
+      "outcome": "Robot/no-code authoring, reusable browser steps and step debugging",
+      "implementation": [
+        "nocode-builder.js",
+        "debugger.js",
+        "visual-web-tester.js"
+      ],
+      "evidence": [
+        "docs/verification/regression-results.json",
+        "scripts/e2e.cjs",
+        "scripts/roadmap-e2e.cjs",
+        "scripts/machina-e2e.cjs"
+      ]
+    },
+    {
+      "id": "FEATURE-16c",
+      "outcome": "Isolated website preview and element picking",
+      "implementation": [
+        "element-picker.js",
+        "services/preview/index.cjs"
+      ],
+      "evidence": [
+        "docs/verification/regression-results.json",
+        "scripts/e2e.cjs",
+        "scripts/roadmap-e2e.cjs",
+        "scripts/machina-e2e.cjs"
+      ]
+    },
+    {
+      "id": "FEATURE-16d",
+      "outcome": "Security inspection, adapters, custom rules and policies",
+      "implementation": [
+        "security-testing.js",
+        "security-ui.js",
+        "services/security/index.js"
+      ],
+      "evidence": [
+        "docs/verification/regression-results.json",
+        "scripts/e2e.cjs",
+        "scripts/roadmap-e2e.cjs",
+        "scripts/machina-e2e.cjs"
+      ]
+    },
+    {
+      "id": "FEATURE-16e",
+      "outcome": "Durable version history, deduplication and restore",
+      "implementation": [
+        "version-control.js",
+        "indexeddb-version-storage.js",
+        "studio-storage.js"
+      ],
+      "evidence": [
+        "docs/verification/regression-results.json",
+        "scripts/e2e.cjs",
+        "scripts/roadmap-e2e.cjs",
+        "scripts/machina-e2e.cjs"
+      ]
+    },
+    {
+      "id": "FEATURE-16f",
+      "outcome": "Authenticated collaboration and role management",
+      "implementation": [
+        "collaboration.js",
+        "collaboration-ui.js",
+        "services/workspace/team.cjs"
+      ],
+      "evidence": [
+        "docs/verification/regression-results.json",
+        "scripts/e2e.cjs",
+        "scripts/roadmap-e2e.cjs",
+        "scripts/machina-e2e.cjs"
+      ]
+    },
+    {
+      "id": "FEATURE-16g",
+      "outcome": "Configured notification integrations and delivery history",
+      "implementation": [
+        "integrations.js"
+      ],
+      "evidence": [
+        "docs/verification/regression-results.json",
+        "scripts/e2e.cjs",
+        "scripts/roadmap-e2e.cjs",
+        "scripts/machina-e2e.cjs"
+      ]
+    },
+    {
+      "id": "FEATURE-16h",
+      "outcome": "CI workflow generation and configuration",
+      "implementation": [
+        "cicd-integration.js"
+      ],
+      "evidence": [
+        "docs/verification/regression-results.json",
+        "scripts/e2e.cjs",
+        "scripts/roadmap-e2e.cjs",
+        "scripts/machina-e2e.cjs"
+      ]
+    },
+    {
+      "id": "FEATURE-16i",
+      "outcome": "Reporting, history, comparison and export",
+      "implementation": [
+        "reporting-dashboard.js"
+      ],
+      "evidence": [
+        "docs/verification/regression-results.json",
+        "scripts/e2e.cjs",
+        "scripts/roadmap-e2e.cjs",
+        "scripts/machina-e2e.cjs"
+      ]
+    },
+    {
+      "id": "FEATURE-16j",
+      "outcome": "Real native engines, discovery, cancellation and run evidence",
+      "implementation": [
+        "services/execution/index.cjs"
+      ],
+      "evidence": [
+        "docs/verification/regression-results.json",
+        "scripts/e2e.cjs",
+        "scripts/roadmap-e2e.cjs",
+        "scripts/machina-e2e.cjs"
+      ]
+    },
+    {
+      "id": "FEATURE-16k",
+      "outcome": "Data generation, masking, validation and reusable datasets",
+      "implementation": [
+        "data-manager.js",
+        "services/workspace/datasets.cjs"
+      ],
+      "evidence": [
+        "docs/verification/regression-results.json",
+        "scripts/e2e.cjs",
+        "scripts/roadmap-e2e.cjs",
+        "scripts/machina-e2e.cjs"
+      ]
+    },
+    {
+      "id": "FEATURE-16l",
+      "outcome": "Environment variables and protected configuration persistence",
+      "implementation": [
+        "environment-manager.js",
+        "protected-config.js",
+        "services/security/index.js"
+      ],
+      "evidence": [
+        "docs/verification/regression-results.json",
+        "scripts/e2e.cjs",
+        "scripts/roadmap-e2e.cjs",
+        "scripts/machina-e2e.cjs"
+      ]
+    },
+    {
+      "id": "FEATURE-19",
+      "outcome": "Per-category persistent retention and durable cleanup receipts, consolidated IndexedDB migration, shared version history",
+      "implementation": [
+        "services/workspace/retention.cjs",
+        "services/retention-effects.cjs",
+        "machina-retention.js",
+        "indexeddb-version-storage.js",
+        "studio-storage.js"
+      ],
+      "evidence": [
+        "tests/machina-retention.test.cjs",
+        "docs/verification/machina-retention.json",
+        "docs/verification/machina-e2e-results.json"
+      ]
+    },
+    {
+      "id": "FEATURE-20",
+      "outcome": "OS-encrypted legacy credentials become opaque references or require actionable re-entry; inactive settings are explicitly reviewed",
+      "implementation": [
+        "services/protect-configuration.cjs",
+        "machina-settings.js",
+        "protected-config.js"
+      ],
+      "evidence": [
+        "tests/machina-host.test.cjs",
+        "docs/verification/machina-e2e-results.json"
+      ]
+    }
+  ]
+}

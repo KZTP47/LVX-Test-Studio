@@ -1,0 +1,235 @@
+{
+  "scope": "storage",
+  "date": "2026-10-24",
+  "status": "implemented_and_leaf_verified",
+  "command": "node --test tests/storage.test.cjs",
+  "result": {
+    "tests": 17,
+    "pass": 17,
+    "fail": 0,
+    "skipped": 0
+  },
+  "findings": [
+    {
+      "id": "S01",
+      "files": [
+        "indexeddb-version-storage.js",
+        "version-control.js",
+        "tests/storage.test.cjs"
+      ],
+      "tests": [
+        "S01 verified migration",
+        "S01 integration hunt",
+        "S01 fallback writes"
+      ],
+      "change": "Active version-control and UI now await one backend, preserve and verify migration originals, serialize saves, keep already committed histories visible if another legacy record fails, invalidate markers on fallback writes.",
+      "status": "fixed",
+      "evidence": "actual source loaded into deterministic Node VM; generated CI Python evaluated locally where applicable"
+    },
+    {
+      "id": "S03",
+      "files": [
+        "indexeddb-version-storage.js",
+        "tests/storage.test.cjs"
+      ],
+      "tests": [
+        "S03 IndexedDB saves and deletes"
+      ],
+      "change": "Readwrite promises resolve only on transaction complete and reject transaction abort/error; migration verifies a committed reread before its marker.",
+      "status": "fixed",
+      "evidence": "actual source loaded into deterministic Node VM; generated CI Python evaluated locally where applicable"
+    },
+    {
+      "id": "S04",
+      "files": [
+        "collaboration.js",
+        "collaboration-ui.js",
+        "collaboration-ui2.js",
+        "tests/storage.test.cjs"
+      ],
+      "tests": [
+        "S04/S05 public file export/import",
+        "S04 backend import and snapshot restore"
+      ],
+      "change": "File imports, backend imports and restores await configured saveSuite/updateSuite and LVXApp.refreshSuites; failures show error without premature mutation; backend imports receive fresh local IDs.",
+      "status": "fixed",
+      "evidence": "actual source loaded into deterministic Node VM; generated CI Python evaluated locally where applicable"
+    },
+    {
+      "id": "S05",
+      "files": [
+        "collaboration.js",
+        "collaboration-ui.js",
+        "tests/storage.test.cjs"
+      ],
+      "tests": [
+        "S04/S05 public file export/import"
+      ],
+      "change": "Single and bulk export formats validate every suite and round-trip through the public file import into persistent storage with new local identities.",
+      "status": "fixed",
+      "evidence": "actual source loaded into deterministic Node VM; generated CI Python evaluated locally where applicable"
+    },
+    {
+      "id": "S06",
+      "files": [
+        "collaboration-ui2.js",
+        "tests/storage.test.cjs"
+      ],
+      "tests": [
+        "S06 email modal listener"
+      ],
+      "change": "Email modal uses an event listener closure carrying the actual Blob and suite name; no serialized binary inline handler.",
+      "status": "fixed",
+      "evidence": "actual source loaded into deterministic Node VM; generated CI Python evaluated locally where applicable"
+    },
+    {
+      "id": "S07",
+      "files": [
+        "data-manager.js",
+        "tests/storage.test.cjs"
+      ],
+      "tests": [
+        "S07 complete CSV quoted records",
+        "S07/S08 empty single-column values"
+      ],
+      "change": "CSV parser tokenizes complete quoted records, including multiline/CRLF and escaped quotes, preserves whitespace and rejects malformed records and duplicate/empty headers.",
+      "status": "fixed",
+      "evidence": "actual source loaded into deterministic Node VM; generated CI Python evaluated locally where applicable"
+    },
+    {
+      "id": "S08",
+      "files": [
+        "data-manager.js",
+        "tests/storage.test.cjs"
+      ],
+      "tests": [
+        "S08/S16 dataset edit/save",
+        "S07/S08 empty single-column values"
+      ],
+      "change": "Dataset edit and export share the same serializer for headers, values, quotes, commas, newlines and empty single-column fields.",
+      "status": "fixed",
+      "evidence": "actual source loaded into deterministic Node VM; generated CI Python evaluated locally where applicable"
+    },
+    {
+      "id": "S09",
+      "files": [
+        "data-manager.js",
+        "environment-manager.js",
+        "tests/storage.test.cjs"
+      ],
+      "tests": [
+        "S09 data and environment placeholders"
+      ],
+      "change": "Placeholder keys and values use literal token replacement, avoiding regex metacharacter interpretation and replacement-string dollar expansion.",
+      "status": "fixed",
+      "evidence": "actual source loaded into deterministic Node VM; generated CI Python evaluated locally where applicable"
+    },
+    {
+      "id": "S11",
+      "files": [
+        "reporting-dashboard.js",
+        "tests/storage.test.cjs"
+      ],
+      "tests": [
+        "S11 security dashboard consumes real manager counts",
+        "S11 unavailable scan evidence"
+      ],
+      "change": "Security cards, charts and compliance normalize actual severity-count schema; legacy summaries with missing details explicitly say unavailable; scan errors show incomplete compliance instead of 100.",
+      "status": "fixed",
+      "evidence": "actual source loaded into deterministic Node VM; generated CI Python evaluated locally where applicable"
+    },
+    {
+      "id": "S12",
+      "files": [
+        "reporting-dashboard.js",
+        "tests/storage.test.cjs"
+      ],
+      "tests": [
+        "S12 all dashboard widgets"
+      ],
+      "change": "One filtered history feeds all summary, trend, ranking and flaky widgets; null means unbounded trends and preserves old executions.",
+      "status": "fixed",
+      "evidence": "actual source loaded into deterministic Node VM; generated CI Python evaluated locally where applicable"
+    },
+    {
+      "id": "S13",
+      "files": [
+        "cicd-integration.js",
+        "tests/storage.test.cjs"
+      ],
+      "tests": [
+        "S13 all generated CI gates"
+      ],
+      "change": "All three generated providers embed the same structural JSON gate requiring terminal nonempty integer summary, no failed/error counts or error statuses, valid totals, and no failed detailed outcomes. Missing/pending/invalid evidence fails CI.",
+      "status": "fixed",
+      "evidence": "actual source loaded into deterministic Node VM; generated CI Python evaluated locally where applicable"
+    },
+    {
+      "id": "S14",
+      "files": [
+        "collaboration.js",
+        "tests/storage.test.cjs"
+      ],
+      "tests": [
+        "S14 retained collaboration snapshots"
+      ],
+      "change": "Snapshot ordinal derives from maximum retained version rather than retention length; continues monotonically beyond21.",
+      "status": "fixed",
+      "evidence": "actual source loaded into deterministic Node VM; generated CI Python evaluated locally where applicable"
+    },
+    {
+      "id": "S15",
+      "files": [
+        "data-manager.js",
+        "tests/storage.test.cjs"
+      ],
+      "tests": [
+        "S15 replacement upload failure"
+      ],
+      "change": "Each selection invalidates previous data/preview/save state immediately; generation token ignores stale async completions and parse errors leave Save disabled.",
+      "status": "fixed",
+      "evidence": "actual source loaded into deterministic Node VM; generated CI Python evaluated locally where applicable"
+    },
+    {
+      "id": "S16",
+      "files": [
+        "data-manager.js",
+        "tests/storage.test.cjs"
+      ],
+      "tests": [
+        "S08/S16 dataset edit/save"
+      ],
+      "change": "Typed CSV serializer explicitly converts nonnull values to strings and preserves numeric zero and generated numeric values.",
+      "status": "fixed",
+      "evidence": "actual source loaded into deterministic Node VM; generated CI Python evaluated locally where applicable"
+    }
+  ],
+  "review_passes": [
+    {
+      "pass": 1,
+      "name": "implementation",
+      "result": "All14 assigned findings implemented with actual-source regression cases; initial harness/source failures corrected."
+    },
+    {
+      "pass": 2,
+      "name": "expert_reread",
+      "result": "Found and fixed partial-migration backend disconnect and marker invalidation after fallback writes; explicit tests added."
+    },
+    {
+      "pass": 3,
+      "name": "defect_and_integration_hunt",
+      "result": "Verified concurrent save preservation, backend persistence failures, stale uploads, unavailable security evidence, and empty single-column CSV round-trip;17 tests pass."
+    },
+    {
+      "pass": 4,
+      "name": "polish",
+      "result": "Checked syntax and CRLF-aware diff whitespace, preserved original line-ending styles; no remaining leaf regression failure."
+    }
+  ],
+  "limits": [
+    "Parent owns actual browser/Electron end-to-end verification; leaf IndexedDB transaction failure cases use deterministic local transaction fixtures, not disk-failure experiments.",
+    "No email/share operation, real backend or CI provider is contacted. CI predicates execute against local JSON fixtures.",
+    "Generated CI execution endpoint must return HTTP200 terminal total/passed/failed/errors summary (top-level or summary); HTTP202/pending results fail until backend resolves them. Python3 and curl are required on Jenkins agents; GitLab template provisions curl and uses a Python image.",
+    "Legacy version keys remain as recovery copies after committed verified migration; idb_migrated markers identify the authoritative IndexedDB histories."
+  ]
+}

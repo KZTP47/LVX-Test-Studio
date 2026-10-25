@@ -1,0 +1,63 @@
+'use strict';
+// Real Electron / SQLite / IPC, disposable profile. No provider calls or user workspace writes.
+const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),assert=require('node:assert/strict');
+const {_electron}=require('playwright'),{root,sourceManifest,hash}=require('./source-manifest.cjs');
+async function run(mode='source'){
+ const packaged=mode==='packaged';require('./build-ui.cjs').buildUI({check:true});
+ const source=sourceManifest(),scriptSha256=hash(fs.readFileSync(__filename)),packageProof=packaged?require('./package-manifest.cjs').verifyPackage():null;
+ const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'lvx-board-save-')),workspace=path.join(temporary,'project');fs.mkdirSync(workspace);
+ let app,page;const checks=[],errors=[];
+ const check=(label,value)=>{assert.ok(value,label);checks.push(label);console.log('PASS '+label);};
+ const until=async fn=>{for(let i=0;i<200;i++){const value=await fn();if(value)return value;await new Promise(r=>setTimeout(r,50));}throw Error('Save condition timed out');};
+ try{
+  const env={...process.env,LVX_TEST_USER_DATA:path.join(temporary,'profile'),LVX_TEST_HIDDEN:'1'};delete env.ELECTRON_RUN_AS_NODE;
+  app=await _electron.launch({...(packaged?{executablePath:path.join(root,'release/win-unpacked/LVX Test Studio.exe')}:{args:[root]}),cwd:os.tmpdir(),env});
+  page=await app.firstWindow();page.setDefaultTimeout(12000);page.on('pageerror',e=>errors.push(e.message));await page.waitForFunction(()=>window.LVXStudioInitialized===true);
+  await app.evaluate(({BrowserWindow,dialog},workspace)=>{const w=BrowserWindow.getAllWindows()[0];w.setContentSize(1500,1000);w.webContents.setBackgroundThrottling(false);w.showInactive();dialog.showOpenDialog=async()=>({canceled:false,filePaths:[workspace]});},workspace);
+  await page.evaluate(async()=>{await electronAPI.studioOps.chooseWorkspace();await electronAPI.studioOps.invoke('security','trust',{trusted:true});await LVXApp.useStorage(LVXWorkspaceBridge.createBackend());await LVXStudio.open('agentBoard');});
+  const action=name=>page.locator('[data-ab-action="'+name+'"]'),dialog=page.locator('dialog.ab-save-dialog'),field=name=>dialog.locator('[name="save-'+name+'"]');
+  const invoke=(action,payload={})=>page.evaluate(({action,payload})=>electronAPI.studioOps.invoke('agents',action,payload),{action,payload});
+  const records=async()=>(await invoke('listBoards')).records;
+  const submit=()=>dialog.locator('[data-save-submit]').click();
+  const save=async()=>{await action('save').click();await dialog.waitFor();};
+  await action('add').click();const nodeId=await page.locator('[name="agent-selection"]').inputValue();
+  await page.locator('[name="agent-name"]').fill('Example agent');
+  await action('fullscreen').click();await page.locator('[data-agent-id="'+nodeId+'"] [data-ab-action="node-chat"]').click();
+  const chat=page.locator('[data-chat-agent="'+nodeId+'"]');await chat.locator('textarea').fill('Do not dispatch until I save');await chat.locator('button[type="submit"]').click();await dialog.waitFor();
+  check('A first chat message asks for a board name before any board or message is saved',await field('name').inputValue()===''&&(await records()).length===0);
+  await page.keyboard.press('Escape');await dialog.waitFor({state:'detached'});
+  check('Cancelling first save keeps the chat draft and prevents dispatch',await chat.locator('textarea').inputValue()==='Do not dispatch until I save'&&(await records()).length===0);
+  await save();await field('name').fill('   ');await submit();await dialog.locator('[data-save-error]').getByText('Give the board a name.').waitFor();
+  check('Whitespace-only names are rejected without saving',(await records()).length===0);
+  const originalName='QA team — Åäö <img src=x>';await field('name').fill(originalName);await submit();await dialog.waitFor({state:'detached'});
+  const first=(await records())[0];check('Named save persists agents, chats and Unicode name to canonical SQLite',first.value.name===originalName&&first.value.nodes[0].name==='Example agent'&&first.value.panels[0].agentId===nodeId);
+  check('User names render as plain text',await page.locator('[name="saved-board"] option:checked').textContent().then(text=>text.includes(originalName))&&await page.locator('.ab-board-tools img').count()===0);
+  await save();check('Saving an opened board offers its existing name and explicit overwrite choice',await field('mode').inputValue()==='overwrite'&&await field('target').inputValue()===first.id&&await field('name').inputValue()===originalName);
+  await field('name').fill('Should not be saved');await submit();
+  check('Overwrite cannot run without confirmation',(await records())[0].revision===first.revision&&await dialog.isVisible());
+  await dialog.locator('[data-save-cancel]').click();check('Cancel leaves the canonical name and revision unchanged',(await records())[0].value.name===originalName&&(await records())[0].revision===first.revision);
+  await save();await field('mode').selectOption('new');await field('name').fill('Separate board');await submit();await dialog.waitFor({state:'detached'});
+  const second=(await records()).find(r=>r.id!==first.id);check('Save as new makes a separate identity and preserves original board',second.value.name==='Separate board'&&(await records()).length===2&&(await invoke('getBoard',{boardId:first.id})).record.revision===first.revision);
+  check('Saved board selector follows a newly saved copy',await page.locator('[name="saved-board"]').inputValue()===second.id);
+  await save();await field('target').selectOption(first.id);await field('name').fill('Chosen overwrite');await field('confirm').check();await submit();await dialog.waitFor({state:'detached'});
+  const overwritten=(await invoke('getBoard',{boardId:first.id})).record;
+  check('Confirmed overwrite updates exactly the chosen board',overwritten.value.name==='Chosen overwrite'&&overwritten.revision>first.revision&&(await invoke('getBoard',{boardId:second.id})).record.revision===second.revision&&(await records()).length===2);
+  await save();await field('name').fill('Stale edit');await field('confirm').check();
+  await invoke('saveBoard',{board:{...overwritten.value,name:'Changed in another window'},expectedRevision:overwritten.revision});await submit();await dialog.locator('[data-save-error]').getByText(/Board changed in another window/).waitFor();
+  check('Concurrent updates fail visibly without overwriting or discarding the dialog draft',(await invoke('getBoard',{boardId:first.id})).record.value.name==='Changed in another window'&&await field('name').inputValue()==='Stale edit');
+  await dialog.locator('[data-save-cancel]').click();await save();await field('mode').selectOption('new');await field('name').fill('Recovered draft');await submit();await dialog.waitFor({state:'detached'});
+  check('A conflicted draft can be saved as a new board without losing either existing board',(await records()).length===3&&(await invoke('getBoard',{boardId:first.id})).record.value.name==='Changed in another window');
+  await page.evaluate(async()=>{await LVXStudio.render('agentBoard');});await page.locator('[name="saved-board"]').selectOption(second.id);await action('load').click();
+  await until(()=>page.locator('[data-ab="goal-readout"]').textContent().then(text=>text.includes('Separate board')));
+  check('Saved choices and contents survive remount and can be reopened',await page.locator('[data-agent-id="'+nodeId+'"] strong').textContent().then(text=>text.includes('Example agent')));
+  await action('fullscreen').click();await save();await field('name').fill('Renamed board');await field('confirm').check();
+  const screenshot='docs/screenshots/board-save-'+mode+'.png';await page.screenshot({path:path.join(root,screenshot)});
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(720,620));
+  check('Save dialog fits a smaller window and keeps actions reachable',await dialog.evaluate(el=>{const r=el.getBoundingClientRect();return r.width<=innerWidth&&r.height<=innerHeight&&getComputedStyle(el).overflowY==='auto';}));
+  await submit();await dialog.waitFor({state:'detached'});check('Existing board can be renamed through confirmed save',(await invoke('getBoard',{boardId:second.id})).record.value.name==='Renamed board');
+  check('No uncaught renderer errors',errors.length===0);assert.equal(sourceManifest().digest,source.digest);assert.equal(hash(fs.readFileSync(__filename)),scriptSha256);
+  fs.writeFileSync(path.join(root,'docs/verification/board-save-'+mode+'.json'),JSON.stringify({status:'SUCCESS',sourceDigest:source.digest,scriptSha256,packageProof,checks,errors,screenshot:{file:screenshot,sha256:hash(fs.readFileSync(path.join(root,screenshot)))},limits:['Disposable Electron profile and workspace. No AI provider or live model calls.']},null,2)+'\n');
+ }finally{if(app){await app.evaluate(({app})=>app.exit(0)).catch(()=>{});await app.close().catch(()=>{});}assert.equal(path.dirname(temporary),os.tmpdir());fs.rmSync(temporary,{recursive:true,force:true,maxRetries:8,retryDelay:150});}
+ console.log('LVX_BOARD_SAVE_'+mode.toUpperCase()+'_VERIFIED');
+}
+if(require.main===module)run(process.argv[2]||'source').catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,0 +1,6 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),{root,sourceManifest,hash}=require('./source-manifest.cjs');
+const executable=path.join(root,'release/win-unpacked/LVX Test Studio.exe'),image='docs/screenshots/windows-exe-icon.png';
+require('../services/windows-shell.cjs').windowsPowerShell('Add-Type -AssemblyName System.Drawing; $icon=[System.Drawing.Icon]::ExtractAssociatedIcon($env:LVX_ICON_EXE); $bitmap=$icon.ToBitmap(); try {$bitmap.Save($env:LVX_ICON_PNG,[System.Drawing.Imaging.ImageFormat]::Png)} finally {$bitmap.Dispose(); $icon.Dispose()}',{env:{LVX_ICON_EXE:executable,LVX_ICON_PNG:path.join(root,image)}});
+const png=fs.readFileSync(path.join(root,image));if(png.length<100||png.subarray(1,4).toString()!=='PNG')throw Error('No actual executable icon was extracted');
+fs.writeFileSync(path.join(root,'docs/verification/icon-results.json'),JSON.stringify({date:new Date().toISOString(),sourceDigest:sourceManifest().digest,executableSha256:hash(fs.readFileSync(executable)),path:image,sha256:hash(png),boundary:'Windows System.Drawing extraction of the actual packaged executable icon; visual review remains required.'},null,2));console.log('LVX_EXECUTABLE_ICON_CAPTURED');

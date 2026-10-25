@@ -1,0 +1,256 @@
+{
+  "scope": "execution",
+  "date": "2026-10-24",
+  "status": "implemented_and_leaf_verified",
+  "command": "node --test tests/execution.test.cjs",
+  "result": {
+    "tests": 23,
+    "pass": 23,
+    "fail": 0,
+    "skipped": 0
+  },
+  "findings": [
+    {
+      "id": "DRV-01",
+      "files": [
+        "services/playwright-runner.js",
+        "main.js",
+        "tests/execution.test.cjs"
+      ],
+      "tests": [
+        "DRV-01 child runner uses packaged Electron Node and explicit module/browser paths outside launch cwd",
+        "DRV-01 real child runtime resolves shipped Playwright without launch-directory modules"
+      ],
+      "change": "process.execPath plus ELECTRON_RUN_AS_NODE; explicit Playwright module root and bundled browser path; os.tmpdir execution directory. Main accepts isolated profile/hidden window for parent Electron E2E.",
+      "status": "fixed"
+    },
+    {
+      "id": "EXE-01",
+      "files": [
+        "graph-engine.js",
+        "tests/execution.test.cjs"
+      ],
+      "tests": [
+        "EXE-01 graph treats production FAILURE/ERROR and legacy aliases truthfully and stops dependents"
+      ],
+      "change": "Canonical SUCCESS/FAILURE/ERROR including legacy aliases; failure/error prevents stop-policy dependents. Unknown outcomes are ERROR.",
+      "status": "fixed"
+    },
+    {
+      "id": "EXE-02",
+      "files": [
+        "pipeline-manager.js",
+        "visual-editor.js",
+        "graph-engine.js",
+        "tests/execution.test.cjs"
+      ],
+      "tests": [
+        "EXE-02 canonical security palette nodes and legacy underscore imports dispatch actual scan handlers",
+        "EXE-02 palette drop dispatches the same canonical types through the graph"
+      ],
+      "change": "Canonical hyphen node types with intentional underscore import aliases; actual palette drop reaches scan handler.",
+      "status": "fixed"
+    },
+    {
+      "id": "EXE-03",
+      "files": [
+        "pipeline-manager.js",
+        "graph-engine.js",
+        "tests/execution.test.cjs"
+      ],
+      "tests": [
+        "EXE-03 connected scans reach gates; missing/unavailable or unrelated evidence cannot pass",
+        "EXE-03 unavailable, incomplete, or unreadable scans stay ERROR instead of passing gates"
+      ],
+      "change": "Scans publish artifacts.securityResults; connected ancestor scan evidence reaches gates, aggregated across branches. Missing, failed, malformed, unrelated or partial evidence cannot pass.",
+      "status": "fixed"
+    },
+    {
+      "id": "EXE-04",
+      "files": [
+        "script.js",
+        "tests/execution.test.cjs"
+      ],
+      "tests": [
+        "EXE-04 actual website adapter status survives shared suite result normalization"
+      ],
+      "change": "Shared core normalizes structured adapter status instead of checking only result.success. Website load event installed before src and timer cleared.",
+      "status": "fixed"
+    },
+    {
+      "id": "EXE-05",
+      "files": [
+        "script.js",
+        "tests/execution.test.cjs"
+      ],
+      "tests": [
+        "EXE-05 saved input_files delivered to Python Java CSharp with legacy migration"
+      ],
+      "change": "All Python/Java/CSharp adapters read persisted input_files; legacy inputFiles retained as fallback.",
+      "status": "fixed"
+    },
+    {
+      "id": "EXE-06",
+      "files": [
+        "script.js",
+        "tests/execution.test.cjs"
+      ],
+      "tests": [
+        "EXE-06 stdout diagnostics never override authoritative success or failure"
+      ],
+      "change": "Removed stdout keyword heuristics; runner status/exit result is authoritative.",
+      "status": "fixed"
+    },
+    {
+      "id": "EXE-07",
+      "files": [
+        "script.js",
+        "tests/execution.test.cjs"
+      ],
+      "tests": [
+        "EXE-07 silent pipeline runs every configured row and passes graph inputs without UI"
+      ],
+      "change": "Silent affects presentation, not dataset coverage. Every row runs with pipeline inputs, substituted expected output and saved file contents.",
+      "status": "fixed"
+    },
+    {
+      "id": "EXE-08",
+      "files": [
+        "script.js",
+        "tests/execution.test.cjs"
+      ],
+      "tests": [
+        "EXE-08 data-driven completion updates one existing suite on repeated runs"
+      ],
+      "change": "Data-driven completion updates existing suite metadata by id; no create call.",
+      "status": "fixed"
+    },
+    {
+      "id": "EXE-09",
+      "files": [
+        "script.js",
+        "tests/execution.test.cjs"
+      ],
+      "tests": [
+        "EXE-09 concurrent creates updates deletes and view unassignment preserve every mutation"
+      ],
+      "change": "Local read-modify-write commits synchronously before any await; concurrent mutations cannot use stale snapshots. View unassignment and tag batches await storage.",
+      "status": "fixed"
+    },
+    {
+      "id": "EXE-10",
+      "files": [
+        "script.js",
+        "tests/execution.test.cjs"
+      ],
+      "tests": [
+        "EXE-10 Expected Output exact assertion applies to core and data-driven rows"
+      ],
+      "change": "Shared core asserts exact Expected Output after CRLF normalization and removing one terminal newline, for ordinary and every data-driven row.",
+      "status": "fixed"
+    },
+    {
+      "id": "EXE-11",
+      "files": [
+        "pipeline-manager.js",
+        "visual-editor.js",
+        "tests/execution.test.cjs"
+      ],
+      "tests": [
+        "EXE-11 individual unit Run uses graph injection/command adapter with upstream clone path"
+      ],
+      "change": "Individual Unit Run and graph Unit Run share real test-file injection/command adapter, using upstream clone or configured CWD. Missing directory/API produces ERROR.",
+      "status": "fixed"
+    },
+    {
+      "id": "EXE-12",
+      "files": [
+        "visual-editor.js",
+        "tests/execution.test.cjs"
+      ],
+      "tests": [
+        "EXE-12 editor working copy and returned graph never mutate saved nested data"
+      ],
+      "change": "Deep clone into editor working state and deep clone on output. Unsaved nested edits cannot mutate saved pipeline.",
+      "status": "fixed"
+    },
+    {
+      "id": "EXE-13",
+      "files": [
+        "pipeline-manager.js",
+        "visual-editor.js",
+        "tests/execution.test.cjs"
+      ],
+      "tests": [
+        "EXE-13 actual code scan receives checkbox categories; none selected is an error"
+      ],
+      "change": "Stored checkbox booleans map to canonical scanTypes; editor stores array too. Zero selected categories is explicit ERROR.",
+      "status": "fixed"
+    },
+    {
+      "id": "EXE-14",
+      "files": [
+        "services/playwright-runner.js",
+        "tests/execution.test.cjs"
+      ],
+      "tests": [
+        "EXE-14 concurrent invocations have isolated files and clean up only their own directory"
+      ],
+      "change": "Unique mkdtemp directory per invocation, own cleanup in finally, safe concurrent runs even identical timestamps.",
+      "status": "fixed"
+    },
+    {
+      "id": "EXE-15",
+      "files": [
+        "script.js",
+        "tests/execution.test.cjs"
+      ],
+      "tests": [
+        "EXE-15 website edit method alias invokes existing toggle behavior"
+      ],
+      "change": "Intentional toggleWebsiteMethod alias routes existing HTML/editor callers to implementation; full URL editor open regression.",
+      "status": "fixed"
+    },
+    {
+      "id": "EXE-16",
+      "files": [
+        "pipeline-manager.js",
+        "tests/execution.test.cjs"
+      ],
+      "tests": [
+        "EXE-16 latest engine cycle errors persist ERROR and timestamp over old SUCCESS"
+      ],
+      "change": "Engine exception updates lastRun/lastStatus ERROR and persists, replacing previously successful metadata.",
+      "status": "fixed"
+    }
+  ],
+  "additionalChanges": [
+    "Removed ensureDemoSuites, its startup timer, and embedded sample suite bodies; regression test code remains.",
+    "Exports LVXApp getStorage/getSuites/getSelectedSuite/refreshSuites; getStorage waits for configured backend and refresh reads authoritative storage, preserving currentStorage/testSuites compatibility.",
+    "Awaited async version-control consumers, including full export histories; lazy Firebase initialization supported.",
+    "Robot BrowserLibrary registered as importable Python module and original source transferred verbatim through pyodide.globals rather than interpolated Python literals."
+  ],
+  "passes": [
+    {
+      "pass": 1,
+      "action": "Implemented all17 assigned IDs and cross-module contracts with actual-source node:test harnesses."
+    },
+    {
+      "pass": 2,
+      "action": "Expert reread: tightened ancestor artifact routing, gate evidence validation, unsupported nodes, Expected Output semantics, async version consumers and runtime dependency resolution."
+    },
+    {
+      "pass": 3,
+      "action": "Integration hunt: added real child runtime test and actual palette/editor flows; fixed unavailable scans, suite source scan inputs, partial repository handling, BrowserLibrary registration and storage readiness."
+    },
+    {
+      "pass": 4,
+      "action": "Polished errors and source-transfer/newline handling; reran23tests and syntax checks, with no remaining leaf test failures."
+    }
+  ],
+  "validationLimits": [
+    "Leaf Node tests exercise actual source under local VM/adapter fixtures plus real Node child module resolution. Parent owns real browser/Electron/packaged E2E and browser payload verification.",
+    "No provider API, credentials, webhook/email recipients, git remotes or user data used. Local temporary runner directories are cleaned after each invocation.",
+    "Repository scanning explicitly errors above500JavaScriptfiles rather than silently reporting a partial scan as clean."
+  ]
+}

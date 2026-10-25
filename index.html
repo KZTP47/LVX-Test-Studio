@@ -1,0 +1,3014 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LVX Test Studio</title>
+  <link rel="stylesheet" href="assets/ui.css"><link rel="icon" href="assets/icons/lvx-32.png"><script src="runtime-assets.js"></script><script src="icons.js"></script>
+  <script src="assets/vendor/chart.umd.js"></script>
+
+  <script src="assets/vendor/pyodide/pyodide.js"></script>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="assets/agent-board.css">
+    <link rel="stylesheet" href="assets/agent-connection.css">
+  <link rel="stylesheet" href="assets/agent-projects.css">
+  <link rel="stylesheet" href="assets/visual-web-targets.css">
+
+  <!-- Monaco Editor -->
+  <link rel="stylesheet" href="assets/vendor/monaco/vs/editor/editor.main.css">
+  <link rel="stylesheet" href="assets/accessibility.css">
+  <script src="assets/vendor/monaco/vs/loader.js"></script>
+  <script src="assets/vendor/xlsx.full.min.js"></script>
+  <script src="assets/vendor/html2canvas.min.js"></script>
+</head>
+
+<body class="p-4 sm:p-8">
+
+  <div id="app" class="max-w-7xl mx-auto flex gap-4 h-[calc(100vh-4rem)] items-stretch">
+    <!-- Sidebar -->
+    <aside id="views-panel" class="w-64 flex-shrink-0 aero-card p-4 rounded-lg overflow-y-auto h-full">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold aero-text-primary">Views</h2>
+        <button onclick="openAddViewModal()" class="aero-button-success text-sm py-1 px-3 rounded transition duration-200" title="Add New View">
+          +
+        </button>
+      </div>
+
+      <div id="views-list" class="space-y-2">
+      </div>
+
+      <!-- Pipeline Sidebar Section -->
+      <div class="mt-6 pt-4 border-t aero-divider">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-xl font-bold aero-text-primary">CI/CD Pipelines</h2>
+          <button onclick="openPipelineEditor()" class="aero-button-purple text-sm py-1 px-3 rounded transition duration-200" title="Create Pipeline">
+            +
+          </button>
+        </div>
+        <div id="pipelines-list" class="space-y-2">
+          <!-- Pipelines populated by JS -->
+        </div>
+      </div>
+    </aside>
+
+    <!-- Resizer Handle -->
+    <div id="sidebar-resizer" title="Drag to resize sidebar"></div>
+
+    <!-- Main Content -->
+    <div class="flex-1 overflow-y-auto h-full pr-2">
+      <header class="lvx-header mb-6 pb-4 aero-header">
+        <h1 class="lvx-brand aero-text-primary"><button type="button" class="lvx-mascot-trigger" aria-label="View mascot" aria-describedby="lvx-mascot-preview" aria-expanded="false" aria-controls="lvx-mascot-preview"><img src="assets/icons/lvx-64.png" alt="" width="48" height="48"></button>LVX Test Studio</h1>
+        <figure id="lvx-mascot-preview" class="lvx-mascot-preview" popover="manual" role="tooltip">
+          <img src="assets/icons/lvx-test-studio.png" alt="The pink octopus mascot holding tools for tests, code, files and AI" width="400" height="400">
+          <figcaption>LVX Test Studio mascot <span>Press Esc to close</span></figcaption>
+        </figure>
+        <div class="flex flex-col sm:flex-row flex-wrap gap-2">
+          <button id="OpenVisualWebTester" onclick="openVisualWebTester()" class="aero-button-primary w-full sm:w-auto py-2 px-4 rounded-lg shadow-lg transition duration-200 order-first sm:order-none">
+            Create Visual Web Test
+          </button>
+          <div class="flex space-x-3 flex-wrap gap-2">
+            <button id="openExecutionSettingsModal" onclick="openExecutionSettingsModal()" class="aero-button-warning py-2 px-4 rounded-lg shadow-lg transition duration-200">
+              Execution Settings
+            </button>
+            <button onclick="openEnvironmentManager()" class="aero-button-info py-2 px-4 rounded-lg shadow-lg transition duration-200 flex items-center gap-2">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="globe"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z"></path></svg> Environments
+            </button>
+            <button onclick="openReportingDashboard()" class="aero-button-purple py-2 px-4 rounded-lg shadow-lg transition duration-200 flex items-center gap-2">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="chart"><path d="M4 3v17h17M8 16v-5m5 5V6m5 10v-8"></path></svg> Dashboard
+            </button>
+            <button onclick="openIntegrationsModal()" class="aero-button-purple py-2 px-4 rounded-lg shadow-lg transition duration-200 flex items-center gap-2">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="bell"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"></path></svg> Integrations
+            </button>
+            <button onclick="openCICDModal()" class="aero-button-info py-2 px-4 rounded-lg shadow-lg transition duration-200 flex items-center gap-2">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="refresh"><path d="M20 8a8 8 0 0 0-14-3L3 8m0-5v5h5M4 16a8 8 0 0 0 14 3l3-3m0 5v-5h-5"></path></svg> <span id="cicd-status-indicator">CI/CD</span>
+            </button>
+            <button onclick="openSecurityModal()" class="aero-button-danger py-2 px-4 rounded-lg shadow-lg transition duration-200 flex items-center gap-2">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="lock"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3"></path></svg> Security
+            </button>
+            <button onclick="openCollaborationModal()" class="aero-button-purple py-2 px-4 rounded-lg shadow-lg transition duration-200 flex items-center gap-2">
+              <span><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="users"><circle cx="9" cy="7" r="3"></circle><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6m3 11v-3a6 6 0 0 0-3-5"></path></svg></span>
+              <span class="hidden sm:inline">Collaborate</span>
+            </button>
+            <button id="openSettingsModal" onclick="openSettingsModal()" class="aero-button-gray py-2 px-4 rounded-lg shadow-lg transition duration-200 flex items-center gap-2">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="settings"><path d="m10 3-1 3-3 1-3 3v4l3 1 1 3 3 3h4l1-3 3-1 3-3v-4l-3-1-1-3-3-3Z"></path><circle cx="12" cy="12" r="3"></circle></svg> Settings
+            </button>
+            <!-- 👇 Ny knapp för unit tester 👇 -->
+            <button id="openUnitTestingCenter" onclick="openUnitTestingModal()" class="aero-button-info py-2 px-4 rounded-lg shadow-lg transition duration-200">
+              Unit Testing Center
+            </button>
+            <!-- 👆 Ny knapp för unit tester 👆 -->
+            <button id="openAddSuiteModal" onclick="openAddSuiteModal()" class="aero-button-success py-2 px-4 rounded-lg shadow-lg transition duration-200">
+              + Add New Test Suite
+            </button>
+
+            <label for="import-file-input" class="aero-button-info py-2 px-4 rounded-lg shadow-lg transition duration-200 cursor-pointer flex items-center">
+              Import JSON
+            </label>
+            <input type="file" id="import-file-input" class="hidden" accept=".json" onchange="importFromJSON(event)">
+
+            <button onclick="exportToJSON()" class="aero-button-gray py-2 px-4 rounded-lg shadow-lg transition duration-200">
+              Export JSON
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div id="storage-status" class="text-sm mb-4 p-3 aero-glass-panel">
+        <p id="storage-info" class="aero-text-secondary">Initializing storage...</p>
+      </div>
+
+      <div id="execution-status" class="text-sm mb-4 p-3 aero-glass-panel border-l-4 border-blue-500">
+        <p id="execution-info" class="aero-text-secondary">Execution Mode: <span id="exec-mode-display" class="font-semibold">Loading...</span></p>
+      </div>
+
+      <main id="suite-list-container">
+        <!-- Search and Filter Toolbar -->
+        <div class="mb-4 p-4 aero-glass-panel">
+          <div class="flex gap-3 flex-wrap">
+            <!-- Search Bar -->
+            <div class="flex-1 min-w-[200px]">
+              <input type="text" id="suite-search" class="w-full aero-input p-2 rounded-lg" placeholder="Search test suites..." oninput="filterSuites()">
+            </div>
+
+            <!-- Tag Filter -->
+            <div class="w-48">
+              <select id="tag-filter" aria-label="Filter suites by tag" class="w-full aero-button p-2 rounded-lg" onchange="filterSuites()">
+                <option value="">All Tags</option>
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+
+            <!-- Language Filter -->
+            <div class="w-40">
+              <select id="language-filter" aria-label="Filter suites by language" class="w-full aero-button p-2 rounded-lg" onchange="filterSuites()">
+                <option value="">All Languages</option>
+                <option value="python">Python</option>
+                <option value="robot">Robot Framework</option>
+                <option value="java">Java</option>
+                <option value="csharp">C#</option>
+                <option value="website">Website</option>
+              </select>
+            </div>
+
+            <!-- Sort Options -->
+            <div class="w-48">
+              <select id="sort-option" aria-label="Sort suites" class="w-full aero-button p-2 rounded-lg" onchange="filterSuites()">
+                <option value="dateModified">Recently Modified</option>
+                <option value="dateCreated">Recently Created</option>
+                <option value="name">Name (A-Z)</option>
+                <option value="favorites">Favorites First</option>
+              </select>
+            </div>
+
+            <!-- Bulk Selection Mode -->
+            <button id="bulk-mode-toggle" onclick="toggleBulkMode()" class="aero-button-info px-4 py-2 rounded-lg">
+              Bulk Select
+            </button>
+          </div>
+        </div>
+
+        <!-- Bulk Actions Toolbar -->
+        <div id="bulk-actions-toolbar" class="hidden mb-4 p-3 aero-glass-panel flex gap-3 items-center">
+          <span class="aero-text-secondary font-semibold">
+            <span id="selected-count">0</span> selected
+          </span>
+          <button onclick="bulkRun()" class="aero-button-primary px-4 py-2 rounded-lg">
+            Run Selected
+          </button>
+          <button onclick="bulkDelete()" class="aero-button-danger px-4 py-2 rounded-lg">
+            Delete Selected
+          </button>
+          <button onclick="bulkExport()" class="aero-button-info px-4 py-2 rounded-lg">
+            Export Selected
+          </button>
+          <button onclick="bulkAddTag()" class="aero-button-success px-4 py-2 rounded-lg">
+            Add Tag to Selected
+          </button>
+        </div>
+
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-2xl font-bold aero-text-primary">
+            Configured Test Suites
+            <span id="current-view-name" class="text-lg aero-text-muted"></span>
+          </h2>
+        </div>
+        <div id="test-suites" class="space-y-6">
+          <p id="loading-message" class="aero-text-muted">Loading test suites...</p>
+        </div>
+      </main>
+
+      <div id="message-box" class="fixed top-5 right-5 z-50 transition-all duration-300 transform translate-x-full">
+      </div>
+    </div>
+  </div>
+  <div id="add-view-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop">
+    <div class="aero-modal p-6 w-full max-w-md">
+      <h3 class="text-2xl font-bold mb-4 aero-text-primary">Create New View</h3>
+      <form onsubmit="createView(event)">
+        <div class="mb-4">
+          <label for="view-name" class="block text-sm font-medium aero-text-secondary mb-2">View Name</label>
+          <input type="text" id="view-name" required="" class="w-full aero-input p-3 rounded-lg" placeholder="e.g., Frontend Tests, Backend Tests">
+        </div>
+        <div class="mb-4">
+          <label for="view-description" class="block text-sm font-medium aero-text-secondary mb-2">Description
+            (Optional)</label>
+          <textarea id="view-description" rows="3" class="w-full aero-input p-3 rounded-lg" placeholder="Brief description of this view"></textarea>
+        </div>
+        <div class="flex justify-end space-x-3">
+          <button type="button" onclick="closeAddViewModal()" class="aero-button-gray py-2 px-4 rounded-lg transition duration-200">
+            Cancel
+          </button>
+          <button type="submit" class="aero-button-success py-2 px-4 rounded-lg transition duration-200">
+            Create View
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="execution-settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop">
+    <div class="aero-modal p-6 sm:p-8 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+      <h3 class="text-3xl font-bold mb-6 aero-text-primary">Execution Configuration</h3>
+
+      <div class="mb-6">
+        <label class="block text-sm font-medium aero-text-secondary mb-3">Execution Mode</label>
+        <div class="space-y-3">
+          <label class="flex items-start p-4 aero-button rounded-lg cursor-pointer hover:opacity-90">
+            <input type="radio" name="execution-mode" value="real" checked="" class="mt-1 mr-3">
+            <div>
+              <div class="font-semibold aero-text-success">Real Execution (Recommended)</div>
+              <div class="text-sm aero-text-muted">Actually run your code and see real output. Python &amp; Robot Framework
+                run in browser, Java/C# require API or local compiler.</div>
+            </div>
+          </label>
+
+          <label class="flex items-start p-4 aero-button rounded-lg cursor-pointer hover:opacity-90">
+            <input type="radio" name="execution-mode" value="simulated" class="mt-1 mr-3">
+            <div>
+              <div class="font-semibold aero-text-warning">Simulated Execution</div>
+              <div class="text-sm aero-text-muted">Display code without running it. Useful for planning and
+                documentation.</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="mb-6 p-4 aero-glass-panel border-l-4 border-blue-500">
+        <h4 class="font-semibold aero-text-primary mb-3">NEW: Website Integration Testing</h4>
+        <div class="text-sm aero-text-secondary mb-3">
+          Test external websites or load your own site files for automated testing!
+        </div>
+        <div class="text-xs aero-text-muted">
+          Perfect for testing tests made through website modules or any other web application<br>
+          Upload site files (HTML/CSS/JS) or link to external URLs<br>
+          Use Robot Framework to interact with forms, buttons, and elements
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h4 class="text-lg font-semibold aero-text-primary mb-3"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="image"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8" cy="8" r="2"></circle><path d="m3 17 5-5 4 4 4-6 5 7"></path></svg> Screenshot Baselines</h4>
+        <p class="text-sm aero-text-muted mb-3">
+          Manage saved screenshot baselines for visual regression testing
+        </p>
+
+        <div id="baselines-list" class="space-y-2 mb-3">
+          <!-- Populated dynamically -->
+        </div>
+
+        <div class="flex gap-2">
+          <button type="button" onclick="refreshBaselinesList()" class="aero-button-info text-sm py-1 px-3 rounded">
+            <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="refresh"><path d="M20 8a8 8 0 0 0-14-3L3 8m0-5v5h5M4 16a8 8 0 0 0 14 3l3-3m0 5v-5h-5"></path></svg> Refresh
+          </button>
+          <button type="button" onclick="exportAllBaselines()" class="aero-button-gray text-sm py-1 px-3 rounded">
+            <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="save"><path d="M4 3h14l3 3v15H3V3Zm3 0v6h10V3M7 21v-8h10v8"></path></svg> Export All
+          </button>
+          <button type="button" onclick="clearAllBaselines()" class="aero-button-danger text-sm py-1 px-3 rounded">
+            <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="trash"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"></path></svg> Clear All
+          </button>
+        </div>
+      </div>
+
+      <div id="python-exec-config" class="mb-6 p-4 aero-modal rounded-lg border aero-divider">
+        <h4 class="font-semibold aero-text-primary mb-3">Python Execution</h4>
+        <div class="text-sm aero-text-muted mb-2">
+          <span class="aero-text-success"> Browser-based execution via Pyodide (WebAssembly)</span>
+        </div>
+        <div class="text-xs aero-text-muted">
+          Python code runs directly in your browser. No server needed. First run may take a few seconds to initialize.
+        </div>
+      </div>
+
+
+      <div id="robot-exec-config" class="mb-6 p-4 aero-modal rounded-lg border border-teal-700">
+        <h4 class="font-semibold aero-text-primary mb-3">Robot Framework Execution</h4>
+        <p class="text-xs aero-text-muted mb-3">Choose how to execute Robot Framework tests:</p>
+
+        <div class="space-y-2 mb-3">
+          <label class="flex items-center">
+            <input type="radio" name="robot-execution-type" value="browser" checked="" class="mr-2">
+            <span class="text-sm"> Browser-based (via Pyodide) - No setup required!</span>
+          </label>
+          <label class="flex items-center">
+            <input type="radio" name="robot-execution-type" value="backend" class="mr-2">
+            <span class="text-sm">Local Backend Server (for SeleniumLibrary/browser automation)</span>
+          </label>
+          <label class="flex items-center">
+            <input type="radio" name="robot-execution-type" value="api" class="mr-2">
+            <span class="text-sm">Remote API (Limited - basic tests only)</span>
+          </label>
+        </div>
+
+        <div id="robot-browser-config" class="mb-3">
+          <div class="text-xs aero-text-secondary aero-glass-panel p-2 rounded mb-2">
+            <strong>Browser-based execution (Recommended)</strong><br>
+            Runs directly in your browser via WebAssembly<br>
+            Auto-installs Robot Framework on first run (~10-15 seconds)<br>
+            <strong>NEW: Includes BrowserLibrary for DOM automation!</strong><br>
+            Perfect for API tests, data validation, business logic<br>
+            Test forms, click buttons, verify page content<br>
+            No server, no API keys, no installation required!
+          </div>
+          <div class="text-xs aero-text-secondary aero-glass-panel p-2 rounded mb-2">
+            <strong> BrowserLibrary Keywords Available:</strong><br>
+            Click Element | Input Text | Get Text | Get Value<br>
+            Element Should Be Visible | Element Should Contain<br>
+            Page Should Contain | Element Should Exist<br>
+            Check Checkbox | Uncheck Checkbox<br>
+            Select From List | Execute JavaScript<br>
+            Wait For Element | Get Element Count
+          </div>
+          <div class="text-xs aero-text-warning aero-glass-panel p-2 rounded">
+            <strong>Limitation:</strong> Same-origin policy applies (can only test current page/domain).
+            Use backend server option for cross-origin testing with SeleniumLibrary.
+          </div>
+        </div>
+
+        <div id="robot-backend-config" class="hidden mb-3">
+          <div class="mb-2">
+            <label class="block text-xs aero-text-muted mb-1">Backend Server URL</label>
+            <input type="text" id="robot-backend-url" value="http://localhost:5000" class="w-full aero-glass-panel border border-blue-300 aero-text-primary p-2 rounded text-sm">
+          </div>
+          <div class="text-xs aero-text-muted aero-glass-panel p-2 rounded mb-2">
+            <strong class="text-teal-300">Quick Setup:</strong><br>
+            1. <code class="aero-button px-1">pip install robotframework robotframework-seleniumlibrary flask flask-cors</code><br>
+            2. Run robot_server.py (included in download)<br>
+            3. Install ChromeDriver or GeckoDriver for browser tests
+          </div>
+          <button type="button" onclick="window.open('https://robotframework.org/', '_blank')" class="text-xs aero-text-primary hover:underline">
+            Robot Framework Documentation
+          </button>
+        </div>
+
+        <div id="robot-api-config" class="hidden">
+          <div class="text-xs aero-text-warning aero-glass-panel p-2 rounded mb-2">
+            API execution is limited. Use browser or local backend for full features.
+          </div>
+          <div class="mb-2">
+            <label class="block text-xs aero-text-muted mb-1">API Endpoint</label>
+            <input type="text" id="robot-api-url" placeholder="https://your-robot-api.com/execute" class="w-full aero-glass-panel border border-blue-300 aero-text-primary p-2 rounded text-sm">
+          </div>
+        </div>
+      </div>
+
+      <div id="java-exec-config" class="mb-6 p-4 aero-modal rounded-lg border aero-divider">
+        <h4 class="font-semibold aero-text-primary mb-3"> Java Execution</h4>
+        <p class="text-xs aero-text-muted mb-3">Choose how to execute Java code:</p>
+
+        <div class="space-y-2 mb-3">
+          <label class="flex items-center">
+            <input type="radio" name="java-execution-type" value="jdoodle" checked="" class="mr-2">
+            <span class="text-sm">JDoodle API (requires free API key from jdoodle.com)</span>
+          </label>
+          <label class="flex items-center">
+            <input type="radio" name="java-execution-type" value="local" class="mr-2">
+            <span class="text-sm">Local compiler (requires Java installed + backend server)</span>
+          </label>
+        </div>
+
+        <div id="jdoodle-config">
+          <div class="mb-2">
+            <label class="block text-xs aero-text-muted mb-1">JDoodle Client ID</label>
+            <input type="text" id="jdoodle-client-id" placeholder="Get from jdoodle.com" class="w-full aero-glass-panel border border-blue-300 aero-text-primary p-2 rounded text-sm">
+          </div>
+          <div>
+            <label class="block text-xs aero-text-muted mb-1">JDoodle Client Secret</label>
+            <input type="text" id="jdoodle-client-secret" placeholder="Get from jdoodle.com" class="w-full aero-glass-panel border border-blue-300 aero-text-primary p-2 rounded text-sm">
+          </div>
+          <a href="https://www.jdoodle.com/compiler-api" target="_blank" class="text-xs aero-text-primary hover:underline mt-1 inline-block">
+            Get free API key (200 requests/day)
+          </a>
+        </div>
+      </div>
+
+      <div id="csharp-exec-config" class="mb-6 p-4 aero-modal rounded-lg border aero-divider">
+        <h4 class="font-semibold aero-text-primary mb-3">C# Execution</h4>
+        <p class="text-xs aero-text-muted mb-3">Choose how to execute C# code:</p>
+
+        <div class="space-y-2 mb-3">
+          <label class="flex items-center">
+            <input type="radio" name="csharp-execution-type" value="jdoodle" checked="" class="mr-2">
+            <span class="text-sm">JDoodle API (same credentials as Java)</span>
+          </label>
+          <label class="flex items-center">
+            <input type="radio" name="csharp-execution-type" value="local" class="mr-2">
+            <span class="text-sm">Local compiler (requires .NET/Mono + backend server)</span>
+          </label>
+        </div>
+      </div>
+
+      <script>
+        // Toggle robot execution type configs
+        document.querySelectorAll('input[name="robot-execution-type"]').forEach(radio => {
+          radio.addEventListener('change', (e) => {
+            document.getElementById('robot-browser-config').classList.toggle('hidden', e.target.value !== 'browser');
+            document.getElementById('robot-backend-config').classList.toggle('hidden', e.target.value !== 'backend');
+            document.getElementById('robot-api-config').classList.toggle('hidden', e.target.value !== 'api');
+          });
+        });
+      </script>
+
+      <div class="flex justify-end space-x-3">
+        <button onclick="closeExecutionSettingsModal()" class="aero-button-gray py-2 px-4 rounded-lg transition duration-200">
+          Cancel
+        </button>
+        <button onclick="saveExecutionSettings()" class="aero-button-success py-2 px-4 rounded-lg transition duration-200">
+          Save Settings
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop">
+    <div class="aero-modal p-6 sm:p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <h3 class="text-3xl font-bold mb-6 aero-text-primary">Storage Configuration</h3>
+
+      <div class="mb-6">
+        <label class="block text-sm font-medium aero-text-secondary mb-3">Storage Type</label>
+        <div class="space-y-3">
+          <label class="flex items-start p-4 aero-button rounded-lg cursor-pointer hover:opacity-90">
+            <input type="radio" name="storage-type" value="localStorage" checked="" class="mt-1 mr-3">
+            <div>
+              <div class="font-semibold aero-text-primary">Browser Local Storage (Default)</div>
+              <div class="text-sm aero-text-muted">Stores test suites locally in your browser. Simple and fast, but
+                limited to this device.</div>
+            </div>
+          </label>
+
+          <label class="flex items-start p-4 aero-button rounded-lg cursor-pointer hover:opacity-90">
+            <input type="radio" name="storage-type" value="firebase" class="mt-1 mr-3">
+            <div>
+              <div class="font-semibold aero-text-primary">Firebase Cloud Storage</div>
+              <div class="text-sm aero-text-muted">Sync your test suites across devices using Google Firebase.</div>
+            </div>
+          </label>
+
+          <label class="flex items-start p-4 aero-button rounded-lg cursor-pointer hover:opacity-90">
+            <input type="radio" name="storage-type" value="customApi" class="mt-1 mr-3">
+            <div>
+              <div class="font-semibold aero-text-primary">Custom API Backend</div>
+              <div class="text-sm aero-text-muted">Connect to your own backend API for custom storage.</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div id="firebase-config" class="hidden mb-6 p-4 aero-modal rounded-lg border aero-divider">
+        <h4 class="font-semibold aero-text-primary mb-3">Firebase Configuration</h4>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-medium aero-text-secondary mb-1">API Key</label>
+            <input type="text" id="firebase-api-key" class="w-full aero-input p-2 rounded text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-medium aero-text-secondary mb-1">Auth Domain</label>
+            <input type="text" id="firebase-auth-domain" class="w-full aero-input p-2 rounded text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-medium aero-text-secondary mb-1">Project ID</label>
+            <input type="text" id="firebase-project-id" class="w-full aero-input p-2 rounded text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-medium aero-text-secondary mb-1">Storage Bucket</label>
+            <input type="text" id="firebase-storage-bucket" class="w-full aero-input p-2 rounded text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-medium aero-text-secondary mb-1">App ID</label>
+            <input type="text" id="firebase-app-id" class="w-full aero-input p-2 rounded text-sm">
+          </div>
+        </div>
+      </div>
+
+      <div id="custom-api-config" class="hidden mb-6 p-4 aero-modal rounded-lg border aero-divider">
+        <h4 class="font-semibold aero-text-primary mb-3">Custom API Configuration</h4>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-medium aero-text-secondary mb-1">API Base URL</label>
+            <input type="text" id="custom-api-base-url" placeholder="https://api.yourserver.com/test-suites" class="w-full aero-input p-2 rounded text-sm">
+            <p class="text-xs aero-text-muted mt-1">Base URL for your test suite API endpoints</p>
+          </div>
+          <div>
+            <label class="block text-xs font-medium aero-text-secondary mb-1">Authorization Header (Optional)</label>
+            <input type="text" id="custom-api-auth-header" placeholder="Bearer your-token-here" class="w-full aero-input p-2 rounded text-sm">
+            <p class="text-xs aero-text-muted mt-1">e.g., "Bearer token123" or "API-Key abc-xyz"</p>
+          </div>
+          <div class="text-xs aero-glass-panel p-3 rounded">
+            <strong>Required API Endpoints:</strong><br>
+            GET {base_url} - List all test suites<br>
+            POST {base_url} - Create test suite<br>
+            PUT {base_url}/{id} - Update test suite<br>
+            DELETE {base_url}/{id} - Delete test suite
+          </div>
+        </div>
+      </div>
+
+      <script>
+        document.querySelectorAll('input[name="storage-type"]').forEach(radio => {
+          radio.addEventListener('change', (e) => {
+            document.getElementById('firebase-config').classList.toggle('hidden', e.target.value !== 'firebase');
+            document.getElementById('custom-api-config').classList.toggle('hidden', e.target.value !== 'customApi');
+          });
+        });
+      </script>
+
+      <div class="flex justify-end space-x-3">
+        <button onclick="closeSettingsModal()" class="aero-button-gray py-2 px-4 rounded-lg transition duration-200">
+          Cancel
+        </button>
+        <button onclick="saveSettings()" class="aero-button-success py-2 px-4 rounded-lg transition duration-200">
+          Save Settings
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="visual-web-tester-modal" class="hidden fixed inset-0 z-[70] flex items-center justify-center aero-modal-backdrop modal-open">
+    <div class="vwt-dialog-shell aero-modal p-0 w-full max-w-[95vw] h-[90vh] flex flex-col">
+      <!-- Resize Handle -->
+      <div class="resize-handle-corner"></div>
+      <header class="vwt-dialog-header p-4 border-b aero-divider flex justify-between items-center flex-shrink-0">
+        <div class="flex-1 flex items-center gap-3">
+          <h2 class="text-2xl font-bold aero-text-primary"> Visual Web Tester</h2>
+
+          <!-- Debug Mode Toggle -->
+          <label class="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" id="vwt-debug-mode" onchange="toggleDebugMode(this.checked)" class="w-4 h-4">
+            <span class="aero-text-secondary">Debug Mode</span>
+          </label>
+
+          <!-- Debug Controls (hidden by default) -->
+          <div id="vwt-debug-controls" class="hidden flex items-center gap-2 ml-4">
+            <button onclick="debugStepOver()" id="debug-step-btn" class="aero-button-info text-sm py-1 px-3 rounded" title="Execute next step (F10)" disabled="">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="play"><path d="m7 3 14 9-14 9Z"></path></svg> Step
+            </button>
+            <button onclick="debugResume()" id="debug-resume-btn" class="aero-button-success text-sm py-1 px-3 rounded" title="Resume execution (F5)" disabled="">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="play"><path d="m7 3 14 9-14 9Z"></path></svg> Resume
+            </button>
+            <button onclick="debugPause()" id="debug-pause-btn" class="aero-button-warning text-sm py-1 px-3 rounded" title="Pause execution" disabled="">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="pause"><path d="M7 4v16M17 4v16"></path></svg> Pause
+            </button>
+            <button onclick="debugStop()" class="aero-button-danger text-sm py-1 px-3 rounded" title="Stop debugging">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="stop"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg> Stop
+            </button>
+          </div>
+        </div>
+        <div class="flex space-x-3">
+          <button onclick="vwt_runTest()" class="aero-button-success py-2 px-4 rounded-lg"> Run Live Test</button>
+          <button onclick="vwt_saveSuite()" class="aero-button-info py-2 px-4 rounded-lg"> Save as Test Suite</button>
+          <button onclick="closeVisualWebTester()" class="aero-button-gray py-2 px-4 rounded-lg">Close</button>
+        </div>
+      </header>
+
+      <div class="vwt-dialog-body flex-grow flex min-h-0">
+        <aside class="vwt-source-column w-1/4 p-4 border-r aero-divider overflow-y-auto flex flex-col">
+          <div class="flex-shrink-0">
+            <h3 class="text-lg font-semibold aero-text-secondary mb-3">1. Load Website</h3>
+            <div class="vwt-target-controls space-y-3 aero-glass-panel p-3 rounded">
+              <p class="text-sm">Choose your website, load its preview, then add the steps you want to test.</p>
+              <label for="vwt-source-kind">Where is your website?</label>
+              <select id="vwt-source-kind" class="aero-input" onchange="vwt_setSourceMode(this.value)">
+                <option value="files">Files or folder</option><option value="repository">Git repository</option><option value="url">Website address</option>
+              </select>
+              <div id="vwt-source-files">
+                <button type="button" class="aero-button-primary" onclick="vwt_chooseProjectFolder()"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 7V4h6l2 3h10v13H3Z"/></svg>Choose folder</button>
+                <p class="text-xs">Recommended: choose the website's root folder to keep imports, images and nested pages together.</p>
+                <label for="vwt-project-files">Or add files (you can select several)</label>
+                <input type="file" id="vwt-project-files" multiple class="aero-input" onchange="vwt_addFiles(this)">
+                <p class="text-xs">Add again to keep existing files. Matching paths replace their contents. Use Path for nested files, such as scripts/main.js. Your HTML and imports decide which files run.</p>
+                <input type="file" id="vwt-update-file" hidden>
+              </div>
+              <div id="vwt-source-repository" hidden>
+                <label for="vwt-repository-url">Repository URL</label><input type="text" id="vwt-repository-url" class="aero-input" placeholder="https://github.com/owner/project.git">
+                <label for="vwt-repository-ref">Branch or tag (optional)</label><input type="text" id="vwt-repository-ref" class="aero-input" placeholder="Repository default">
+                <button type="button" class="aero-button-primary" onclick="vwt_loadRepository()">Get repository</button>
+                <p class="text-xs">Downloads a separate copy using Git. Private repositories use your computer's Git sign-in. Nothing is installed or run yet.</p>
+              </div>
+              <div id="vwt-source-url" hidden>
+                <label for="vwt-website-url">Staging or live website URL</label><input type="url" id="vwt-website-url" class="aero-input" placeholder="https://staging.example.com">
+                <button type="button" class="aero-button-primary" onclick="vwt_loadWebsite()">Use website</button>
+                <p class="text-xs">Tests interact with the real website. Use a test account and test data when actions change anything.</p>
+              </div>
+              <div id="vwt-source-status" class="text-sm" role="status" aria-live="polite">Choose files, a folder, a repository or a website address to begin.</div>
+              <div id="vwt-files-preview" class="text-xs aero-text-muted p-2 aero-modal rounded">No files yet.</div>
+              <label for="vwt-entry">Start page</label><select id="vwt-entry" class="aero-input" onchange="vwt_setEntry(this.value)" disabled></select>
+              <button type="button" id="vwt-refresh-source" class="aero-button-gray" onclick="vwt_refreshSource()" disabled>Read folder / repository again</button>
+              <div id="vwt-source-warnings" class="text-xs" role="note"></div>
+              <button type="button" id="vwt-stop-all-projects" class="aero-button-gray" onclick="vwt_stopAllProjects()">Stop all project websites</button>
+              <div id="vwt-project-server" hidden>
+                <strong>This project needs its own website server</strong>
+                <p class="text-xs">Source files such as React components cannot run as plain HTML. Start the project's server first, or choose a running staging URL.</p>
+                <label for="vwt-server-script">Package script to run</label><select id="vwt-server-script" class="aero-input"></select>
+                <label class="vwt-checkbox-label"><input type="checkbox" id="vwt-install-dependencies">Install dependencies first</label>
+                <p class="text-xs">Installing downloads packages and may run their setup code. Starting runs the exact script above. Only use projects you trust.</p>
+                <button type="button" class="aero-button-success" onclick="vwt_startProject()">Start project website</button>
+                <button type="button" id="vwt-stop-project" class="aero-button-gray" onclick="vwt_stopProject()">Stop project website</button>
+                <button type="button" class="aero-button-gray" onclick="vwt_projectStatus()">Check server status</button>
+                <details><summary>Server output</summary><pre id="vwt-project-log" class="text-xs">No server output yet.</pre></details>
+              </div>
+              <button type="button" id="vwt-reload-preview" onclick="vwt_renderIframe().catch(error=>vwt_targetNotice(error.message,true))" class="aero-button-primary w-full text-sm py-1 px-3 rounded">Reload Preview</button>
+            </div>
+          </div>
+
+          <div class="flex-shrink-0 mt-4">
+            <h3 class="text-lg font-semibold aero-text-secondary mb-3">2. Add Steps</h3>
+            <div id="vwt-toolbox" class="space-y-2">
+            </div>
+          </div>
+        </aside>
+
+        <main class="vwt-build-column w-1/4 p-4 border-r aero-divider flex flex-col overflow-y-hidden">
+          <h3 class="text-lg font-semibold aero-text-secondary mb-3">3. Build Test</h3>
+          <div id="vwt-canvas" class="droppable-area flex-grow overflow-y-auto p-2">
+          </div>
+          <!-- Debug Panel (shown when debug mode active) -->
+          <div id="vwt-debug-panel" class="hidden flex-shrink-0 mb-4 pt-4 border-t aero-divider max-h-[300px] overflow-y-auto">
+            <h3 class="text-lg font-semibold aero-text-secondary mb-3"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="bug"><rect x="7" y="7" width="10" height="14" rx="5"></rect><path d="M9 7V3m6 4V3M3 9h4m10 0h4M2 14h5m10 0h5M4 21l4-4m8 0 4 4M12 8v13"></path></svg> Debugger</h3>
+
+            <!-- Current Step Info -->
+            <div class="aero-glass-panel p-3 rounded-lg mb-3">
+              <div class="text-xs aero-text-muted mb-1">Current Step</div>
+              <div id="debug-current-step" class="font-semibold text-sm">Not started</div>
+              <div class="text-xs aero-text-muted mt-1">
+                Step <span id="debug-step-number">0</span> of <span id="debug-total-steps">0</span>
+              </div>
+            </div>
+
+            <!-- Breakpoints -->
+            <div class="aero-glass-panel p-3 rounded-lg mb-3">
+              <div class="text-xs font-semibold aero-text-secondary mb-2">Breakpoints</div>
+              <div id="debug-breakpoints-list" class="text-xs space-y-1">
+                <div class="aero-text-muted">No breakpoints set</div>
+              </div>
+            </div>
+
+            <!-- Variables Inspector -->
+            <div class="aero-glass-panel p-3 rounded-lg mb-3">
+              <div class="text-xs font-semibold aero-text-secondary mb-2">Variables</div>
+              <div id="debug-variables-list" class="text-xs space-y-1">
+                <div class="aero-text-muted">No variables captured</div>
+              </div>
+            </div>
+
+            <!-- Error Panel -->
+            <div id="debug-error-panel" class="hidden aero-glass-panel p-3 rounded-lg mb-3 border-l-4 border-red-500">
+              <div class="text-xs font-semibold aero-text-danger mb-2"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="close"><path d="m5 5 14 14M19 5 5 19"></path></svg> Error Details</div>
+              <div id="debug-error-message" class="text-xs aero-text-danger mb-2"></div>
+              <details class="text-xs">
+                <summary class="cursor-pointer aero-text-muted hover:aero-text-secondary">Stack Trace</summary>
+                <pre id="debug-error-stack" class="mt-2 p-2 aero-input rounded overflow-x-auto text-xs"></pre>
+              </details>
+            </div>
+
+            <!-- Call Stack -->
+            <div class="aero-glass-panel p-3 rounded-lg">
+              <div class="text-xs font-semibold aero-text-secondary mb-2">Execution Status</div>
+              <div id="debug-status" class="text-xs">
+                <span class="aero-badge-info">Ready</span>
+              </div>
+            </div>
+          </div>
+
+          <div id="vwt-properties" class="flex-shrink-0 pt-4 border-t aero-divider min-h-[200px] overflow-y-auto">
+          </div>
+        </main>
+
+        <aside class="vwt-preview-column w-1/2 p-4 flex flex-col overflow-y-hidden">
+          <h3 class="text-lg font-semibold aero-text-secondary mb-3">4. Preview &amp; Run</h3>
+          <div class="vwt-preview-frame flex-grow border aero-divider rounded-lg overflow-hidden">
+            <iframe id="vwt-iframe" class="w-full h-full" src="about:blank" title="Sandboxed Website Preview"></iframe>
+          </div>
+          <div class="flex-shrink-0 pt-4">
+            <h4 class="text-md font-semibold aero-text-secondary mb-2">Live Test Logs</h4>
+            <textarea id="vwt-logs" rows="8" class="w-full code-area p-3 rounded-lg font-mono text-sm" readonly="" placeholder="Test logs will appear here..."></textarea>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <div id="vwt-live-runner-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop modal-open">
+    <div class="aero-modal p-0 w-full max-w-[95vw] h-[90vh] flex flex-col">
+      <header class="p-4 border-b aero-divider flex justify-between items-center flex-shrink-0">
+        <h2 id="vwt-runner-modal-title" class="text-2xl font-bold aero-text-primary"> Visual Web Tester (Live Runner)
+        </h2>
+        <div class="flex space-x-3">
+          <button id="vwt-runner-rerun-btn" onclick="vwt_runLiveTestFromRunner()" class="aero-button-success py-2 px-4 rounded-lg"> Re-run Test</button>
+          <button onclick="vwt_minimizeLiveRunner()" class="aero-button-info p-2 rounded-lg" title="Minimize">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+              <path fill-rule="evenodd" d="M2 8a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 8z"></path>
+            </svg>
+          </button>
+          <button onclick="vwt_closeLiveRunner(true)" class="aero-button-gray py-2 px-4 rounded-lg">Close</button>
+        </div>
+      </header>
+
+      <div class="flex-grow flex min-h-0">
+        <aside class="w-1/3 p-4 border-r aero-divider overflow-y-auto flex flex-col">
+          <h3 class="text-lg font-semibold aero-text-secondary mb-3">1. Test Steps</h3>
+          <div id="vwt-runner-canvas" class="flex-grow overflow-y-auto p-2 space-y-2">
+          </div>
+        </aside>
+
+        <main class="w-2/3 p-4 flex flex-col overflow-y-hidden">
+          <h3 class="text-lg font-semibold aero-text-secondary mb-3">2. Preview &amp; Run</h3>
+          <div id="vwt-runner-iframe-container" class="flex-grow border aero-divider rounded-lg overflow-hidden">
+          </div>
+          <div class="flex-shrink-0 pt-4">
+            <h4 class="text-md font-semibold aero-text-secondary mb-2">Live Test Logs</h4>
+            <textarea id="vwt-runner-logs" rows="8" class="w-full code-area p-3 rounded-lg font-mono text-sm" readonly="" placeholder="Test logs will appear here..."></textarea>
+          </div>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <div id="suite-modal" class="hidden fixed inset-0 z-[70] flex items-center justify-center aero-modal-backdrop modal-open" onclick="if (event.target.id === 'suite-modal') closeEditorModal()">
+    <div class="aero-modal p-6 sm:p-8 w-full max-w-5xl max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+      <h3 id="modal-title" class="text-3xl font-bold mb-6 aero-text-primary">Add New Test Suite</h3>
+      <form id="suite-form" onsubmit="saveSuite(event)">
+        <input type="hidden" id="suite-id">
+
+        <div class="mb-4">
+          <label for="suite_name" class="block text-sm font-medium aero-text-secondary mb-1">Test Suite Name</label>
+          <input type="text" id="suite_name" required="" class="w-full aero-input p-3 rounded-lg">
+        </div>
+
+        <div class="mb-4">
+          <label for="suite_description" class="block text-sm font-medium aero-text-secondary mb-1">Description</label>
+          <textarea id="suite_description" rows="2" class="w-full aero-input p-3 rounded-lg"></textarea>
+        </div>
+
+        <div class="mb-4">
+          <label for="suite_view" class="block text-sm font-medium aero-text-secondary mb-1">Assign to View</label>
+          <select id="suite_view" class="w-full aero-input p-3 rounded-lg">
+            <option value="">All Views (Default)</option>
+          </select>
+          <p class="text-xs aero-text-muted mt-1">Select which view/folder this test suite belongs to</p>
+        </div>
+
+        <div class="mb-4">
+          <label for="suite_language" class="block text-sm font-medium aero-text-secondary mb-1">Programming Language /
+            Framework</label>
+          <select id="suite_language" class="w-full aero-input p-3 rounded-lg" onchange="updateCodeEditor()">
+            <option value="python">Python</option>
+            <option value="java">Java</option>
+            <option value="csharp">C#</option>
+            <option value="robot">Robot Framework</option>
+            <option value="website">Website Integration Testing</option>
+            <option value="playwright">Playwright (Node.js)</option>
+            <option value="security"> Security Test</option>
+          </select>
+        </div>
+
+        <div id="website-testing-config" class="hidden mb-6 p-4 aero-glass-panel border-l-4 border-blue-500 rounded-lg">
+          <h4 class="font-semibold aero-text-primary mb-3">Website Integration Testing</h4>
+
+          <div class="mb-4">
+            <label class="block text-sm font-medium aero-text-secondary mb-2">Website Source</label>
+            <div class="space-y-2">
+              <label class="flex items-center">
+                <input type="radio" name="website-method" value="url" checked="" class="mr-2" onchange="toggleWebsiteMethod()">
+                <span class="text-sm">External Website URL</span>
+              </label>
+              <label class="flex items-center">
+                <input type="radio" name="website-method" value="upload" class="mr-2" onchange="toggleWebsiteMethod()">
+                <span class="text-sm">Upload Local Site Files (HTML/CSS/JS)</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="website-url-config" class="mb-4">
+            <label for="website_url" class="block text-sm font-medium aero-text-secondary mb-1">Website URL</label>
+            <input type="url" id="website_url" placeholder="https://example.com" class="w-full aero-input p-3 rounded-lg">
+            <p class="text-xs aero-text-muted mt-1">URL of the website to test</p>
+          </div>
+
+          <div id="website-upload-config" class="hidden space-y-3">
+            <div>
+              <label class="block text-sm font-medium aero-text-secondary mb-1">HTML File (Required)</label>
+              <input type="file" id="website-html-file" accept=".html,.htm" class="w-full aero-input p-2 rounded-lg text-sm" onchange="handleWebsiteFileUpload(this, 'html')">
+            </div>
+            <div>
+              <label class="block text-sm font-medium aero-text-secondary mb-1">CSS Files (Optional)</label>
+              <input type="file" id="website-css-files" accept=".css" multiple="" class="w-full aero-input p-2 rounded-lg text-sm" onchange="handleWebsiteFileUpload(this, 'css')">
+            </div>
+            <div>
+              <label class="block text-sm font-medium aero-text-secondary mb-1">JavaScript Files (Optional)</label>
+              <input type="file" id="website-js-files" accept=".js" multiple="" class="w-full aero-input p-2 rounded-lg text-sm" onchange="handleWebsiteFileUpload(this, 'js')">
+            </div>
+            <div id="website-files-preview" class="text-xs aero-text-muted p-2 aero-modal rounded">
+              No files uploaded yet
+            </div>
+          </div>
+
+          <div class="mt-4 p-3 aero-glass-panel rounded text-xs aero-text-muted">
+            <strong> How it works:</strong><br>
+            1. Specify website URL or upload your site files<br>
+            2. Write Robot Framework test cases below to interact with the site<br>
+            3. Tests will run against the live site or your uploaded files<br>
+            4. Perfect for testing forms, buttons, navigation, and content validation
+          </div>
+        </div>
+
+        <div class="mb-4 border-t aero-divider pt-4">
+          <label class="block text-sm font-medium aero-text-secondary mb-1">Environment Parameters</label>
+          <p class="text-xs aero-text-muted mb-2">Key-value pairs that can be accessed by your test code.</p>
+          <div id="parameters-container" class="space-y-2 mb-2">
+          </div>
+          <button type="button" onclick="addParameterInput()" class="text-sm bg-emerald-500 hover:bg-emerald-400 aero-text-primary py-1 px-3 rounded-lg transition duration-200">
+            + Add Parameter
+          </button>
+          <input type="hidden" id="parameters-json">
+        </div>
+
+        <div class="mb-4 border-t aero-divider pt-4">
+          <label class="block text-sm font-medium aero-text-secondary mb-1">External Test Inputs (Mock Files)</label>
+          <p class="text-xs aero-text-muted mb-3">Load files from your computer or manually enter content. You can add
+            multiple files.</p>
+          <div id="input-files-container" class="space-y-4">
+          </div>
+          <button type="button" onclick="addInputFile()" class="mt-3 text-sm bg-emerald-500 hover:bg-emerald-400 aero-text-primary py-1 px-3 rounded-lg transition duration-200">
+            + Add Test Input
+          </button>
+        </div>
+
+        <div class="mb-4 border-t aero-divider pt-4">
+          <label class="block text-sm font-medium aero-text-secondary mb-2">Tags</label>
+          <div id="tag-input-container" class="flex flex-wrap gap-2 mb-2">
+            <!-- Tags appear here -->
+          </div>
+          <div class="flex gap-2">
+            <input type="text" id="new-tag-input" class="flex-1 aero-input p-2 rounded-lg" placeholder="Add tag (press Enter)" onkeypress="if(event.key===&quot;Enter&quot;){event.preventDefault();addTag()}">
+            <button type="button" onclick="addTag()" class="aero-button-success px-3 rounded-lg">+ Add</button>
+          </div>
+        </div>
+
+        <div class="mb-4 border-t aero-divider pt-4">
+          <div class="flex gap-2 border-b aero-divider mb-4">
+            <button type="button" onclick="switchEditorTab(&quot;code&quot;)" id="tab-code" class="py-2 px-4 font-semibold aero-text-primary border-b-2 border-blue-500">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="code"><path d="m7 6-6 6 6 6m10-12 6 6-6 6M14 3l-4 18"></path></svg> Code
+            </button>
+            <button type="button" onclick="switchEditorTab(&quot;data&quot;)" id="tab-data" class="py-2 px-4 font-semibold aero-text-muted">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="chart"><path d="M4 3v17h17M8 16v-5m5 5V6m5 10v-8"></path></svg> Test Data
+            </button>
+          </div>
+
+          <input type="hidden" id="mock_builder_json" value="{}">
+          <section class="aero-glass-panel p-3 mb-4 rounded-lg" aria-label="Test data and website starters">
+            <button type="button" onclick="LVXProduct.openSuiteMocks()" class="aero-button px-3 py-2 rounded-lg">Configure test data &amp; mocks</button>
+            <p id="suite-mock-summary" class="text-sm mt-2">No mock plan attached.</p>
+            <details class="mt-3"><summary>Robot website starter and guide</summary><p class="my-2">Choose a website URL or upload its HTML. Configure selectors that exist on your page. This starter is added only when you select it.</p><button type="button" onclick="loadWebsiteTemplate()" class="aero-button px-3 py-2 rounded-lg">Load website starter</button><p class="text-sm mt-2">Use two or more spaces between Robot keywords and arguments. Input Text, Click Element and Element Should Contain run through the isolated browser adapter. Inspect the selectors and expected results before running.</p></details>
+          </section>
+          <!-- Code Tab Content -->
+          <div id="editor-tab-code">
+            <div class="flex justify-between items-center mb-1">
+              <label for="suite_code" class="block text-sm font-medium aero-text-secondary">
+                <span id="code-label">Test Code</span>
+              </label>
+              <button type="button" onclick="openNoCodeBuilder()" class="aero-button-purple text-xs py-1 px-3 rounded transition">
+                Launch RobotFrameWork Visual Builder
+              </button>
+            </div>
+            <div id="monaco-editor-container" style="height: 400px; border: 1px solid #B8D4E8; border-radius: 4px;">
+            </div>
+            <div id="code-hint" class="text-xs aero-text-muted mt-1"></div>
+          </div>
+
+          <!-- Data Tab Content -->
+          <div id="editor-tab-data" class="hidden">
+            <div class="space-y-4">
+              <!-- Data Set Selector -->
+              <div>
+                <label class="block text-sm font-medium aero-text-secondary mb-2">Select Data Set (Optional)</label>
+                <div class="flex gap-2">
+                  <select id="suite_data_set" aria-label="Dataset for this test suite" class="flex-1 aero-button p-2 rounded-lg">
+                    <option value="">No data set (run once)</option>
+                    <!-- Populated dynamically -->
+                  </select>
+                  <button type="button" onclick="openDataSetManager()" class="aero-button-info px-4 rounded-lg">
+                    Manage Data Sets
+                  </button>
+                </div>
+                <p class="text-xs aero-text-muted mt-1">
+                  When a data set is selected, test will run once for each row. Use ${columnName} in code for variables.
+                </p>
+              </div>
+
+              <!-- Data Preview -->
+              <div id="data-set-preview" class="hidden">
+                <h4 class="font-semibold aero-text-secondary mb-2">Data Preview</h4>
+                <div class="aero-input p-3 rounded-lg max-h-48 overflow-auto">
+                  <table id="data-preview-table" class="w-full text-sm">
+                    <!-- Populated dynamically -->
+                  </table>
+                </div>
+                <p class="text-xs aero-text-muted mt-1">
+                  Test will run <span id="iteration-count" class="font-bold">0</span> times (once per row)
+                </p>
+              </div>
+
+              <!-- Variable Usage Help -->
+              <div class="aero-glass-panel p-3 rounded-lg text-sm">
+                <h4 class="font-semibold aero-text-secondary mb-2"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="info"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v6m0-10h.01"></path></svg> Using Variables in Code</h4>
+                <p class="aero-text-muted mb-2">Reference data columns using ${columnName} syntax:</p>
+                <div class="aero-input p-2 rounded font-mono text-xs">
+                  <div>Python: driver.find_element(By.ID, "${username}").send_keys("${password}")</div>
+                  <div>Robot: Input Text #username ${username}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label for="expected_output" class="block text-sm font-medium aero-text-secondary mb-1">Expected output or Python assertions
+            (Optional)</label>
+          <textarea id="expected_output" rows="3" class="w-full code-area p-3 rounded-lg font-mono text-sm"></textarea>
+        </div>
+
+        <div class="mb-4 border-t aero-divider pt-4">
+          <label for="webhook_url" class="block text-sm font-medium aero-text-secondary mb-1">External Integration /
+            Webhook URL (Optional)</label>
+          <input type="url" id="webhook_url" placeholder="https://your-ci-server/trigger" class="w-full aero-button border border-blue-300 aero-text-primary p-3 rounded-lg focus:ring-emerald-500 focus:border-emerald-500">
+        </div>
+
+        <div class="mb-6">
+          <label for="integration_info" class="block text-sm font-medium aero-text-secondary mb-1">API/Program
+            Integration Details</label>
+          <p class="text-xs aero-text-muted mb-1">Describe external programs or API calls this test would make.</p>
+          <textarea id="integration_info" rows="3" class="w-full aero-button border border-blue-300 aero-text-primary p-3 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"></textarea>
+        </div>
+
+        <div class="mb-6 border-t aero-divider pt-4">
+          <div class="flex items-center justify-between mb-3">
+            <label class="block text-sm font-medium aero-text-secondary"> Log File Configuration</label>
+            <label class="flex items-center cursor-pointer">
+              <input type="checkbox" id="enable_log_saving" class="mr-2">
+              <span class="text-sm aero-text-muted">Enable automatic log saving</span>
+            </label>
+          </div>
+
+          <div id="log-config-options" class="space-y-3 hidden">
+            <div>
+              <label for="log_filename" class="block text-xs aero-text-muted mb-1">Log Filename Pattern</label>
+              <input type="text" id="log_filename" placeholder="test_log_{suite_name}_{timestamp}" value="log_{suite_name}_{timestamp}" class="w-full aero-button border border-blue-300 aero-text-primary p-2 rounded-lg text-sm">
+              <p class="text-xs aero-text-muted mt-1">
+                Available variables: {suite_name}, {timestamp}, {date}, {time}, {status}
+              </p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="log_format" class="block text-xs aero-text-muted mb-1">Log Format</label>
+                <select id="log_format" class="w-full aero-button border border-blue-300 aero-text-primary p-2 rounded-lg text-sm">
+                  <option value="txt">Plain Text (.txt)</option>
+                  <option value="json">JSON (.json)</option>
+                  <option value="html">HTML Report (.html)</option>
+                  <option value="xml">XML (.xml)</option>
+                  <option value="md">Markdown (.md)</option>
+                </select>
+              </div>
+
+              <div>
+                <label for="log_save_trigger" class="block text-xs aero-text-muted mb-1">Save Trigger</label>
+                <select id="log_save_trigger" class="w-full aero-button border border-blue-300 aero-text-primary p-2 rounded-lg text-sm">
+                  <option value="always">After every run</option>
+                  <option value="failure">Only on failure</option>
+                  <option value="success">Only on success</option>
+                  <option value="manual">Manual only</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="text-xs aero-glass-panel p-2 rounded">
+              <span class="aero-text-muted"> Tip:</span> Logs will download automatically based on your trigger setting.
+              You can also manually download from the execution modal.
+            </div>
+          </div>
+        </div>
+
+        <script>
+          // Toggle log config options
+          document.getElementById('enable_log_saving').addEventListener('change', function (e) {
+            document.getElementById('log-config-options').classList.toggle('hidden', !e.target.checked);
+          });
+        </script>
+
+        <div class="flex justify-end space-x-3">
+          <button type="button" onclick="closeEditorModal()" class="bg-gray-600 hover:bg-gray-500 aero-text-primary font-semibold py-2 px-4 rounded-lg transition duration-200">
+            Cancel
+          </button>
+          <button id="Save_Test_Suite0666" type="submit" class="bg-emerald-600 hover:bg-emerald-500 aero-text-primary font-semibold py-2 px-4 rounded-lg transition duration-200">
+            Save Test Suite
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="nocode-builder-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop modal-open">
+    <div class="aero-modal p-0 w-full max-w-6xl h-[90vh] flex flex-col">
+      <!-- Resize Handle -->
+      <div class="resize-handle-corner"></div>
+      <header class="p-4 border-b aero-divider flex justify-between items-center flex-shrink-0">
+        <h2 class="text-2xl font-bold aero-text-primary"> Visual Test Builder (No-Code)</h2>
+        <div class="flex space-x-3">
+          <button onclick="closeNoCodeBuilder()" class="aero-button-gray py-2 px-4 rounded-lg">Cancel</button>
+          <button onclick="generateAndApplyBrowserCode()" class="aero-button-success py-2 px-4 rounded-lg text-xs">Generate Browser-Only Code &amp; Close</button>
+          <button onclick="generateAndApplyCode()" class="aero-button-info py-2 px-4 rounded-lg text-xs">Generate
+            Universal Robot Code &amp; Close</button>
+        </div>
+      </header>
+      <div class="flex-grow flex min-h-0">
+        <aside class="w-1/4 p-4 border-r aero-divider overflow-y-auto">
+          <h3 class="text-lg font-semibold aero-text-secondary mb-3">Available Steps</h3>
+          <div id="nocode-toolbox" class="space-y-2">
+          </div>
+        </aside>
+
+        <main class="w-1/2 p-4 overflow-y-auto droppable-area">
+          <h3 class="text-lg font-semibold aero-text-secondary mb-3">Test Steps</h3>
+          <div id="nocode-canvas">
+          </div>
+        </main>
+
+        <aside class="w-1/4 p-4 border-l aero-divider overflow-y-auto">
+          <div id="nocode-properties">
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+
+  <div id="run-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop" onclick="if (event.target.id === 'run-modal') closeRunModal()">
+    <div class="aero-glass-panel p-6 sm:p-8 aero-modal w-full max-w-4xl max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+      <!-- Resize Handle -->
+      <div class="resize-handle-corner"></div>
+      <div class="flex justify-between items-center mb-4">
+        <h3 id="run-modal-title" class="text-2xl font-bold aero-text-primary">Run Test Suite</h3>
+        <div id="run-status-indicator" class="text-sm"></div>
+      </div>
+      <div id="run-modal-content" class="aero-modal p-4 rounded-lg text-sm font-mono aero-text-success whitespace-pre-wrap max-h-[600px] overflow-y-auto">
+      </div>
+      <div class="mt-4 flex justify-end space-x-3">
+        <button onclick="cancelDesktopRuns()" class="aero-button-danger font-semibold py-2 px-4 rounded-lg">Cancel active desktop runs</button>
+        <button onclick="downloadCurrentLog()" id="download-log-btn" class="aero-button-primary aero-text-primary font-semibold py-2 px-4 rounded-lg transition duration-200">
+          Download Log
+        </button>
+        <button onclick="closeRunModal()" class="bg-gray-600 hover:bg-gray-500 aero-text-primary font-semibold py-2 px-4 rounded-lg transition duration-200">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="minimize-bar" class="hidden fixed bottom-0 left-0 right-0 h-16 aero-header p-2 flex items-center z-40">
+    <button id="minimize-bar-toggle-left" class="aero-button-gray h-12 w-10 text-xl font-bold rounded-lg flex-shrink-0">«</button>
+    <div id="minimize-bar-items-wrapper" class="flex-1 h-full mx-2 overflow-x-auto overflow-y-hidden">
+      <div id="minimize-bar-items-container" class="flex h-full items-center space-x-2">
+      </div>
+    </div>
+    <button id="minimize-bar-toggle-right" class="aero-button-gray h-12 w-10 text-xl font-bold rounded-lg flex-shrink-0">»</button>
+  </div>
+
+  <div id="hidden-iframes-container" class="hidden"></div>
+
+  <div id="version-history-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop" onclick="if(event.target.id===&quot;version-history-modal&quot;) closeVersionHistory()">
+    <div class="aero-modal p-6 w-full max-w-4xl max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+      <!-- Resize Handle -->
+      <div class="resize-handle-corner"></div>
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-2xl font-bold aero-text-primary">Version History: <span id="version-history-suite-name"></span>
+        </h3>
+        <button onclick="closeVersionHistory()" class="aero-button-gray px-4 py-2 rounded-lg">Close</button>
+      </div>
+
+      <div class="flex-1 overflow-hidden flex gap-4">
+        <div class="w-1/3 overflow-y-auto aero-glass-panel p-3 rounded-lg">
+          <h4 class="font-semibold mb-2 aero-text-secondary">Versions</h4>
+          <div id="versions-list" class="space-y-2">
+          </div>
+        </div>
+
+        <div class="w-2/3 overflow-y-auto aero-glass-panel p-4 rounded-lg">
+          <div class="flex justify-between items-center mb-3">
+            <h4 class="font-semibold aero-text-secondary">Preview</h4>
+            <div class="flex gap-2">
+              <button id="compare-btn" onclick="toggleComparisonMode()" class="aero-button-info text-sm py-1 px-3 rounded" disabled="">
+                Compare
+              </button>
+              <button onclick="exportVersionHistory()" class="aero-button-gray text-sm py-1 px-3 rounded">
+                Export
+              </button>
+              <button id="restore-btn" onclick="restoreSelectedVersion()" class="aero-button-success text-sm py-1 px-3 rounded" disabled="">
+                Restore Version
+              </button>
+            </div>
+          </div>
+          <div id="version-preview" class="aero-input p-4 rounded-lg min-h-[400px] font-mono text-sm whitespace-pre-wrap">
+            Select a version to preview
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- 👇 NYTT. till för unit tests 👇 -->
+  <!-- ============================================
+     UNIT TESTING MODAL
+     ============================================ -->
+  <div id="unit-testing-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop">
+    <div class="aero-modal p-0 w-full max-w-7xl h-[95vh] flex flex-col">
+      <!-- Resize Handle -->
+      <div class="resize-handle-corner"></div>
+      <header class="p-4 border-b aero-divider flex justify-between items-center flex-shrink-0">
+        <h2 class="text-2xl font-bold aero-text-primary">Unit Testing Center</h2>
+        <div class="flex gap-3">
+          <button onclick="createNewUnitTest()" class="w-full aero-button-success py-2 px-4 rounded-lg">+ New Unit
+            Test</button>
+          <button onclick="importUnitTestsFromFile()" class="aero-button-info py-2 px-4 rounded-lg"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="download"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"></path></svg> Import
+            Tests</button>
+          <button onclick="exportUnitTests()" class="aero-button-gray py-2 px-4 rounded-lg"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="upload"><path d="M12 16V4m-5 5 5-5 5 5M4 16v5h16v-5"></path></svg> Export Tests</button>
+          <button onclick="closeUnitTestingModal()" class="aero-button-danger py-2 px-4 rounded-lg">✕ Close</button>
+        </div>
+      </header>
+      <div class="flex-1 flex overflow-hidden">
+        <aside class="w-64 border-r aero-divider p-4 overflow-y-auto aero-glass-panel">
+          <h3 class="text-lg font-semibold aero-text-secondary mb-3">Test Suites</h3>
+          <div id="unit-test-suites-list" class="space-y-2"></div>
+          <button onclick="createNewUnitTest()" class="w-full aero-button-success py-2 px-4 rounded-lg mt-4">+ New Unit
+            Test</button>
+        </aside>
+        <main class="flex-1 p-4 overflow-y-auto">
+          <div class="mb-4 flex justify-between items-center">
+            <h3 class="text-xl font-semibold aero-text-primary" id="unit-test-section-title">All Unit Tests</h3>
+            <button onclick="runAllVisibleUnitTests()" class="aero-button-primary py-2 px-4 rounded-lg"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="play"><path d="m7 3 14 9-14 9Z"></path></svg> Run All
+              Tests</button>
+          </div>
+          <div class="mb-4 p-3 aero-glass-panel flex gap-3 flex-wrap">
+            <input type="text" id="unit-test-search" class="flex-1 min-w-[200px] aero-input p-2 rounded-lg" placeholder="Search unit tests..." oninput="filterUnitTests()">
+            <select id="unit-test-status-filter" aria-label="Filter unit tests by status" class="aero-button p-2 rounded-lg" onchange="filterUnitTests()">
+              <option value="">All Status</option>
+              <option value="PASS">Passed</option>
+              <option value="FAIL">Failed</option>
+              <option value="NOT_RUN">Not Run</option>
+              <option value="SKIPPED">Skipped</option>
+            </select>
+            <select id="unit-test-framework-filter" aria-label="Filter unit tests by framework" class="aero-button p-2 rounded-lg" onchange="filterUnitTests()">
+              <option value="">All Frameworks</option>
+              <option value="pytest">pytest</option>
+              <option value="unittest">unittest</option>
+              <option value="jest" disabled="">Jest — use Studio project runner</option>
+              <option value="junit" disabled="">JUnit — use Studio project runner</option>
+              <option value="nunit" disabled="">NUnit — use Studio project runner</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div id="unit-tests-list" class="space-y-3"></div>
+        </main>
+      </div>
+      <footer class="p-4 border-t aero-divider aero-glass-panel flex-shrink-0">
+        <div id="unit-test-statistics"></div>
+      </footer>
+    </div>
+  </div>
+
+  <div id="unit-test-editor-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop">
+    <div class="aero-modal p-0 w-full max-w-6xl h-[95vh] flex flex-col">
+      <!-- Resize Handle -->
+      <div class="resize-handle-corner"></div>
+      <header class="p-4 border-b aero-divider flex justify-between items-center flex-shrink-0">
+        <h2 class="text-2xl font-bold aero-text-primary" id="unit-test-editor-title">Create Unit Test</h2>
+        <button onclick="closeUnitTestEditor()" class="aero-button-danger py-2 px-4 rounded-lg">✕ Close</button>
+      </header>
+      <div class="flex-1 overflow-y-auto p-6">
+        <form id="unit-test-form" onsubmit="event.preventDefault(); saveUnitTestFromForm();">
+          <input type="hidden" id="unit-test-id">
+          <div class="mb-6 p-4 aero-glass-panel rounded-lg">
+            <h3 class="text-lg font-semibold aero-text-secondary mb-4">Basic Information</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium aero-text-secondary mb-2">Test Name <span class="text-red-500">*</span></label>
+                <input type="text" id="unit-test-name" required="" class="w-full aero-input p-2 rounded-lg" placeholder="e.g., Test User Login">
+              </div>
+              <div>
+                <label class="block text-sm font-medium aero-text-secondary mb-2">Test Framework</label>
+                <select id="unit-test-framework" class="w-full aero-button p-2 rounded-lg">
+                  <option value="custom">Custom / Generic</option>
+                  <option value="pytest">pytest</option>
+                  <option value="unittest">unittest</option>
+                  <option value="jest" disabled="">Jest — use Studio project runner</option>
+                  <option value="junit" disabled="">JUnit — use Studio project runner</option>
+                  <option value="nunit" disabled="">NUnit — use Studio project runner</option>
+                </select>
+              </div>
+            </div>
+            <div class="mt-4">
+              <label class="block text-sm font-medium aero-text-secondary mb-2">Description</label>
+              <textarea id="unit-test-description" rows="2" class="w-full aero-input p-2 rounded-lg" placeholder="What does this test validate?"></textarea>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label class="block text-sm font-medium aero-text-secondary mb-2">Link to Test Suite</label>
+                <select id="unit-test-suite" class="w-full aero-button p-2 rounded-lg">
+                  <option value="">None (Standalone)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium aero-text-secondary mb-2">Tags (comma-separated)</label>
+                <input type="text" id="unit-test-tags-input" class="w-full aero-input p-2 rounded-lg" placeholder="e.g., unit, integration, smoke">
+              </div>
+            </div>
+          </div>
+          <div class="mb-6">
+            <div class="mb-4 p-4 aero-glass-panel rounded-lg">
+              <h3 class="text-lg font-semibold aero-text-secondary mb-2">Setup Code (Optional)</h3>
+              <p class="text-sm aero-text-muted mb-3">Code to run before the test (fixtures, initialization)</p>
+              <div id="unit-test-setup-editor" style="height: 150px; border: 1px solid #B8D4E8; border-radius: 4px;">
+              </div>
+            </div>
+            <div class="mb-4 p-4 aero-glass-panel rounded-lg">
+              <h3 class="text-lg font-semibold aero-text-secondary mb-2">Test Code <span class="text-red-500">*</span>
+              </h3>
+              <p class="text-sm aero-text-muted mb-3">The actual test code with assertions</p>
+              <div id="unit-test-code-editor" style="height: 250px; border: 1px solid #B8D4E8; border-radius: 4px;">
+              </div>
+            </div>
+            <div class="mb-4 p-4 aero-glass-panel rounded-lg">
+              <h3 class="text-lg font-semibold aero-text-secondary mb-2">Teardown Code (Optional)</h3>
+              <p class="text-sm aero-text-muted mb-3">Cleanup code to run after the test</p>
+              <div id="unit-test-teardown-editor" style="height: 150px; border: 1px solid #B8D4E8; border-radius: 4px;">
+              </div>
+            </div>
+          </div>
+          <div class="mb-6 p-4 aero-glass-panel rounded-lg">
+            <h3 class="text-lg font-semibold aero-text-secondary mb-2">Expected Result (Optional)</h3>
+            <p class="text-sm aero-text-muted mb-3">Describe what should happen when this test passes</p>
+            <textarea id="unit-test-expected" rows="3" class="w-full aero-input p-2 rounded-lg" placeholder="e.g., User should be redirected to dashboard with success message"></textarea>
+          </div>
+        </form>
+      </div>
+      <footer class="p-4 border-t aero-divider flex justify-end gap-3 flex-shrink-0">
+        <button type="button" onclick="closeUnitTestEditor()" class="aero-button-gray py-2 px-4 rounded-lg">Cancel</button>
+        <button type="button" onclick="saveUnitTestFromForm()" class="aero-button-success py-2 px-4 rounded-lg"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="save"><path d="M4 3h14l3 3v15H3V3Zm3 0v6h10V3M7 21v-8h10v8"></path></svg> Save
+          Unit Test</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Pipeline Editor Modal -->
+  <div id="pipeline-editor-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop">
+    <div class="aero-modal p-0 w-full max-w-6xl h-[90vh] flex flex-col">
+      <!-- Resize Handle -->
+      <div class="resize-handle-corner"></div>
+      <header class="p-4 border-b aero-divider flex justify-between items-center flex-shrink-0">
+        <h2 class="text-2xl font-bold aero-text-primary">Pipeline Orchestrator</h2>
+        <div class="flex gap-3">
+          <button onclick="closePipelineEditor()" class="aero-button-gray py-2 px-4 rounded-lg">Cancel</button>
+          <button onclick="savePipeline()" class="aero-button-success py-2 px-4 rounded-lg">Save Pipeline</button>
+        </div>
+      </header>
+      <div class="flex-1 flex overflow-hidden">
+        <aside class="w-1/4 border-r aero-divider p-4 overflow-y-auto aero-glass-panel">
+          <h3 class="text-lg font-semibold aero-text-secondary mb-3">Pipeline Settings</h3>
+          <div class="mb-4">
+            <label class="block text-sm font-medium aero-text-secondary mb-1">Pipeline Name</label>
+            <input type="text" id="pipeline-name" class="w-full aero-input p-2 rounded-lg" placeholder="e.g., Release Candidate Flow">
+            <input type="hidden" id="pipeline-id">
+          </div>
+          <div class="mb-4">
+            <label class="block text-sm font-medium aero-text-secondary mb-1">Description</label>
+            <textarea id="pipeline-description" rows="3" class="w-full aero-input p-2 rounded-lg"></textarea>
+          </div>
+          <h3 class="text-lg font-semibold aero-text-secondary mb-3 mt-6">Toolbox</h3>
+          <div class="text-xs aero-text-muted mb-2">Drag items or click + to add to active stage</div>
+          <div class="mb-4">
+            <button onclick="addNewStageToPipeline()" class="w-full aero-button-info py-2 rounded mb-4">+ Add New
+              Stage</button>
+          </div>
+
+          <div id="pipeline-available-suites" class="space-y-2">
+            <!-- Populated by JS -->
+          </div>
+        </aside>
+        <main class="flex-1 p-4 overflow-y-auto bg-gray-50 relative" id="pipeline-canvas">
+          <div class="text-center text-gray-400 mt-20" id="pipeline-empty-msg">Add stages to build your pipeline logic.
+          </div>
+          <div id="pipeline-stages-container" class="space-y-6">
+            <!-- Stages rendered here -->
+          </div>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pipeline Execution Modal -->
+  <div id="pipeline-run-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop">
+    <div class="aero-modal p-0 w-full max-w-5xl max-h-[90vh] flex flex-col">
+      <!-- Resize Handle -->
+      <div class="resize-handle-corner"></div>
+      <header class="flex justify-between items-center p-4 border-b aero-divider bg-white rounded-t-lg">
+        <div class="flex items-center gap-3">
+          <div class="p-2 bg-blue-100 rounded-lg text-blue-600"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="bolt"><path d="m14 2-11 13h8l-1 7 11-13h-8Z"></path></svg></div>
+          <div>
+            <h3 class="text-xl font-bold aero-text-primary">Executing Pipeline: <span id="run-pipeline-name">...</span>
+            </h3>
+            <div class="text-xs text-gray-500">Local Execution Environment</div>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <div class="flex gap-2">
+            <div id="pipeline-overall-status" class="px-3 py-1 rounded-full text-sm font-bold bg-gray-200 text-gray-600">
+              INITIALIZING</div>
+            <button onclick="downloadPipelineLog()" class="aero-button-primary py-1 px-3 rounded text-sm">Download
+              Log</button>
+            <button onclick="closePipelineRunModal()" class="aero-button-gray py-1 px-3 rounded">Close</button>
+          </div>
+      </div></header>
+      <div class="flex-1 flex overflow-hidden">
+        <!-- Execution Steps Visualization -->
+        <div class="w-1/2 border-r aero-divider p-4 overflow-y-auto bg-gray-50">
+          <h4 class="text-sm font-semibold text-gray-500 uppercase mb-3">Workflow Progress</h4>
+          <div id="pipeline-execution-steps" class="space-y-4"></div>
+        </div>
+        <!-- Real-time Console Output -->
+        <div class="w-1/2 flex flex-col">
+          <div class="p-2 bg-gray-800 text-white text-xs font-mono flex justify-between items-center">
+            <span>CONSOLE OUTPUT</span>
+            <button onclick="document.getElementById('pipeline-console-output').innerHTML = ''" class="text-gray-400 hover:text-white">Clear</button>
+          </div>
+          <div class="flex-1 p-4 bg-black text-green-400 font-mono text-xs overflow-y-auto" id="pipeline-console-output">
+            Initializing pipeline runner...
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Visual Editor Root (Injected by visual-editor.js) -->
+  <div id="visual-editor-root" class="hidden fixed inset-0 z-[40] bg-gray-100 flex flex-col"></div>
+
+  <!-- slut -->
+
+  <!-- 👇 NYTT. till för unit tests 👇 -->
+
+
+
+
+
+  <!-- Environment Manager Modal -->
+  <div id="environment-manager-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop" onclick="if(event.target.id===&quot;environment-manager-modal&quot;) closeEnvironmentManager()">
+    <div class="aero-modal p-6 w-full max-w-5xl max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-2xl font-bold aero-text-primary"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="globe"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z"></path></svg> Environment Manager</h3>
+        <button onclick="closeEnvironmentManager()" class="aero-button-gray px-4 py-2 rounded-lg">Close</button>
+      </div>
+
+      <div class="flex gap-4 flex-1 min-h-0">
+        <!-- Left: Environments List -->
+        <div class="w-1/3 flex flex-col">
+          <div class="flex justify-between items-center mb-3">
+            <h4 class="font-semibold aero-text-secondary">Environments</h4>
+            <button onclick="openCreateEnvironmentModal()" class="aero-button-success text-sm py-1 px-3 rounded">
+              + New
+            </button>
+          </div>
+          <div id="environments-list" class="flex-1 overflow-y-auto space-y-2">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Right: Environment Details -->
+        <div class="w-2/3 flex flex-col">
+          <h4 class="font-semibold aero-text-secondary mb-3">Environment Details</h4>
+          <div id="environment-details" class="flex-1 overflow-y-auto aero-glass-panel p-4 rounded-lg">
+            <p class="aero-text-muted">Select an environment to view details</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create/Edit Environment Modal -->
+  <div id="create-environment-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center aero-modal-backdrop" onclick="if(event.target.id===&quot;create-environment-modal&quot;) closeCreateEnvironmentModal()">
+    <div class="aero-modal p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+      <h3 class="text-2xl font-bold mb-4 aero-text-primary">
+        <span id="env-modal-title">Create Environment</span>
+      </h3>
+
+      <form onsubmit="saveEnvironment(event)">
+        <div class="mb-4">
+          <label class="block text-sm font-medium aero-text-secondary mb-2">Environment Name*</label>
+          <input type="text" id="env-name" required="" class="w-full aero-input p-2 rounded-lg" placeholder="e.g., Staging, Production">
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium aero-text-secondary mb-2">Description</label>
+          <textarea id="env-description" rows="2" class="w-full aero-input p-2 rounded-lg" placeholder="Brief description of this environment"></textarea>
+        </div>
+
+        <div class="mb-4">
+          <div class="flex justify-between items-center mb-2">
+            <label class="block text-sm font-medium aero-text-secondary">Environment Variables</label>
+            <button type="button" onclick="addEnvironmentVariable()" class="aero-button-success text-sm py-1 px-3 rounded">
+              + Add Variable
+            </button>
+          </div>
+          <div id="env-variables-list" class="space-y-2">
+            <!-- Populated dynamically -->
+          </div>
+          <p class="text-xs aero-text-muted mt-2">
+            Use ${env.VARIABLE_NAME} in your test code to reference these values
+          </p>
+        </div>
+
+        <div class="aero-glass-panel p-3 rounded-lg mb-4">
+          <h4 class="font-semibold aero-text-secondary mb-2">Common Variables</h4>
+          <div class="text-xs aero-text-muted space-y-1">
+            <div>• <code>BASE_URL</code> - Base URL of the application</div>
+            <div>• <code>API_URL</code> - API endpoint URL</div>
+            <div>• <code>USERNAME</code> - Test user credentials</div>
+            <div>• <code>PASSWORD</code> - Test user password</div>
+            <div>• <code>TIMEOUT</code> - Default timeout in milliseconds</div>
+            <div>• <code>API_KEY</code> - API authentication key</div>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+          <button type="button" onclick="closeCreateEnvironmentModal()" class="aero-button-gray px-4 py-2 rounded-lg">
+            Cancel
+          </button>
+          <button type="submit" class="aero-button-success px-4 py-2 rounded-lg">
+            Save Environment
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+
+
+
+
+
+  <!-- la till denna med syftet att ha IndexedDB. Purpose; Larger storage, to trancend localstorage limit of ca 10mb. Nu; ca 500mb-1GB local storage som funkar offline 4ever -->
+
+  <!-- allt nedan; det som fanns sen innan -->
+  <div id="reporting-dashboard-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop" onclick="if(event.target.id===&quot;reporting-dashboard-modal&quot;) closeDashboard()">
+    <div class="aero-modal p-6 w-full max-w-7xl max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-2xl font-bold aero-text-primary"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="chart"><path d="M4 3v17h17M8 16v-5m5 5V6m5 10v-8"></path></svg> Analytics Dashboard</h3>
+        <div class="flex gap-2">
+          <select id="dashboard-timeframe" onchange="refreshDashboard()" class="aero-button px-3 py-2 rounded-lg text-sm">
+            <option value="7">Last 7 Days</option>
+            <option value="14">Last 14 Days</option>
+            <option value="30">Last 30 Days</option>
+            <option value="90">Last 90 Days</option>
+            <option value="all">All Time</option>
+          </select>
+          <button onclick="closeDashboard()" class="aero-button-gray px-4 py-2 rounded-lg">Close</button>
+        </div>
+      </div>
+
+      <!-- Tab Navigation -->
+      <div class="flex gap-2 mb-4">
+        <button id="dashboard-test-tab" onclick="switchDashboardTab(&quot;test&quot;)" class="security-tab-btn active px-4 py-2 rounded-lg aero-button">
+          <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="test"><path d="M8 3h8m-6 0v7L4 19a1 1 0 0 0 1 2h14a1 1 0 0 0 1-2l-6-9V3M8 14h8"></path></svg> Test Execution
+        </button>
+        <button id="dashboard-security-tab" onclick="switchDashboardTab(&quot;security&quot;)" class="security-tab-btn px-4 py-2 rounded-lg aero-button">
+          <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="lock"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3"></path></svg> Security
+        </button>
+      </div>
+
+      <!-- Test Execution Content -->
+      <div id="dashboard-test-content" class="flex-1 overflow-y-auto space-y-4">
+        <!-- Summary Statistics -->
+        <div class="grid grid-cols-4 gap-4">
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <div class="text-sm aero-text-muted mb-1">Total Executions</div>
+            <div id="stat-total" class="text-3xl font-bold aero-text-primary">0</div>
+          </div>
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <div class="text-sm aero-text-muted mb-1">Pass Rate</div>
+            <div id="stat-pass-rate" class="text-3xl font-bold text-green-600">0%</div>
+          </div>
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <div class="text-sm aero-text-muted mb-1">Avg Execution Time</div>
+            <div id="stat-avg-time" class="text-3xl font-bold aero-text-primary">0ms</div>
+          </div>
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <div class="text-sm aero-text-muted mb-1">Total Time</div>
+            <div id="stat-total-time" class="text-3xl font-bold aero-text-primary">0s</div>
+          </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid grid-cols-2 gap-4">
+          <!-- Execution Trend Chart -->
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <h4 class="font-semibold aero-text-secondary mb-3">Execution Trend</h4>
+            <div class="relative h-64 w-full">
+              <canvas id="trend-chart"></canvas>
+            </div>
+          </div>
+
+          <!-- Pass/Fail Distribution -->
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <h4 class="font-semibold aero-text-secondary mb-3">Pass/Fail Distribution</h4>
+            <div class="relative h-64 w-full">
+              <canvas id="distribution-chart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Flaky Tests Alert -->
+        <div id="flaky-tests-section" class="hidden aero-glass-panel p-4 rounded-lg border-l-4 border-yellow-500">
+          <h4 class="font-semibold aero-text-warning mb-3"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="warning"><path d="m12 3 10 18H2Zm0 6v5m0 3h.01"></path></svg> Flaky Tests Detected</h4>
+          <p class="text-sm aero-text-muted mb-3">These tests have inconsistent results and may need investigation:</p>
+          <div id="flaky-tests-list" class="space-y-2">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Performance Insights -->
+        <div class="grid grid-cols-2 gap-4">
+          <!-- Slowest Tests -->
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <h4 class="font-semibold aero-text-secondary mb-3"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="clock"><circle cx="12" cy="12" r="9"></circle><path d="M12 6v6l4 3"></path></svg> Slowest Tests</h4>
+            <div id="slowest-tests-list" class="space-y-2">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+
+          <!-- Most Run Tests -->
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <h4 class="font-semibold aero-text-secondary mb-3"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="bolt"><path d="m14 2-11 13h8l-1 7 11-13h-8Z"></path></svg> Most Frequently Run</h4>
+            <div id="most-run-tests-list" class="space-y-2">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Test Suite History -->
+        <div class="aero-glass-panel p-4 rounded-lg">
+          <h4 class="font-semibold aero-text-secondary mb-3">Recent Executions</h4>
+          <div class="overflow-x-auto">
+            <table id="recent-executions-table" class="w-full text-sm">
+              <thead>
+                <tr class="border-b aero-divider">
+                  <th class="text-left p-2">Time</th>
+                  <th class="text-left p-2">Test Suite</th>
+                  <th class="text-left p-2">Status</th>
+                  <th class="text-left p-2">Duration</th>
+                  <th class="text-left p-2">Iterations</th>
+                </tr>
+              </thead>
+              <tbody id="recent-executions-body">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Security Dashboard Content -->
+      <div id="dashboard-security-content" class="hidden flex-1 overflow-y-auto space-y-4">
+        <!-- Security Summary Statistics -->
+        <div class="grid grid-cols-4 gap-4">
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <div class="text-sm aero-text-muted mb-1">Total Scans</div>
+            <div id="sec-stat-total-scans" class="text-3xl font-bold aero-text-primary">0</div>
+          </div>
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <div class="text-sm aero-text-muted mb-1">Total Vulnerabilities</div>
+            <div id="sec-stat-total-vulns" class="text-3xl font-bold text-red-600">0</div>
+          </div>
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <div class="text-sm aero-text-muted mb-1">Critical Issues</div>
+            <div id="sec-stat-critical" class="text-3xl font-bold text-red-700">0</div>
+          </div>
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <div class="text-sm aero-text-muted mb-1">Pass Rate</div>
+            <div id="sec-stat-pass-rate" class="text-3xl font-bold text-green-600">0%</div>
+          </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid grid-cols-3 gap-4">
+          <!-- Severity Distribution Chart -->
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <h4 class="font-semibold aero-text-secondary mb-3">Severity Distribution</h4>
+            <div class="relative h-64 w-full">
+              <canvas id="security-severity-chart"></canvas>
+            </div>
+          </div>
+
+          <!-- Security Trend Chart -->
+          <div class="aero-glass-panel p-4 rounded-lg col-span-2">
+            <h4 class="font-semibold aero-text-secondary mb-3">Security Trend (14 Days)</h4>
+            <div class="relative h-64 w-full">
+              <canvas id="security-trend-chart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Compliance Score & Top Vulnerabilities -->
+        <div class="grid grid-cols-3 gap-4">
+          <!-- Compliance Score -->
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <h4 class="font-semibold aero-text-secondary mb-3"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="shield"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Z"></path><path d="m8 12 3 3 5-6"></path></svg> Compliance Score</h4>
+            <div class="flex flex-col items-center justify-center">
+              <div id="compliance-gauge" class="w-32 h-32 rounded-full flex items-center justify-center mb-3" style="background: conic-gradient(#22C55E 100%, #E5E7EB 100%);">
+                <div class="w-24 h-24 rounded-full bg-white flex items-center justify-center">
+                  <span id="compliance-score" class="text-4xl font-bold text-green-600">100</span>
+                </div>
+              </div>
+              <div class="text-sm aero-text-muted">Based on vulnerability impact</div>
+            </div>
+          </div>
+
+          <!-- Top Vulnerabilities -->
+          <div class="aero-glass-panel p-4 rounded-lg col-span-2">
+            <h4 class="font-semibold aero-text-secondary mb-3"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="bolt"><path d="m14 2-11 13h8l-1 7 11-13h-8Z"></path></svg> Top Vulnerabilities</h4>
+            <div class="overflow-x-auto max-h-64 overflow-y-auto">
+              <table class="w-full text-sm">
+                <thead class="sticky top-0 bg-white">
+                  <tr class="border-b aero-divider">
+                    <th class="text-left p-2">Rule ID</th>
+                    <th class="text-left p-2">Description</th>
+                    <th class="text-left p-2">Severity</th>
+                    <th class="text-left p-2">Count</th>
+                  </tr>
+                </thead>
+                <tbody id="top-vulnerabilities-body">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="suite-history-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop" onclick="if(event.target.id===&quot;suite-history-modal&quot;) closeSuiteHistoryModal()">
+    <div class="aero-modal p-6 w-full max-w-4xl max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-2xl font-bold aero-text-primary">
+          <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="chart"><path d="M4 3v17h17M8 16v-5m5 5V6m5 10v-8"></path></svg> Test History: <span id="suite-history-name"></span>
+        </h3>
+        <button onclick="closeSuiteHistoryModal()" class="aero-button-gray px-4 py-2 rounded-lg">Close</button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto space-y-4">
+        <!-- Statistics -->
+        <div class="grid grid-cols-3 gap-4">
+          <div class="aero-glass-panel p-3 rounded-lg">
+            <div class="text-sm aero-text-muted mb-1">Total Runs</div>
+            <div id="suite-stat-total" class="text-2xl font-bold aero-text-primary">0</div>
+          </div>
+          <div class="aero-glass-panel p-3 rounded-lg">
+            <div class="text-sm aero-text-muted mb-1">Pass Rate</div>
+            <div id="suite-stat-pass-rate" class="text-2xl font-bold text-green-600">0%</div>
+          </div>
+          <div class="aero-glass-panel p-3 rounded-lg">
+            <div class="text-sm aero-text-muted mb-1">Avg Time</div>
+            <div id="suite-stat-avg-time" class="text-2xl font-bold aero-text-primary">0ms</div>
+          </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="aero-glass-panel p-4 rounded-lg">
+          <h4 class="font-semibold aero-text-secondary mb-3">Recent Execution History</h4>
+          <div class="relative h-48 w-full">
+            <canvas id="suite-history-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Execution List -->
+        <div class="aero-glass-panel p-4 rounded-lg">
+          <h4 class="font-semibold aero-text-secondary mb-3">Execution Details</h4>
+          <div id="suite-history-list" class="space-y-2 max-h-64 overflow-y-auto">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+
+
+
+
+
+
+
+  <div id="data-set-manager-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop" onclick="if(event.target.id===&quot;data-set-manager-modal&quot;) closeDataSetManager()">
+    <div class="aero-modal p-6 w-full max-w-5xl max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-2xl font-bold aero-text-primary"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="chart"><path d="M4 3v17h17M8 16v-5m5 5V6m5 10v-8"></path></svg> Test Data Manager</h3>
+        <button onclick="closeDataSetManager()" class="aero-button-gray px-4 py-2 rounded-lg">Close</button>
+      </div>
+
+      <div class="flex gap-4 flex-1 min-h-0">
+        <!-- Left: Data Sets List -->
+        <div class="w-1/3 flex flex-col">
+          <div class="flex justify-between items-center mb-3">
+            <h4 class="font-semibold aero-text-secondary">Your Data Sets</h4>
+            <button onclick="openCreateDataSetModal()" class="aero-button-success text-sm py-1 px-3 rounded">
+              + New
+            </button>
+          </div>
+          <div id="data-sets-list" class="flex-1 overflow-y-auto space-y-2">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Right: Data Set Preview -->
+        <div class="w-2/3 flex flex-col">
+          <h4 class="font-semibold aero-text-secondary mb-3">Data Set Details</h4>
+          <div id="data-set-details" class="flex-1 overflow-y-auto aero-glass-panel p-4 rounded-lg">
+            <p class="aero-text-muted">Select a data set to view details</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create/Import Data Set Modal -->
+  <div id="create-data-set-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center aero-modal-backdrop" onclick="if(event.target.id===&quot;create-data-set-modal&quot;) closeCreateDataSetModal()">
+    <div class="aero-modal p-6 w-full max-w-2xl" onclick="event.stopPropagation()">
+      <h3 class="text-2xl font-bold mb-4 aero-text-primary">Create Test Data Set</h3>
+
+      <!-- Tab Navigation -->
+      <div class="flex gap-2 border-b aero-divider mb-4">
+        <button type="button" onclick="switchDataCreationTab(&quot;upload&quot;)" id="data-tab-upload" class="py-2 px-4 font-semibold aero-text-primary border-b-2 border-blue-500">
+          <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="upload"><path d="M12 16V4m-5 5 5-5 5 5M4 16v5h16v-5"></path></svg> Upload File
+        </button>
+        <button type="button" onclick="switchDataCreationTab(&quot;manual&quot;)" id="data-tab-manual" class="py-2 px-4 font-semibold aero-text-muted">
+          <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="edit"><path d="m4 16 12-12 4 4L8 20H4Zm9-9 4 4"></path></svg> Manual Entry
+        </button>
+        <button type="button" onclick="switchDataCreationTab(&quot;generate&quot;)" id="data-tab-generate" class="py-2 px-4 font-semibold aero-text-muted">
+          <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="dice"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="M7 7h.01M17 7h.01M12 12h.01M7 17h.01M17 17h.01"></path></svg> Generate
+        </button>
+      </div>
+
+      <!-- Upload Tab -->
+      <div id="data-creation-upload">
+        <div class="mb-4">
+          <label class="block text-sm font-medium aero-text-secondary mb-2">Data Set Name</label>
+          <input type="text" id="data-set-name-upload" class="w-full aero-input p-2 rounded-lg" placeholder="e.g., User Login Credentials">
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium aero-text-secondary mb-2">Upload File</label>
+          <input type="file" id="data-file-input" accept=".csv,.xlsx,.xls" class="w-full aero-input p-2 rounded-lg" onchange="handleDataFileUpload(event)">
+          <p class="text-xs aero-text-muted mt-1">Supported: CSV, Excel (.xlsx, .xls)</p>
+        </div>
+
+        <div id="upload-preview" class="hidden mb-4">
+          <h4 class="font-semibold aero-text-secondary mb-2">Preview</h4>
+          <div class="aero-input p-3 rounded-lg max-h-48 overflow-auto">
+            <table id="upload-preview-table" class="w-full text-sm">
+              <!-- Populated dynamically -->
+            </table>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+          <button onclick="closeCreateDataSetModal()" class="aero-button-gray px-4 py-2 rounded-lg">
+            Cancel
+          </button>
+          <button id="save-uploaded-data-btn" onclick="saveUploadedDataSet()" class="aero-button-success px-4 py-2 rounded-lg" disabled="">
+            Save Data Set
+          </button>
+        </div>
+      </div>
+
+      <!-- Manual Entry Tab -->
+      <div id="data-creation-manual" class="hidden">
+        <div class="mb-4">
+          <label class="block text-sm font-medium aero-text-secondary mb-2">Data Set Name</label>
+          <input type="text" id="data-set-name-manual" class="w-full aero-input p-2 rounded-lg" placeholder="e.g., Test Users">
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium aero-text-secondary mb-2">Enter CSV Data</label>
+          <textarea id="manual-csv-input" rows="10" class="w-full aero-input p-2 rounded-lg font-mono text-sm" placeholder="username,password,email
+user1,pass123,user1@test.com
+user2,pass456,user2@test.com"></textarea>
+          <p class="text-xs aero-text-muted mt-1">First row should be column headers</p>
+        </div>
+
+        <div class="flex justify-end gap-3">
+          <button onclick="closeCreateDataSetModal()" class="aero-button-gray px-4 py-2 rounded-lg">
+            Cancel
+          </button>
+          <button onclick="saveManualDataSet()" class="aero-button-success px-4 py-2 rounded-lg">
+            Save Data Set
+          </button>
+        </div>
+      </div>
+
+      <!-- Generate Tab -->
+      <div id="data-creation-generate" class="hidden">
+        <div class="mb-4">
+          <label class="block text-sm font-medium aero-text-secondary mb-2">Data Set Name</label>
+          <input type="text" id="data-set-name-generate" class="w-full aero-input p-2 rounded-lg" placeholder="e.g., Random Users">
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium aero-text-secondary mb-2">Number of Rows</label>
+          <input type="number" id="generate-row-count" value="10" min="1" max="1000" class="w-full aero-input p-2 rounded-lg">
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium aero-text-secondary mb-2">Data Pattern</label>
+          <textarea id="generate-pattern" rows="6" class="w-full aero-input p-2 rounded-lg font-mono text-sm" placeholder="{{firstName}},{{lastName}},{{email}},{{phone}}"></textarea>
+          <p class="text-xs aero-text-muted mt-1">
+            Available patterns: {{firstName}}, {{lastName}}, {{email}}, {{phone}}, {{number:min:max}}, {{text}},
+            {{boolean}}, {{date}}
+          </p>
+        </div>
+
+        <div class="flex justify-end gap-3">
+          <button onclick="closeCreateDataSetModal()" class="aero-button-gray px-4 py-2 rounded-lg">
+            Cancel
+          </button>
+          <button onclick="generateAndSaveDataSet()" class="aero-button-success px-4 py-2 rounded-lg">
+            Generate &amp; Save
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Screenshot Comparison Modal -->
+  <div id="screenshot-comparison-modal" class="hidden fixed inset-0 z-[70] flex items-center justify-center aero-modal-backdrop" onclick="if(event.target.id===&quot;screenshot-comparison-modal&quot;) closeScreenshotComparison()">
+    <div class="aero-modal p-6 w-full max-w-6xl max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-2xl font-bold aero-text-primary"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="search"><circle cx="10" cy="10" r="6"></circle><path d="m15 15 6 6"></path></svg> Visual Regression Detected</h3>
+        <button onclick="closeScreenshotComparison()" class="aero-button-gray px-4 py-2 rounded-lg">Close</button>
+      </div>
+
+      <div class="mb-4 aero-glass-panel p-3 rounded">
+        <div class="flex justify-between items-center">
+          <div>
+            <span class="aero-text-secondary">Baseline:</span>
+            <span id="comparison-name" class="font-bold ml-2"></span>
+          </div>
+          <div>
+            <span class="aero-text-secondary">Difference:</span>
+            <span id="comparison-diff" class="font-bold ml-2 aero-text-danger"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex gap-4 flex-1 overflow-hidden mb-4">
+        <!-- Baseline -->
+        <div class="flex-1 flex flex-col">
+          <h4 class="font-semibold aero-text-secondary mb-2">Baseline (Expected)</h4>
+          <div class="flex-1 aero-input rounded-lg overflow-auto p-2">
+            <img id="comparison-baseline" src="assets/image-placeholder.svg" alt="Comparison preview" class="w-full h-auto">
+          </div>
+        </div>
+
+        <!-- Current -->
+        <div class="flex-1 flex flex-col">
+          <h4 class="font-semibold aero-text-secondary mb-2">Current (Actual)</h4>
+          <div class="flex-1 aero-input rounded-lg overflow-auto p-2">
+            <img id="comparison-current" src="assets/image-placeholder.svg" alt="Comparison preview" class="w-full h-auto">
+          </div>
+        </div>
+
+        <!-- Diff -->
+        <div class="flex-1 flex flex-col">
+          <h4 class="font-semibold aero-text-secondary mb-2">Difference (Highlighted)</h4>
+          <div class="flex-1 aero-input rounded-lg overflow-auto p-2">
+            <img id="comparison-diff-img" src="assets/image-placeholder.svg" alt="Comparison preview" class="w-full h-auto">
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between">
+        <button onclick="updateBaseline()" class="aero-button-warning px-4 py-2 rounded-lg">
+          <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="warning"><path d="m12 3 10 18H2Zm0 6v5m0 3h.01"></path></svg> Update Baseline (Accept Changes)
+        </button>
+        <div class="flex gap-3">
+          <button onclick="downloadComparisonImages()" class="aero-button-info px-4 py-2 rounded-lg">
+            <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="save"><path d="M4 3h14l3 3v15H3V3Zm3 0v6h10V3M7 21v-8h10v8"></path></svg> Download Images
+          </button>
+          <button onclick="closeScreenshotComparison()" class="aero-button-gray px-4 py-2 rounded-lg">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Integrations Modal -->
+  <div id="integrations-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop" onclick="if(event.target.id===&quot;integrations-modal&quot;) closeIntegrationsModal()">
+    <div class="aero-modal p-6 w-full max-w-5xl max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-2xl font-bold aero-text-primary"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="bell"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"></path></svg> Notification Integrations</h3>
+        <button onclick="closeIntegrationsModal()" class="aero-button-gray px-4 py-2 rounded-lg">Close</button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="mb-4 border-b aero-divider">
+        <button onclick="switchIntegrationsTab(&quot;configured&quot;)" id="integrations-tab-configured" class="py-2 px-4 font-semibold aero-text-primary border-b-2 border-blue-500">
+          Configured
+        </button>
+        <button onclick="switchIntegrationsTab(&quot;history&quot;)" id="integrations-tab-history" class="py-2 px-4 font-semibold aero-text-muted">
+          History
+        </button>
+      </div>
+
+      <!-- Configured Tab -->
+      <div id="integrations-configured-panel" class="flex gap-4 flex-1 min-h-0">
+        <!-- Left: Integration Types -->
+        <div class="w-1/3 flex flex-col">
+          <h4 class="font-semibold aero-text-secondary mb-3">Add Integration</h4>
+          <div class="space-y-2">
+            <button onclick="openAddIntegrationModal(&quot;slack&quot;)" class="w-full aero-button p-4 rounded-lg text-left hover:aero-button-primary transition">
+              <div class="flex items-center gap-3">
+                <span class="text-3xl"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="comment"><path d="M3 3h18v14H8l-5 4Z"></path><path d="M7 7h10M7 11h7"></path></svg></span>
+                <div>
+                  <div class="font-semibold">Slack</div>
+                  <div class="text-xs aero-text-muted">Send notifications to Slack channels</div>
+                </div>
+              </div>
+            </button>
+
+            <button onclick="openAddIntegrationModal(&quot;discord&quot;)" class="w-full aero-button p-4 rounded-lg text-left hover:aero-button-primary transition">
+              <div class="flex items-center gap-3">
+                <span class="text-3xl"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="comment"><path d="M3 3h18v14H8l-5 4Z"></path><path d="M7 7h10M7 11h7"></path></svg></span>
+                <div>
+                  <div class="font-semibold">Discord</div>
+                  <div class="text-xs aero-text-muted">Send notifications to Discord channels</div>
+                </div>
+              </div>
+            </button>
+
+            <button onclick="openAddIntegrationModal(&quot;webhook&quot;)" class="w-full aero-button p-4 rounded-lg text-left hover:aero-button-primary transition">
+              <div class="flex items-center gap-3">
+                <span class="text-3xl"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="link"><path d="m10 14 4-4m-7 5-2 2a4 4 0 0 0 6 6l3-3m3-11 2-2a4 4 0 0 0-6-6l-3 3" transform="translate(0 -2)"></path></svg></span>
+                <div>
+                  <div class="font-semibold">Custom Webhook</div>
+                  <div class="text-xs aero-text-muted">POST JSON to any endpoint</div>
+                </div>
+              </div>
+            </button>
+
+            <button onclick="openAddIntegrationModal(&quot;email&quot;)" class="w-full aero-button p-4 rounded-lg text-left hover:aero-button-primary transition">
+              <div class="flex items-center gap-3">
+                <span class="text-3xl"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="mail"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="m3 6 9 7 9-7"></path></svg></span>
+                <div>
+                  <div class="font-semibold">Email</div>
+                  <div class="text-xs aero-text-muted">Send email notifications</div>
+                </div>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Configured Integrations -->
+        <div class="w-2/3 flex flex-col">
+          <h4 class="font-semibold aero-text-secondary mb-3">Configured Integrations</h4>
+          <div id="integrations-list" class="flex-1 overflow-y-auto space-y-2">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- History Tab -->
+      <div id="integrations-history-panel" class="hidden flex-1 overflow-y-auto">
+        <div id="notification-history-list" class="space-y-2">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Integration Modal -->
+  <div id="add-integration-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center aero-modal-backdrop" onclick="if(event.target.id===&quot;add-integration-modal&quot;) closeAddIntegrationModal()">
+    <div class="aero-modal p-6 w-full max-w-2xl" onclick="event.stopPropagation()">
+      <h3 class="text-2xl font-bold mb-4 aero-text-primary">
+        <span id="add-integration-title">Add Integration</span>
+      </h3>
+
+      <form onsubmit="saveIntegration(event)">
+        <input type="hidden" id="integration-id">
+        <input type="hidden" id="integration-type">
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium aero-text-secondary mb-2">Integration Name*</label>
+          <input type="text" id="integration-name" required="" class="w-full aero-input p-2 rounded-lg" placeholder="e.g., Main Slack Channel">
+        </div>
+
+        <!-- Slack/Discord/Webhook fields -->
+        <div id="webhook-fields" class="hidden">
+          <div class="mb-4">
+            <label class="block text-sm font-medium aero-text-secondary mb-2">Webhook URL*</label>
+            <input type="url" id="integration-webhook-url" class="w-full aero-input p-2 rounded-lg font-mono text-sm" placeholder="https://hooks.slack.com/services/...">
+            <p class="text-xs aero-text-muted mt-1">
+              <span id="webhook-help"></span>
+            </p>
+          </div>
+        </div>
+
+        <!-- Email fields -->
+        <div id="email-fields" class="hidden">
+          <div class="mb-4">
+            <label class="block text-sm font-medium aero-text-secondary mb-2">Email Address*</label>
+            <input type="email" id="integration-email" class="w-full aero-input p-2 rounded-lg" placeholder="test-results@example.com">
+          </div>
+        </div>
+
+        <!-- Notification Settings -->
+        <div class="mb-4">
+          <label class="block text-sm font-medium aero-text-secondary mb-2">Notify When</label>
+          <div class="space-y-2">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" id="notify-on-failure" checked="" class="w-4 h-4">
+              <span class="text-sm">Test failures</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" id="notify-on-success" class="w-4 h-4">
+              <span class="text-sm">Test successes</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="checkbox" id="notify-on-all" class="w-4 h-4">
+              <span class="text-sm">All test executions</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="aero-glass-panel p-3 rounded-lg mb-4">
+          <h4 class="font-semibold aero-text-secondary mb-2 text-sm">Setup Instructions</h4>
+          <div id="integration-instructions" class="text-xs aero-text-muted space-y-1">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+          <button type="button" onclick="testCurrentIntegration()" class="aero-button-info px-4 py-2 rounded-lg">
+            <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="test"><path d="M8 3h8m-6 0v7L4 19a1 1 0 0 0 1 2h14a1 1 0 0 0 1-2l-6-9V3M8 14h8"></path></svg> Test Integration
+          </button>
+          <button type="button" onclick="closeAddIntegrationModal()" class="aero-button-gray px-4 py-2 rounded-lg">
+            Cancel
+          </button>
+          <button type="submit" class="aero-button-success px-4 py-2 rounded-lg">
+            Save Integration
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CI/CD Integration Modal -->
+  <div id="cicd-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop" onclick="if(event.target.id===&quot;cicd-modal&quot;) closeCICDModal()">
+    <div class="aero-modal p-6 w-full max-w-6xl max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-2xl font-bold aero-text-primary"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="refresh"><path d="M20 8a8 8 0 0 0-14-3L3 8m0-5v5h5M4 16a8 8 0 0 0 14 3l3-3m0 5v-5h-5"></path></svg> CI/CD Integration</h3>
+        <button onclick="closeCICDModal()" class="aero-button-gray px-4 py-2 rounded-lg">Close</button>
+      </div>
+
+      <!-- Tab Navigation -->
+      <div class="flex gap-2 border-b aero-divider mb-4">
+        <button onclick="switchCICDTab(&quot;configuration&quot;)" id="cicd-tab-configuration" class="py-2 px-4 font-semibold aero-text-primary border-b-2 border-blue-500">
+          <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="settings"><path d="m10 3-1 3-3 1-3 3v4l3 1 1 3 3 3h4l1-3 3-1 3-3v-4l-3-1-1-3-3-3Z"></path><circle cx="12" cy="12" r="3"></circle></svg> Configuration
+        </button>
+        <button onclick="switchCICDTab(&quot;github-actions&quot;)" id="cicd-tab-github-actions" class="py-2 px-4 font-semibold aero-text-muted">
+          GitHub Actions
+        </button>
+        <button onclick="switchCICDTab(&quot;gitlab-ci&quot;)" id="cicd-tab-gitlab-ci" class="py-2 px-4 font-semibold aero-text-muted">
+          GitLab CI
+        </button>
+        <button onclick="switchCICDTab(&quot;jenkins&quot;)" id="cicd-tab-jenkins" class="py-2 px-4 font-semibold aero-text-muted">
+          Jenkins
+        </button>
+        <button onclick="switchCICDTab(&quot;backend-docs&quot;)" id="cicd-tab-backend-docs" class="py-2 px-4 font-semibold aero-text-muted">
+          <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="book"><path d="M12 5c-4-3-7-3-10-2v16c4-1 7 0 10 2 3-2 6-3 10-2V3c-3-1-6-1-10 2Zm0 0v16"></path></svg> Backend Setup
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto">
+        <!-- Configuration Tab -->
+        <div id="cicd-panel-configuration">
+          <!-- Security Notice -->
+          <div class="aero-glass-panel p-4 rounded-lg mb-4 border-l-4 border-blue-500">
+            <h4 class="font-semibold aero-text-primary mb-2 flex items-center gap-2">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="lock"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3"></path></svg> Security Model
+            </h4>
+            <p class="text-sm aero-text-muted mb-2">
+              LVX-Machina is a <strong>client-side application</strong>. You provide your own backend API URL and API
+              key.
+            </p>
+            <ul class="text-xs aero-text-muted space-y-1 list-disc list-inside">
+              <li><strong>Your backend</strong> validates API keys and executes tests securely</li>
+              <li>API keys are stored <strong>locally in your browser only</strong> (not on any server)</li>
+              <li>Similar to how you configure Firebase or AWS credentials</li>
+              <li>Deploy the reference backend implementation (see "Backend Setup" tab)</li>
+            </ul>
+          </div>
+
+          <!-- Current Status -->
+          <div id="cicd-status-panel" class="aero-glass-panel p-4 rounded-lg mb-4">
+            <div class="flex justify-between items-center">
+              <div>
+                <h4 class="font-semibold aero-text-secondary mb-1">Backend Status</h4>
+                <p id="cicd-status-text" class="text-sm aero-text-muted">Not configured</p>
+              </div>
+              <span id="cicd-status-badge" class="aero-badge-error">Disconnected</span>
+            </div>
+          </div>
+
+          <!-- Configuration Form -->
+          <div class="aero-glass-panel p-4 rounded-lg mb-4">
+            <h4 class="font-semibold aero-text-secondary mb-4">Backend Configuration</h4>
+
+            <form onsubmit="saveBackendConfig(event)">
+              <div class="mb-4">
+                <label class="block text-sm font-medium aero-text-secondary mb-2">
+                  Backend API URL*
+                </label>
+                <input type="url" id="cicd-backend-url" required="" class="w-full aero-input p-3 rounded-lg font-mono text-sm" placeholder="https://your-backend.com/api">
+                <p class="text-xs aero-text-muted mt-1">
+                  Full URL to your deployed backend API (must support CORS)
+                </p>
+              </div>
+
+              <div class="mb-4">
+                <label class="block text-sm font-medium aero-text-secondary mb-2">
+                  API Key*
+                </label>
+                <div class="flex gap-2">
+                  <input type="password" id="cicd-api-key" required="" class="flex-1 aero-input p-3 rounded-lg font-mono text-sm" placeholder="Enter your backend API key">
+                  <button type="button" onclick="toggleApiKeyVisibility()" aria-label="Show or hide API key" class="aero-button px-3 rounded-lg">
+                    <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="eye"><path d="M2 12s4-8 10-8 10 8 10 8-4 8-10 8S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
+                </div>
+                <p class="text-xs aero-text-muted mt-1">
+                  Get this from your backend admin panel or generate it server-side
+                </p>
+              </div>
+
+              <div class="mb-4">
+                <label class="block text-sm font-medium aero-text-secondary mb-2">
+                  Description (Optional)
+                </label>
+                <input type="text" id="cicd-description" class="w-full aero-input p-2 rounded-lg" placeholder="e.g., Production Backend, Development Server">
+              </div>
+
+              <div class="flex gap-3">
+                <button type="button" onclick="testBackendConnection()" class="aero-button-info px-4 py-2 rounded-lg flex items-center gap-2">
+                  <span class="hidden" id="test-spinner"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="clock"><circle cx="12" cy="12" r="9"></circle><path d="M12 6v6l4 3"></path></svg></span>
+                  <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="test"><path d="M8 3h8m-6 0v7L4 19a1 1 0 0 0 1 2h14a1 1 0 0 0 1-2l-6-9V3M8 14h8"></path></svg> Test Connection
+                </button>
+                <button type="submit" class="aero-button-success px-4 py-2 rounded-lg">
+                  <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="save"><path d="M4 3h14l3 3v15H3V3Zm3 0v6h10V3M7 21v-8h10v8"></path></svg> Save Configuration
+                </button>
+                <button type="button" onclick="clearBackendConfig()" class="aero-button-danger px-4 py-2 rounded-lg">
+                  <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="trash"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"></path></svg> Clear
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Quick Start Guide -->
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <h4 class="font-semibold aero-text-secondary mb-3"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="play"><path d="m7 3 14 9-14 9Z"></path></svg> Quick Start</h4>
+            <ol class="text-sm aero-text-muted space-y-2 list-decimal list-inside">
+              <li>Deploy the reference backend (see "Backend Setup" tab)</li>
+              <li>Get your backend URL and API key</li>
+              <li>Enter them above and click "Save Configuration"</li>
+              <li>Test the connection to verify it works</li>
+              <li>Use the other tabs to generate CI/CD workflows</li>
+            </ol>
+          </div>
+        </div>
+
+        <!-- GitHub Actions Tab -->
+        <div id="cicd-panel-github-actions" class="hidden">
+          <div class="aero-glass-panel p-4 rounded-lg mb-4">
+            <h4 class="font-semibold aero-text-secondary mb-3">GitHub Actions Setup</h4>
+            <ol class="text-sm aero-text-muted space-y-2 list-decimal list-inside">
+              <li>Configure your backend in the "Configuration" tab</li>
+              <li>Add your API key to GitHub repository secrets as <code class="aero-badge-info text-xs">LVX_API_KEY</code></li>
+              <li>Create <code>.github/workflows/tests.yml</code> in your repository</li>
+              <li>Copy the workflow YAML below into the file</li>
+              <li>Commit and push - tests will run automatically!</li>
+            </ol>
+          </div>
+
+          <div class="mb-4">
+            <label class="block text-sm font-medium aero-text-secondary mb-2">
+              Select tests to run (optional - leave empty for all)
+            </label>
+            <select id="github-suite-selector" multiple="" class="w-full aero-button p-2 rounded-lg" size="5" onchange="updateWorkflowYAML()">
+              <!-- Populated dynamically -->
+            </select>
+          </div>
+
+          <div class="flex justify-between items-center mb-2">
+            <label class="font-semibold aero-text-secondary">Workflow YAML</label>
+            <button onclick="copyGitHubWorkflow()" class="aero-button-info text-sm py-1 px-3 rounded">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="file"><path d="M5 3h9l5 5v13H5Zm9 0v6h5M8 13h8m-8 4h6"></path></svg> Copy to Clipboard
+            </button>
+          </div>
+          <textarea id="github-workflow-yaml" aria-label="Generated GitHub Actions workflow" readonly="" class="w-full h-96 aero-input p-3 rounded-lg font-mono text-xs"></textarea>
+        </div>
+
+        <!-- GitLab CI Tab -->
+        <div id="cicd-panel-gitlab-ci" class="hidden">
+          <div class="aero-glass-panel p-4 rounded-lg mb-4">
+            <h4 class="font-semibold aero-text-secondary mb-3">GitLab CI Setup</h4>
+            <ol class="text-sm aero-text-muted space-y-2 list-decimal list-inside">
+              <li>Configure your backend in the "Configuration" tab</li>
+              <li>Add your API key to GitLab CI/CD variables as <code class="aero-badge-info text-xs">LVX_API_KEY</code>
+              </li>
+              <li>Create or update <code>.gitlab-ci.yml</code> in your repository root</li>
+              <li>Copy the configuration below</li>
+              <li>Commit and push to trigger the pipeline</li>
+            </ol>
+          </div>
+
+          <div class="flex justify-between items-center mb-2">
+            <label class="font-semibold aero-text-secondary">GitLab CI Configuration</label>
+            <button onclick="copyGitLabCI()" class="aero-button-info text-sm py-1 px-3 rounded">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="file"><path d="M5 3h9l5 5v13H5Zm9 0v6h5M8 13h8m-8 4h6"></path></svg> Copy to Clipboard
+            </button>
+          </div>
+          <textarea id="gitlab-ci-yaml" aria-label="Generated GitLab CI configuration" readonly="" class="w-full h-96 aero-input p-3 rounded-lg font-mono text-xs"></textarea>
+        </div>
+
+        <!-- Jenkins Tab -->
+        <div id="cicd-panel-jenkins" class="hidden">
+          <div class="aero-glass-panel p-4 rounded-lg mb-4">
+            <h4 class="font-semibold aero-text-secondary mb-3">Jenkins Pipeline Setup</h4>
+            <ol class="text-sm aero-text-muted space-y-2 list-decimal list-inside">
+              <li>Configure your backend in the "Configuration" tab</li>
+              <li>Add your API key to Jenkins credentials as <code class="aero-badge-info text-xs">lvx-api-key</code>
+                (Secret text)</li>
+              <li>Create a new Pipeline job in Jenkins</li>
+              <li>In Pipeline configuration, use "Pipeline script" and copy the Jenkinsfile below</li>
+              <li>Save and build the pipeline</li>
+            </ol>
+          </div>
+
+          <div class="flex justify-between items-center mb-2">
+            <label class="font-semibold aero-text-secondary">Jenkinsfile</label>
+            <button onclick="copyJenkinsPipeline()" class="aero-button-info text-sm py-1 px-3 rounded">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="file"><path d="M5 3h9l5 5v13H5Zm9 0v6h5M8 13h8m-8 4h6"></path></svg> Copy to Clipboard
+            </button>
+          </div>
+          <textarea id="jenkins-pipeline" aria-label="Generated Jenkins pipeline" readonly="" class="w-full h-96 aero-input p-3 rounded-lg font-mono text-xs"></textarea>
+        </div>
+
+        <!-- Backend Documentation Tab -->
+        <div id="cicd-panel-backend-docs" class="hidden">
+          <!-- Will be populated with backend setup instructions -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CI/CD Integration Script -->
+
+  <!-- Integration Manager Script -->
+
+
+  <!-- ============================================ -->
+  <!-- COLLABORATION MODAL -->
+  <!-- ============================================ -->
+  <div id="collaboration-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop" onclick="if(event.target.id===&quot;collaboration-modal&quot;) closeCollaborationModal()">
+    <div class="aero-modal p-6 w-full max-w-6xl max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+
+      <!-- Header -->
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-2xl font-bold aero-text-primary"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="users"><circle cx="9" cy="7" r="3"></circle><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6m3 11v-3a6 6 0 0 0-3-5"></path></svg> Team Collaboration</h3>
+        <button onclick="closeCollaborationModal()" class="aero-button-gray px-4 py-2 rounded-lg hover:bg-gray-300 transition">
+          Close
+        </button>
+      </div>
+
+      <!-- Current User Info -->
+      <div class="aero-glass-panel p-3 rounded-lg mb-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 text-white flex items-center justify-center font-bold text-lg">
+              <span id="user-avatar">?</span>
+            </div>
+            <div>
+              <div class="font-semibold text-lg" id="current-user-display">Loading...</div>
+              <div class="text-xs aero-text-muted">Current User</div>
+            </div>
+          </div>
+          <button onclick="changeUsername()" class="aero-button-info text-sm py-2 px-4 rounded-lg hover:bg-blue-600 transition">
+            <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="edit"><path d="m4 16 12-12 4 4L8 20H4Zm9-9 4 4"></path></svg> Change Name
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab Navigation -->
+      <div class="flex gap-2 border-b aero-divider mb-4 overflow-x-auto">
+        <button onclick="switchCollabTab(&quot;share&quot;)" id="collab-tab-share" class="py-3 px-4 font-semibold whitespace-nowrap aero-text-primary border-b-2 border-blue-500 transition">
+          <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="link"><path d="m10 14 4-4m-7 5-2 2a4 4 0 0 0 6 6l3-3m3-11 2-2a4 4 0 0 0-6-6l-3 3" transform="translate(0 -2)"></path></svg> Share
+        </button>
+        <button onclick="switchCollabTab(&quot;import&quot;)" id="collab-tab-import" class="py-3 px-4 font-semibold whitespace-nowrap aero-text-muted transition hover:aero-text-secondary">
+          <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="download"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"></path></svg> Import/Export
+        </button>
+        <button onclick="switchCollabTab(&quot;comments&quot;)" id="collab-tab-comments" class="py-3 px-4 font-semibold whitespace-nowrap aero-text-muted transition hover:aero-text-secondary">
+          <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="comment"><path d="M3 3h18v14H8l-5 4Z"></path><path d="M7 7h10M7 11h7"></path></svg> Comments
+        </button>
+        <button onclick="switchCollabTab(&quot;versions&quot;)" id="collab-tab-versions" class="py-3 px-4 font-semibold whitespace-nowrap aero-text-muted transition hover:aero-text-secondary">
+          <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="code"><path d="m7 6-6 6 6 6m10-12 6 6-6 6M14 3l-4 18"></path></svg> Versions
+        </button>
+        <button onclick="switchCollabTab(&quot;team&quot;)" id="collab-tab-team" class="py-3 px-4 font-semibold whitespace-nowrap aero-text-muted transition hover:aero-text-secondary">
+          <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="users"><circle cx="9" cy="7" r="3"></circle><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6m3 11v-3a6 6 0 0 0-3-5"></path></svg> Team
+        </button>
+      </div>
+
+      <!-- Tab Content -->
+      <div class="flex-1 overflow-y-auto">
+
+        <!-- SHARE TAB -->
+        <div id="collab-panel-share">
+
+          <!-- Backend Status -->
+          <div class="aero-glass-panel p-4 rounded-lg mb-4 border-l-4 border-blue-500">
+            <div class="flex justify-between items-start">
+              <div class="flex-1">
+                <h4 class="font-semibold aero-text-primary mb-1 flex items-center gap-2">
+                  <span><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="cloud"><path d="M6 19a5 5 0 0 1-1-10 7 7 0 0 1 13-2 6 6 0 0 1 0 12Z"></path></svg> Sharing Backend</span>
+                  <span id="share-backend-badge" class="aero-badge-error text-xs">Disabled</span>
+                </h4>
+                <p id="share-backend-status-text" class="text-sm aero-text-muted mb-2">
+                  Not configured - Only file-based sharing available
+                </p>
+                <p class="text-xs aero-text-muted">
+                  Configure a backend to enable shareable links that work across browsers.
+                </p>
+              </div>
+              <button onclick="openSharingBackendConfig()" id="config-sharing-backend-btn" class="aero-button-info py-2 px-4 rounded-lg hover:bg-blue-600 transition whitespace-nowrap">
+                <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="settings"><path d="m10 3-1 3-3 1-3 3v4l3 1 1 3 3 3h4l1-3 3-1 3-3v-4l-3-1-1-3-3-3Z"></path><circle cx="12" cy="12" r="3"></circle></svg> Configure Backend
+              </button>
+            </div>
+          </div>
+
+          <!-- File-Based Sharing -->
+          <div class="aero-glass-panel p-4 rounded-lg mb-4">
+            <div class="flex items-start gap-3 mb-3">
+              <div class="text-3xl"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="folder"><path d="M3 7V5h7l2 3h9v12H3Z"></path></svg></div>
+              <div class="flex-1">
+                <h4 class="font-semibold aero-text-secondary mb-1">Share via File Export</h4>
+                <p class="text-sm aero-text-muted mb-3">
+                  <strong>Always available.</strong> Export test suite as JSON file and share with your team via email,
+                  Slack, Google Drive, or any file sharing service.
+                </p>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="block text-sm font-medium aero-text-secondary mb-2">Select Test Suite*</label>
+              <select id="file-export-suite-selector" class="w-full aero-button p-2 rounded-lg">
+                <option value="">-- Select a test suite --</option>
+              </select>
+            </div>
+
+            <div class="mb-4">
+              <label class="flex items-center gap-2 text-sm cursor-pointer hover:aero-text-primary transition">
+                <input type="checkbox" id="export-include-history" class="w-4 h-4">
+                <span>Include execution history (last 50 runs)</span>
+              </label>
+            </div>
+
+            <div class="flex gap-3">
+              <button onclick="exportTestSuiteAsFile()" class="aero-button-success px-4 py-3 rounded-lg flex-1 font-semibold hover:bg-green-600 transition">
+                <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="save"><path d="M4 3h14l3 3v15H3V3Zm3 0v6h10V3M7 21v-8h10v8"></path></svg> Export as JSON File
+              </button>
+              <button onclick="emailTestSuite()" class="aero-button-info px-4 py-3 rounded-lg flex-1 font-semibold hover:bg-blue-600 transition">
+                <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="mail"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="m3 6 9 7 9-7"></path></svg> Email to Team
+              </button>
+            </div>
+          </div>
+
+          <!-- Link-Based Sharing (Backend Required) -->
+          <div id="link-sharing-section" class="hidden aero-glass-panel p-4 rounded-lg mb-4 border-l-4 border-green-500">
+            <div class="flex items-start gap-3 mb-3">
+              <div class="text-3xl"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="link"><path d="m10 14 4-4m-7 5-2 2a4 4 0 0 0 6 6l3-3m3-11 2-2a4 4 0 0 0-6-6l-3 3" transform="translate(0 -2)"></path></svg></div>
+              <div class="flex-1">
+                <h4 class="font-semibold aero-text-secondary mb-1">Share via Link (Backend Enabled)</h4>
+                <p class="text-sm aero-text-muted">
+                  Generate a shareable link that anyone can use to import your test suite. Links are stored on your
+                  backend.
+                </p>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="block text-sm font-medium aero-text-secondary mb-2">Select Test Suite*</label>
+              <select id="link-share-suite-selector" class="w-full aero-button p-2 rounded-lg">
+                <option value="">-- Select a test suite --</option>
+              </select>
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-sm font-medium aero-text-secondary mb-2">Link Expires In</label>
+              <select id="share-expiry-days" class="w-full aero-button p-2 rounded-lg">
+                <option value="7">7 days</option>
+                <option value="14">14 days</option>
+                <option value="30" selected="">30 days</option>
+                <option value="60">60 days</option>
+                <option value="90">90 days</option>
+              </select>
+            </div>
+
+            <button onclick="generateBackendShareLink()" class="aero-button-success px-4 py-3 rounded-lg w-full font-semibold hover:bg-green-600 transition">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="link"><path d="m10 14 4-4m-7 5-2 2a4 4 0 0 0 6 6l3-3m3-11 2-2a4 4 0 0 0-6-6l-3 3" transform="translate(0 -2)"></path></svg> Generate Share Link
+            </button>
+          </div>
+
+          <!-- Active Shared Links -->
+          <div id="backend-shares-section" class="hidden aero-glass-panel p-4 rounded-lg">
+            <div class="flex justify-between items-center mb-3">
+              <h4 class="font-semibold aero-text-secondary"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="file"><path d="M5 3h9l5 5v13H5Zm9 0v6h5M8 13h8m-8 4h6"></path></svg> Your Active Share Links</h4>
+              <button onclick="refreshBackendShares()" class="aero-button-info text-sm py-1 px-3 rounded hover:bg-blue-600 transition">
+                <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="refresh"><path d="M20 8a8 8 0 0 0-14-3L3 8m0-5v5h5M4 16a8 8 0 0 0 14 3l3-3m0 5v-5h-5"></path></svg> Refresh
+              </button>
+            </div>
+            <div id="backend-shared-links-list" class="space-y-2">
+              <p class="text-sm aero-text-muted">Loading...</p>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- IMPORT/EXPORT TAB -->
+        <div id="collab-panel-import" class="hidden">
+
+          <!-- Import from Link -->
+          <div class="aero-glass-panel p-4 rounded-lg mb-4">
+            <h4 class="font-semibold aero-text-secondary mb-3"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="download"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"></path></svg> Import from Share Link</h4>
+            <p class="text-sm aero-text-muted mb-3">
+              Paste a share link you received to import a test suite.
+            </p>
+
+            <div class="mb-3">
+              <label class="block text-sm font-medium aero-text-secondary mb-2">Share Link</label>
+              <input type="text" id="import-share-link" class="w-full aero-input p-3 rounded-lg font-mono text-sm" placeholder="https://your-app.com#import=abc123 or just abc123">
+            </div>
+
+            <button onclick="importFromLink()" class="aero-button-success px-4 py-3 rounded-lg w-full font-semibold hover:bg-green-600 transition">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="download"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"></path></svg> Import from Link
+            </button>
+          </div>
+
+          <!-- Import from File -->
+          <div class="aero-glass-panel p-4 rounded-lg mb-4">
+            <h4 class="font-semibold aero-text-secondary mb-3"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="folder"><path d="M3 7V5h7l2 3h9v12H3Z"></path></svg> Import from File</h4>
+            <p class="text-sm aero-text-muted mb-3">
+              Upload a JSON file that was exported by a team member.
+            </p>
+
+            <input type="file" id="collab-import-file-input" accept=".json,.txt" onchange="handleImportFile(this)" class="hidden">
+
+            <button onclick="document.getElementById(&quot;collab-import-file-input&quot;).click()" class="aero-button-info px-4 py-3 rounded-lg w-full font-semibold hover:bg-blue-600 transition">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="folder"><path d="M3 7V5h7l2 3h9v12H3Z"></path></svg> Choose JSON File
+            </button>
+
+            <div id="import-file-preview" class="hidden mt-3 p-3 aero-input rounded-lg">
+              <div class="text-sm font-semibold mb-1">Selected File:</div>
+              <div id="import-file-name" class="text-xs aero-text-muted"></div>
+            </div>
+          </div>
+
+          <!-- Bulk Export -->
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <h4 class="font-semibold aero-text-secondary mb-3"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="database"><ellipse cx="12" cy="5" rx="8" ry="3"></ellipse><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"></path></svg> Export Multiple Suites</h4>
+            <p class="text-sm aero-text-muted mb-3">
+              Export all test suites as a single JSON file for backup or team sharing.
+            </p>
+
+            <button onclick="exportAllSuites()" class="aero-button-purple px-4 py-3 rounded-lg w-full font-semibold hover:bg-purple-600 transition">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="database"><ellipse cx="12" cy="5" rx="8" ry="3"></ellipse><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"></path></svg> Export All Suites
+            </button>
+          </div>
+
+        </div>
+
+        <!-- COMMENTS TAB -->
+        <div id="collab-panel-comments" class="hidden">
+
+          <!-- Add Comment -->
+          <div class="aero-glass-panel p-4 rounded-lg mb-4">
+            <h4 class="font-semibold aero-text-secondary mb-3"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="comment"><path d="M3 3h18v14H8l-5 4Z"></path><path d="M7 7h10M7 11h7"></path></svg> Add Comment/Note</h4>
+            <p class="text-sm aero-text-muted mb-3">
+              Comments are stored locally and help you remember important details about your tests.
+            </p>
+
+            <div class="mb-3">
+              <label class="block text-sm font-medium aero-text-secondary mb-2">Test Suite*</label>
+              <select id="comment-suite-selector" class="w-full aero-button p-2 rounded-lg" onchange="loadSuiteComments()">
+                <option value="">-- Select a test suite --</option>
+              </select>
+            </div>
+
+            <div class="mb-3">
+              <label class="block text-sm font-medium aero-text-secondary mb-2">Comment*</label>
+              <textarea id="comment-input" class="w-full h-24 aero-input p-3 rounded-lg resize-none" placeholder="Write your comment or note here..."></textarea>
+            </div>
+
+            <button onclick="addComment()" class="aero-button-success px-4 py-2 rounded-lg w-full font-semibold hover:bg-green-600 transition">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="comment"><path d="M3 3h18v14H8l-5 4Z"></path><path d="M7 7h10M7 11h7"></path></svg> Add Comment
+            </button>
+          </div>
+
+          <!-- Comments List -->
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <h4 class="font-semibold aero-text-secondary mb-3">Recent Comments</h4>
+            <div id="comments-list" class="space-y-3">
+              <p class="text-sm aero-text-muted">Select a test suite to view comments</p>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- VERSIONS TAB -->
+        <div id="collab-panel-versions" class="hidden">
+
+          <!-- Create Version -->
+          <div class="aero-glass-panel p-4 rounded-lg mb-4">
+            <h4 class="font-semibold aero-text-secondary mb-3"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="image"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8" cy="8" r="2"></circle><path d="m3 17 5-5 4 4 4-6 5 7"></path></svg> Create Version Snapshot</h4>
+            <p class="text-sm aero-text-muted mb-3">
+              Save a snapshot of your test suite to easily restore it later. Up to 20 versions per suite.
+            </p>
+
+            <div class="mb-3">
+              <label class="block text-sm font-medium aero-text-secondary mb-2">Test Suite*</label>
+              <select id="version-suite-selector" class="w-full aero-button p-2 rounded-lg" onchange="loadVersionHistory()">
+                <option value="">-- Select a test suite --</option>
+              </select>
+            </div>
+
+            <div class="mb-3">
+              <label class="block text-sm font-medium aero-text-secondary mb-2">Description</label>
+              <input type="text" id="version-description" class="w-full aero-input p-2 rounded-lg" placeholder="e.g., Added new login validation tests">
+            </div>
+
+            <button onclick="createVersionSnapshot()" class="aero-button-success px-4 py-2 rounded-lg w-full font-semibold hover:bg-green-600 transition">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="image"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8" cy="8" r="2"></circle><path d="m3 17 5-5 4 4 4-6 5 7"></path></svg> Create Snapshot
+            </button>
+          </div>
+
+          <!-- Version History -->
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <h4 class="font-semibold aero-text-secondary mb-3"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="code"><path d="m7 6-6 6 6 6m10-12 6 6-6 6M14 3l-4 18"></path></svg> Version History</h4>
+            <div id="collab-versions-list" class="space-y-2">
+              <p class="text-sm aero-text-muted">Select a test suite to view version history</p>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- TEAM TAB -->
+        <div id="collab-panel-team" class="hidden">
+
+          <!-- Add Team Member -->
+          <div class="aero-glass-panel p-4 rounded-lg mb-4">
+            <h4 class="font-semibold aero-text-secondary mb-3"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="plus"><path d="M12 4v16M4 12h16"></path></svg> Add Team Member</h4>
+            <p class="text-sm aero-text-muted mb-3">
+              Keep a local reference list of your team members. This helps you remember who you're sharing tests with.
+            </p>
+
+            <div class="mb-3">
+              <label class="block text-sm font-medium aero-text-secondary mb-2">Name*</label>
+              <input type="text" id="team-member-name" class="w-full aero-input p-2 rounded-lg" placeholder="John Doe">
+            </div>
+
+            <div class="mb-3">
+              <label class="block text-sm font-medium aero-text-secondary mb-2">Email</label>
+              <input type="email" id="team-member-email" class="w-full aero-input p-2 rounded-lg" placeholder="john@example.com">
+            </div>
+
+            <div class="mb-3">
+              <label class="block text-sm font-medium aero-text-secondary mb-2">Role</label>
+              <select id="team-member-role" class="w-full aero-button p-2 rounded-lg">
+                <option value="member">Team Member</option>
+                <option value="lead">Team Lead</option>
+                <option value="admin">Admin</option>
+                <option value="qa">QA Engineer</option>
+                <option value="dev">Developer</option>
+              </select>
+            </div>
+
+            <div class="flex gap-3">
+              <button onclick="addTeamMember()" class="aero-button-success px-4 py-2 rounded-lg flex-1 font-semibold hover:bg-green-600 transition">
+                <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="plus"><path d="M12 4v16M4 12h16"></path></svg> Add Team Member
+              </button>
+              <button onclick="showBulkAddTeamModal()" class="aero-button-purple px-4 py-2 rounded-lg flex-1 font-semibold hover:bg-purple-600 transition">
+                <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="users"><circle cx="9" cy="7" r="3"></circle><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6m3 11v-3a6 6 0 0 0-3-5"></path></svg> Bulk Add
+              </button>
+            </div>
+          </div>
+
+          <!-- Team Members List -->
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <h4 class="font-semibold aero-text-secondary mb-3"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="users"><circle cx="9" cy="7" r="3"></circle><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6m3 11v-3a6 6 0 0 0-3-5"></path></svg> Team Members</h4>
+            <div id="team-members-list" class="space-y-2">
+              <p class="text-sm aero-text-muted">No team members added yet</p>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- SHARING BACKEND CONFIGURATION MODAL -->
+  <!-- ============================================ -->
+  <div id="sharing-backend-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center aero-modal-backdrop" onclick="if(event.target.id===&quot;sharing-backend-modal&quot;) closeSharingBackendConfig()">
+    <div class="aero-modal p-6 max-w-2xl" onclick="event.stopPropagation()">
+
+      <h3 class="text-xl font-bold mb-4 aero-text-primary"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="settings"><path d="m10 3-1 3-3 1-3 3v4l3 1 1 3 3 3h4l1-3 3-1 3-3v-4l-3-1-1-3-3-3Z"></path><circle cx="12" cy="12" r="3"></circle></svg> Configure Sharing Backend</h3>
+
+      <!-- Info Panel -->
+      <div class="aero-glass-panel p-4 rounded-lg mb-4 border-l-4 border-blue-500">
+        <h4 class="font-semibold aero-text-primary mb-2"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="info"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v6m0-10h.01"></path></svg> About Sharing Backend</h4>
+        <p class="text-sm aero-text-muted mb-2">
+          A sharing backend enables real shareable links. Without it, you can still use file-based sharing.
+        </p>
+        <ul class="text-xs aero-text-muted space-y-1 list-disc list-inside">
+          <li>Deploy the reference backend (see CI/CD Integration → Backend Setup)</li>
+          <li>Your backend stores shared test suites and manages access</li>
+          <li>Works just like the CI/CD backend configuration</li>
+          <li>Security is handled by YOUR backend, not the frontend</li>
+        </ul>
+      </div>
+
+      <form onsubmit="saveSharingBackendConfig(event)">
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium aero-text-secondary mb-2">
+            Backend API URL*
+          </label>
+          <input type="url" id="sharing-backend-url" required="" class="w-full aero-input p-3 rounded-lg font-mono text-sm" placeholder="https://your-backend.com/api">
+          <p class="text-xs aero-text-muted mt-1">
+            Full URL to your deployed backend API
+          </p>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium aero-text-secondary mb-2">
+            API Key*
+          </label>
+          <div class="flex gap-2">
+            <input type="password" id="sharing-api-key" required="" class="flex-1 aero-input p-3 rounded-lg font-mono text-sm" placeholder="Enter your backend API key">
+            <button type="button" onclick="toggleSharingApiKeyVisibility()" class="aero-button px-3 rounded-lg hover:bg-gray-300 transition">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="eye"><path d="M2 12s4-8 10-8 10 8 10 8-4 8-10 8S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+          </div>
+          <p class="text-xs aero-text-muted mt-1">
+            Get this from your backend admin panel
+          </p>
+        </div>
+
+        <div class="flex gap-3 mb-4">
+          <button type="button" onclick="testSharingBackendConnection()" class="aero-button-info px-4 py-2 rounded-lg flex-1 hover:bg-blue-600 transition">
+            <span id="test-backend-spinner" class="hidden"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="clock"><circle cx="12" cy="12" r="9"></circle><path d="M12 6v6l4 3"></path></svg> </span>
+            <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="test"><path d="M8 3h8m-6 0v7L4 19a1 1 0 0 0 1 2h14a1 1 0 0 0 1-2l-6-9V3M8 14h8"></path></svg> Test Connection
+          </button>
+          <button type="button" onclick="clearSharingBackendConfig()" class="aero-button-danger px-4 py-2 rounded-lg hover:bg-red-600 transition">
+            <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="trash"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"></path></svg> Clear
+          </button>
+        </div>
+
+        <div class="flex gap-3">
+          <button type="button" onclick="closeSharingBackendConfig()" class="aero-button-gray px-4 py-2 rounded-lg flex-1 hover:bg-gray-400 transition">
+            Cancel
+          </button>
+          <button type="submit" class="aero-button-success px-4 py-2 rounded-lg flex-1 font-semibold hover:bg-green-600 transition">
+            <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="save"><path d="M4 3h14l3 3v15H3V3Zm3 0v6h10V3M7 21v-8h10v8"></path></svg> Save Configuration
+          </button>
+        </div>
+
+      </form>
+
+    </div>
+  </div>
+
+  <!-- Collaboration Manager Script -->
+
+
+
+  <div id="input-modal" class="hidden fixed inset-0 z-[99999] flex items-center justify-center aero-modal-backdrop">
+    <div class="aero-modal p-6 w-full max-w-md">
+      <h3 id="input-modal-title" class="text-2xl font-bold mb-4 aero-text-primary">Input Required</h3>
+      <form onsubmit="handleInputModalSubmit(event)">
+        <div class="mb-4">
+          <input type="text" id="input-modal-value" required="" class="w-full aero-input p-3 rounded-lg" placeholder="Enter value...">
+        </div>
+        <div class="flex justify-end space-x-3">
+          <button type="button" onclick="closeInputModal()" class="aero-button-gray py-2 px-4 rounded-lg transition duration-200">
+            Cancel
+          </button>
+          <button type="submit" class="aero-button-success py-2 px-4 rounded-lg transition duration-200">
+            Confirm
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Security Testing Modal -->
+  <div id="security-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center aero-modal-backdrop">
+    <div class="aero-modal p-0 w-full max-w-6xl h-[90vh] flex flex-col">
+      <header class="p-4 border-b aero-divider flex justify-between items-center flex-shrink-0">
+        <div class="flex items-center gap-4">
+          <h2 class="text-2xl font-bold aero-text-primary"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="lock"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3"></path></svg> Security Testing Center</h2>
+          <div id="security-status-badge" class="text-sm px-3 py-1 rounded-full bg-green-500/20 text-green-400">
+            Ready
+          </div>
+        </div>
+        <div class="flex space-x-3">
+          <button onclick="runQuickSecurityScan()" class="aero-button-success py-2 px-4 rounded-lg">
+            <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="play"><path d="m7 3 14 9-14 9Z"></path></svg> Quick Scan
+          </button>
+          <button onclick="closeSecurityModal()" class="aero-button-gray py-2 px-4 rounded-lg">Close</button>
+        </div>
+      </header>
+
+      <div class="flex-grow flex min-h-0">
+        <!-- Sidebar -->
+        <aside class="w-64 p-4 border-r aero-divider overflow-y-auto flex-shrink-0">
+          <!-- Tabs -->
+          <div class="space-y-2 mb-6">
+            <button onclick="switchSecurityTab('scan')" class="security-tab-btn w-full text-left px-4 py-2 rounded-lg aero-button active" data-tab="scan">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="search"><circle cx="10" cy="10" r="6"></circle><path d="m15 15 6 6"></path></svg> Run Scan
+            </button>
+            <button onclick="switchSecurityTab('results')" class="security-tab-btn w-full text-left px-4 py-2 rounded-lg aero-button" data-tab="results">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="file"><path d="M5 3h9l5 5v13H5Zm9 0v6h5M8 13h8m-8 4h6"></path></svg> Results
+            </button>
+            <button onclick="switchSecurityTab('history')" class="security-tab-btn w-full text-left px-4 py-2 rounded-lg aero-button" data-tab="history">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="chart"><path d="M4 3v17h17M8 16v-5m5 5V6m5 10v-8"></path></svg> History
+            </button>
+            <button onclick="switchSecurityTab('policy')" class="security-tab-btn w-full text-left px-4 py-2 rounded-lg aero-button" data-tab="policy">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="settings"><path d="m10 3-1 3-3 1-3 3v4l3 1 1 3 3 3h4l1-3 3-1 3-3v-4l-3-1-1-3-3-3Z"></path><circle cx="12" cy="12" r="3"></circle></svg> Policy
+            </button>
+          </div>
+
+          <!-- Quick Stats -->
+          <div class="aero-glass-panel p-4 rounded-lg">
+            <h3 class="text-sm font-semibold aero-text-secondary mb-3">Quick Stats</h3>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="aero-text-muted">Total Scans</span>
+                <span id="sec-stat-total" class="font-semibold">0</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="aero-text-muted">Passed</span>
+                <span id="sec-stat-passed" class="font-semibold text-green-400">0</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="aero-text-muted">Failed</span>
+                <span id="sec-stat-failed" class="font-semibold text-red-400">0</span>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-grow p-6 overflow-y-auto">
+          <!-- Scan Tab -->
+          <div id="security-tab-scan" class="security-tab-content">
+            <h3 class="text-xl font-semibold aero-text-primary mb-4">Security Scan</h3>
+
+            <!-- Scan Type Selection -->
+            <div class="mb-6 aero-glass-panel p-4 rounded-lg">
+              <h4 class="text-sm font-semibold aero-text-secondary mb-3">Scan Types</h4>
+              <div class="flex flex-wrap gap-3">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="scan-type-sast" checked="" class="w-4 h-4">
+                  <span class="text-sm">SAST (Code Analysis)</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="scan-type-secrets" checked="" class="w-4 h-4">
+                  <span class="text-sm">Secrets Detection</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="scan-type-xss" class="w-4 h-4">
+                  <span class="text-sm">XSS Patterns</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Language Selection -->
+            <div class="mb-6">
+              <label class="block text-sm font-medium aero-text-secondary mb-2">Language</label>
+              <select id="security-scan-language" class="w-full aero-input p-3 rounded-lg">
+                <option value="javascript">JavaScript</option>
+                <option value="python">Python</option>
+                <option value="robot">Robot Framework</option>
+              </select>
+            </div>
+
+            <!-- Code Input -->
+            <div class="mb-6">
+              <label class="block text-sm font-medium aero-text-secondary mb-2">Code to Scan</label>
+              <textarea id="security-code-input" rows="15" class="w-full code-area p-4 rounded-lg font-mono text-sm" placeholder="Paste code here to scan for security vulnerabilities...
+
+Example vulnerable code:
+const password = 'secret123';
+eval(userInput);
+document.innerHTML = data;
+"></textarea>
+            </div>
+
+            <!-- Scan Button -->
+            <div class="flex gap-3">
+              <button onclick="runSecurityCodeScan()" class="aero-button-success py-3 px-6 rounded-lg font-semibold">
+                <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="search"><circle cx="10" cy="10" r="6"></circle><path d="m15 15 6 6"></path></svg> Run Security Scan
+              </button>
+              <button onclick="scanCurrentSuite()" class="aero-button-info py-3 px-6 rounded-lg">
+                <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="file"><path d="M5 3h9l5 5v13H5Zm9 0v6h5M8 13h8m-8 4h6"></path></svg> Scan Selected Suite
+              </button>
+              <button onclick="clearSecurityInput()" class="aero-button-gray py-3 px-6 rounded-lg">
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <!-- Results Tab -->
+          <div id="security-tab-results" class="security-tab-content hidden">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-xl font-semibold aero-text-primary">Scan Results</h3>
+              <div class="flex gap-2">
+                <button onclick="saveSecurityScanAsSuite()" class="aero-button-success text-sm py-2 px-4 rounded-lg">
+                  <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="save"><path d="M4 3h14l3 3v15H3V3Zm3 0v6h10V3M7 21v-8h10v8"></path></svg> Save as Suite
+                </button>
+                <button onclick="exportSecurityResults()" class="aero-button-info text-sm py-2 px-4 rounded-lg">
+                  <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="download"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"></path></svg> Export
+                </button>
+              </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div id="security-results-summary" class="grid grid-cols-4 gap-4 mb-6">
+              <div class="aero-glass-panel p-4 rounded-lg text-center border-l-4 border-red-500">
+                <div id="result-critical" class="text-3xl font-bold text-red-400">0</div>
+                <div class="text-sm aero-text-muted">Critical</div>
+              </div>
+              <div class="aero-glass-panel p-4 rounded-lg text-center border-l-4 border-orange-500">
+                <div id="result-high" class="text-3xl font-bold text-orange-400">0</div>
+                <div class="text-sm aero-text-muted">High</div>
+              </div>
+              <div class="aero-glass-panel p-4 rounded-lg text-center border-l-4 border-yellow-500">
+                <div id="result-medium" class="text-3xl font-bold text-yellow-400">0</div>
+                <div class="text-sm aero-text-muted">Medium</div>
+              </div>
+              <div class="aero-glass-panel p-4 rounded-lg text-center border-l-4 border-green-500">
+                <div id="result-low" class="text-3xl font-bold text-green-400">0</div>
+                <div class="text-sm aero-text-muted">Low</div>
+              </div>
+            </div>
+
+            <!-- Policy Status -->
+            <div id="security-policy-status" class="mb-6 p-4 aero-glass-panel rounded-lg border-l-4 border-gray-400">
+              <div class="flex items-center gap-3">
+                <span class="text-2xl"><svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="check"><path d="m4 12 5 5L20 6"></path></svg></span>
+                <div>
+                  <div class="font-semibold">Policy Check: Not run</div>
+                  <div class="text-sm aero-text-muted">Run a scan to evaluate this policy.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Vulnerabilities List -->
+            <div id="security-vulnerabilities-list" class="space-y-3">
+              <div class="aero-glass-panel p-6 rounded-lg text-center aero-text-muted">
+                No scan results yet. Run a security scan to see vulnerabilities.
+              </div>
+            </div>
+          </div>
+
+          <!-- History Tab -->
+          <div id="security-tab-history" class="security-tab-content hidden">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-xl font-semibold aero-text-primary">Scan History</h3>
+              <button onclick="clearSecurityHistory()" class="aero-button-danger text-sm py-2 px-4 rounded-lg">
+                <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="trash"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"></path></svg> Clear History
+              </button>
+            </div>
+
+            <div id="security-history-list" class="space-y-3">
+              <div class="aero-glass-panel p-6 rounded-lg text-center aero-text-muted">
+                No scan history yet.
+              </div>
+            </div>
+          </div>
+
+          <!-- Policy Tab -->
+          <div id="security-tab-policy" class="security-tab-content hidden">
+            <h3 class="text-xl font-semibold aero-text-primary mb-4">Security Policy Configuration</h3>
+
+            <div class="aero-glass-panel p-6 rounded-lg mb-6">
+              <h4 class="font-semibold mb-4">Failure Threshold</h4>
+              <div class="space-y-3">
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input type="radio" name="policy-fail-on" value="critical" checked="" class="w-4 h-4">
+                  <span>Fail on Critical only</span>
+                </label>
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input type="radio" name="policy-fail-on" value="high" class="w-4 h-4">
+                  <span>Fail on Critical or High</span>
+                </label>
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input type="radio" name="policy-fail-on" value="medium" class="w-4 h-4">
+                  <span>Fail on Critical, High, or Medium</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="aero-glass-panel p-6 rounded-lg mb-6">
+              <h4 class="font-semibold mb-4">Maximum Allowed Vulnerabilities</h4>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm aero-text-muted mb-1">Max Critical</label>
+                  <input type="number" id="policy-max-critical" value="0" min="0" class="w-full aero-input p-2 rounded-lg">
+                </div>
+                <div>
+                  <label class="block text-sm aero-text-muted mb-1">Max High</label>
+                  <input type="number" id="policy-max-high" value="5" min="0" class="w-full aero-input p-2 rounded-lg">
+                </div>
+                <div>
+                  <label class="block text-sm aero-text-muted mb-1">Max Medium</label>
+                  <input type="number" id="policy-max-medium" value="20" min="0" class="w-full aero-input p-2 rounded-lg">
+                </div>
+                <div>
+                  <label class="block text-sm aero-text-muted mb-1">Max Low</label>
+                  <input type="number" id="policy-max-low" value="50" min="0" class="w-full aero-input p-2 rounded-lg">
+                </div>
+              </div>
+            </div>
+
+            <div class="aero-glass-panel p-6 rounded-lg mb-6">
+              <h4 class="font-semibold mb-4">Pipeline Integration</h4>
+              <label class="flex items-center gap-3 cursor-pointer mb-3">
+                <input type="checkbox" id="policy-block-pipeline" checked="" class="w-4 h-4">
+                <span>Block pipeline on policy failure</span>
+              </label>
+              <label class="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" id="policy-notify-failure" checked="" class="w-4 h-4">
+                <span>Send notification on policy failure</span>
+              </label>
+            </div>
+
+            <button onclick="saveSecurityPolicy()" class="aero-button-success py-3 px-6 rounded-lg font-semibold">
+              <svg class="lvx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-icon="save"><path d="M4 3h14l3 3v15H3V3Zm3 0v6h10V3M7 21v-8h10v8"></path></svg> Save Policy
+            </button>
+          </div>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <!-- Visual Pipeline Scripts -->
+
+
+
+
+
+  <!-- Security Testing Scripts -->
+
+
+<script src="assets/app-modules.js"></script>
+<script src="unified-shell.js"></script>
+<script type="module" src="studio-workbench.js"></script>
+
+
+</body></html>

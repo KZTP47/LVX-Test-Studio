@@ -1,0 +1,23 @@
+name: Bug report
+description: A reproducible failure using a redacted local fixture
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal steps and fixture
+      description: Use a disposable authorized target. Remove credentials and private content.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Version, runtime readiness and redacted evidence
+      description: Include the run status and relevant error. Review screenshots before uploading.
+    validations:
+      required: true

@@ -1,0 +1,2 @@
+'use strict';
+(async()=>{const browser=await require('playwright').chromium.launch({headless:true});try{const page=await browser.newPage();await page.setContent('<h1>LVX browser check</h1>');if(await page.locator('h1').textContent()!=='LVX browser check')throw Error('Browser check failed.');console.log('Chromium launch check passed.');}finally{await browser.close();}})().catch(error=>{console.error(error.message);process.exitCode=1;});

@@ -1,0 +1,2 @@
+'use strict';
+const {spawnSync}=require('node:child_process'),assert=require('node:assert/strict');const result=spawnSync(process.execPath,['--test','tests/runtime-setup.test.cjs'],{encoding:'utf8',maxBuffer:4*1024*1024});process.stdout.write(result.stdout||'');process.stderr.write(result.stderr||'');assert.equal(result.status,0);for(const name of ['fail','skipped','cancelled'])assert.match(result.stdout,new RegExp('^# '+name+' 0$','m'));assert.ok(Number(result.stdout.match(/^# pass (\d+)$/m)?.[1])>=20);console.log('LVX_RUNTIME_SETUP_UNIT_VERIFIED');

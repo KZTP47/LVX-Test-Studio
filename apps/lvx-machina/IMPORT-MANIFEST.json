@@ -1,0 +1,344 @@
+{
+  "importedAt": "2026-10-24T22:54:59.027Z",
+  "sourceArchiveSha256": "924f1b90bd2412ba888c9926d0d9b8f0ae92bfca064908aad05b57efc1eafab5",
+  "purpose": "Historical application-source snapshot with explicit privacy amendments; maintained product remains repository root. Environment files, caches, installed dependencies and user data excluded.",
+  "files": [
+    {
+      "file": "GUIDES AND TUTORIALS/CICD-SETUP-GUIDE.md",
+      "bytes": 9735,
+      "sha256": "8a327fd5d10d9c922a64f100c0776f4a53258aee064c1bcfcae96e8da4f16a87"
+    },
+    {
+      "file": "README.md",
+      "bytes": 553,
+      "sha256": "a4bda549e782cb8ee5d3d9cd65dd8b36d43f7b81abe985fc7ea34b34d191e413"
+    },
+    {
+      "file": "advanced-assertions.js",
+      "bytes": 20424,
+      "sha256": "be58fa2450b13e5609e24eb4e23126f9d3ea8ce726a30fbe48b145c6ea390326"
+    },
+    {
+      "file": "ai-log-summary.test.js",
+      "bytes": 8434,
+      "sha256": "776bf5b784fee3b108ebe09338d05f82e2f69343e535647441b7e0531eb143b8"
+    },
+    {
+      "file": "cicd-integration.js",
+      "bytes": 19993,
+      "sha256": "43dcb9a94dee0fe6a19eccca56d63429b44650104ff8eaf65dae6b9285925eb9"
+    },
+    {
+      "file": "code-review-node.js",
+      "bytes": 17837,
+      "sha256": "07f6540e8b82b954879fe96f16f50f2eaa40d66dd8a3ad12ff80ac75b9637908"
+    },
+    {
+      "file": "collaboration-ui.js",
+      "bytes": 15508,
+      "sha256": "1894704c277a15a6061ccfb85fc2f4bb32f40cd86102b09c61f91944f429533e"
+    },
+    {
+      "file": "collaboration-ui2.js",
+      "bytes": 36290,
+      "sha256": "4cb6dbe4ce0ecd16fee499859de0b68ada78d82f399c8b696ffd6b67de81fe79"
+    },
+    {
+      "file": "collaboration.js",
+      "bytes": 27877,
+      "sha256": "ad4ed8b0b675dce3811b7f5b52f8a069aedcaa812db2c048484b2fab126d206d"
+    },
+    {
+      "file": "custom-rules.test.js",
+      "bytes": 1319,
+      "sha256": "af270af10d7cfde1f023033570393ca195df4902063034cf2ac528780001b716"
+    },
+    {
+      "file": "data-manager.js",
+      "bytes": 27168,
+      "sha256": "6fcdc3a2aae1047489fe61d62224f6bad678d86680b3df8ab2736c2d17094b1e"
+    },
+    {
+      "file": "data-manager.test.js",
+      "bytes": 3493,
+      "sha256": "286ec1780c91ec463c2e1d7a502424809c0193a6a57195a1c8a7817269f52b77"
+    },
+    {
+      "file": "debugger.js",
+      "bytes": 10209,
+      "sha256": "ac3280853a191803de3230c7735e908a571172d8b7267fd278abcf40c9525f68"
+    },
+    {
+      "file": "element-picker.js",
+      "bytes": 15715,
+      "sha256": "581091906a497bb62549f769be77c548a9f93e0d3fba45e37be9efe92969d84a"
+    },
+    {
+      "file": "environment-manager.js",
+      "bytes": 16084,
+      "sha256": "80c90bcab743408760a82386f46ef7df2c74a774499eeb551b57be74eab18257"
+    },
+    {
+      "file": "execution-validation.js",
+      "bytes": 1898,
+      "sha256": "6feefc1901a5a7615d7c4da9a2ba3922ae589bbf2783419f0711319098448e25"
+    },
+    {
+      "file": "execution-validation.test.js",
+      "bytes": 2227,
+      "sha256": "17f8d1a8038d252584526708a6617bd228c20d2098d5da4092c92708f8b106eb"
+    },
+    {
+      "file": "graph-engine.js",
+      "bytes": 6582,
+      "sha256": "82159a606bcaa2fc176da7ae66e3227974f1b488f1e5527c3f0b80ab1211f5fa"
+    },
+    {
+      "file": "graph-engine.test.js",
+      "bytes": 6298,
+      "sha256": "33ea143e013f3b79705652a9b7589bd41ccf28bf49986734d981b2ea1673c350"
+    },
+    {
+      "file": "index.html",
+      "bytes": 176152,
+      "sha256": "2c55fcf2d26bf2e9738f3b473f84c9e01c42f7b7e74abf6bf13631cda493c4b3"
+    },
+    {
+      "file": "index.tsx",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "indexeddb-version-storage.js",
+      "bytes": 8264,
+      "sha256": "b94cfaccb6c704857784aea38b3f135ecc6ca766d89fdbff79eef94b285eba2d"
+    },
+    {
+      "file": "integrations.js",
+      "bytes": 37403,
+      "sha256": "77e10838433811afb4ce8ace9ffbfab8f0ddf4cba25c17b4285b3743f0e007ec"
+    },
+    {
+      "file": "legacy-importer.js",
+      "bytes": 6255,
+      "sha256": "f3e878e1fa69de7cd2d38543ba3b2b7e28e03fa0564d02f9e67816eac77726fd"
+    },
+    {
+      "file": "legacy-importer.test.js",
+      "bytes": 3953,
+      "sha256": "df502a916951683593c8efef20e381a62069ca740465ab7b5343c6be0c1b9103"
+    },
+    {
+      "file": "log-rotation.js",
+      "bytes": 4668,
+      "sha256": "c453ebbf3f94f2d68a55dbd9198e7bb45eaec5398be92596aa126f269ab1cd2c"
+    },
+    {
+      "file": "log-rotation.test.js",
+      "bytes": 4617,
+      "sha256": "46c23e35deb7ee1832b2ef92a9af805561d4844a0f5d206dc42afbd67c49dd3e"
+    },
+    {
+      "file": "main.js",
+      "bytes": 28497,
+      "sha256": "73abc5c0810b3f4624b7f5bf4efd027cae21f350d7cab249ad068ff4caba0b8e"
+    },
+    {
+      "file": "metadata.json",
+      "bytes": 240,
+      "sha256": "96854023dc9b3a888dee2779f60ce1ee403d23d2cd9cb829161b4abadf5ab1bd"
+    },
+    {
+      "file": "mock-builder.js",
+      "bytes": 58640,
+      "sha256": "decca55ccbe167b6f10cb612366565c2601862a98ec5ee1262330cbcbdcb2725"
+    },
+    {
+      "file": "mock-builder.test.js",
+      "bytes": 9261,
+      "sha256": "3f9313cda439562c5203e26155b7f6873b14ca0a96b4fc3965d7de9ad807133d"
+    },
+    {
+      "file": "mock-runtime.js",
+      "bytes": 11724,
+      "sha256": "c521322135ae23a9bf337015176cee3433319a72f0e845af56b7f9fc1dbd6875"
+    },
+    {
+      "file": "mock-runtime.test.js",
+      "bytes": 5592,
+      "sha256": "7df15ba97e9b3626de19c6c073639764dd4a4d559336b3acb00e6527e6b952f4"
+    },
+    {
+      "file": "modal-backdrop.js",
+      "bytes": 1780,
+      "sha256": "7c9cecf16d56c9e354244c1fbd2f5a189b79514bb08c0e6f41440b8354d20f5e"
+    },
+    {
+      "file": "modal-backdrop.test.js",
+      "bytes": 1516,
+      "sha256": "66f19922e22cf53f0faca576575f5f293d30b2b66c5e03dfe981ffe319e71f95"
+    },
+    {
+      "file": "monaco-config.js",
+      "bytes": 31621,
+      "sha256": "bf3a58dc2d117cad16ee40edcb6508c4abc6f09f3283b99bba8c6b72bc096575"
+    },
+    {
+      "file": "nocode-builder.js",
+      "bytes": 13949,
+      "sha256": "235b17d4edce6eb806b58b837aac458bbb9acd34509b9d78a0ab6def9a5804c6"
+    },
+    {
+      "file": "package.json",
+      "bytes": 214,
+      "sha256": "38f472c8f47d31488344ab388f892a87b47d1dd015bc0a349cf793537b2a1f97"
+    },
+    {
+      "file": "phase1-bugfixes.test.js",
+      "bytes": 5656,
+      "sha256": "0610d85e11fc3d7485133c7a9bc08bd8575d1c215f4e6293131d184f0452c046"
+    },
+    {
+      "file": "pipeline-manager.js",
+      "bytes": 198746,
+      "sha256": "bc26eb09ee0b43b7ffe776475ada84457d306ee874e561e392dd788fe4e9972f"
+    },
+    {
+      "file": "preload.js",
+      "bytes": 4186,
+      "sha256": "d72350f43270b89f20a397957fff265aac3abde0d5943b21d69bba30d1ca0fc9"
+    },
+    {
+      "file": "reporting-dashboard.js",
+      "bytes": 57877,
+      "sha256": "205a32607898bf44ba9d0fd03d1daa38a281d1f6b599f923de9946add2491744"
+    },
+    {
+      "file": "script.js",
+      "bytes": 190566,
+      "sha256": "d30a1514d736bf7aa7c1b5b2a48cd0d04ba3858b81b692f29247adaaef9ddae6"
+    },
+    {
+      "file": "secure-config.js",
+      "bytes": 5816,
+      "sha256": "ceb0e4211d30070b2bce74183ae90e9abea0eac84ab146a54cc9ad5f210db8e6"
+    },
+    {
+      "file": "security-scanners.test.js",
+      "bytes": 4405,
+      "sha256": "33af71833594c81bf87df96d0e320f77552b664d5425e6dbc163d6ee1fcc85cf"
+    },
+    {
+      "file": "security-storage-integration.test.js",
+      "bytes": 2882,
+      "sha256": "10fbd565039fcb447be41c5d0c12cb0039d8cc7405df771e1a516c54544a4762"
+    },
+    {
+      "file": "security-testing.js",
+      "bytes": 45529,
+      "sha256": "e0fe92440436df0b989e368b283e56592b299c617aefcc50c450e53a1dcbca75"
+    },
+    {
+      "file": "security-testing.test.js",
+      "bytes": 17394,
+      "sha256": "438bf8ee3aa67bb6af4f6d30d0b8291a9496c285b50e88fa1ab50595990d1abc"
+    },
+    {
+      "file": "security-ui.js",
+      "bytes": 20981,
+      "sha256": "7aac2715ab07fe9142f0122a1ae1273a0b37a4c92d45522559b2e83c34f79825"
+    },
+    {
+      "file": "services/playwright-runner.js",
+      "bytes": 2639,
+      "sha256": "64ae762963d76afa906d072f7fac814df7afde6e7b9decc2d4402bbc58e59632"
+    },
+    {
+      "file": "session-export-manager.js",
+      "bytes": 6429,
+      "sha256": "348a560ccc93223380c8cd4bd38991c49b5840e9627b480186371914f99c5cb9"
+    },
+    {
+      "file": "session-export-manager.test.js",
+      "bytes": 4972,
+      "sha256": "6ce7d674e78b7093c3f7e6d6b5435f22d645da602db7c88888f32e70e55032a8"
+    },
+    {
+      "file": "storage-manager.js",
+      "bytes": 46874,
+      "sha256": "612c3c07bb3cbb1b49a52ede0845315bbcc37cde5c03de9a9af2e65eab120d56"
+    },
+    {
+      "file": "storage-manager.test.js",
+      "bytes": 14707,
+      "sha256": "dfb9ce8e9bbc59534f3fb2394a3e037faed7056b07ff93da78456ecfc4f9ac09"
+    },
+    {
+      "file": "storage-retention.test.js",
+      "bytes": 13364,
+      "sha256": "25bb29ff95336647590130eb8e88f3db29a64815f58e7e5f591a680226877afa"
+    },
+    {
+      "file": "styles.css",
+      "bytes": 25793,
+      "sha256": "6a810b87ac65887c28faa2bda0e23489abeb531ee1cf568895834996354ff627"
+    },
+    {
+      "file": "tsconfig.json",
+      "bytes": 542,
+      "sha256": "8641deb29adfd1958488d1951f0d5ddf3013f498aa67ce0f621e347f0ef608d2"
+    },
+    {
+      "file": "unit-testing.js",
+      "bytes": 56716,
+      "sha256": "d9ec80f878d2d4b3e6f45523490e9aefc764b81e85c4f53ae242ce888717f6ff"
+    },
+    {
+      "file": "version-control.js",
+      "bytes": 21751,
+      "sha256": "d5eaa6656207be5cf9c2fc8ea66c26f3aac7c3283a862876c9fbbbe0a444046d"
+    },
+    {
+      "file": "version-storage-dedup.test.js",
+      "bytes": 11543,
+      "sha256": "739ab4a8cf8ee2d4d3c1347ec130381edae7a243134bbfc63da8a1ad22ce700c"
+    },
+    {
+      "file": "visual-editor.js",
+      "bytes": 232414,
+      "sha256": "7c4d14e92fa20787bdb99911f11f3f0184667c5c526356b4b8af75616d1a936f"
+    },
+    {
+      "file": "visual-editor.test.js",
+      "bytes": 50878,
+      "sha256": "39a3eeeef4af8aa5495e0199bc9f9710f515bfc474a629c3e2135a82434f10de"
+    },
+    {
+      "file": "visual-web-tester.js",
+      "bytes": 43678,
+      "sha256": "bc7e14fd54b07562646048f0d2914a902b2d03ca4dd96e5133f0bc42e317c399"
+    },
+    {
+      "file": "vite.config.ts",
+      "bytes": 532,
+      "sha256": "d29c7decf4b274d1e30e85b8b4626e67b42ea009a456f4d115c988a8c143807d"
+    }
+  ],
+  "privacyAmendments": [
+    {
+      "file": "visual-editor.js",
+      "originalSha256": "e07c41f5ca026df6f4b485d6b2f42ae621e5bb14fa84ac1864bff671a4d6572e",
+      "publishedSha256": "7c4d14e92fa20787bdb99911f11f3f0184667c5c526356b4b8af75616d1a936f",
+      "change": "Replaced a personal Windows log-folder placeholder with a workspace-relative example; execution code unchanged.",
+      "originalCommit": "a27b904edb2a138315065a86b8d82ad71dfe2727"
+    }
+  ],
+  "fixtureAmendments": [
+    {
+      "file": "security-testing.test.js",
+      "originalSha256": "23b8fcdad5eea865e15aa35150f66b2cfe57f88aa7ea24bb2c5e3a63b50a7861",
+      "publishedSha256": "438bf8ee3aa67bb6af4f6d30d0b8291a9496c285b50e88fa1ab50595990d1abc",
+      "change": "Construct the identical synthetic Slack test input at runtime instead of embedding a credential-shaped literal that GitHub push protection rejects. No genuine token or runtime application code changed."
+    }
+  ]
+}

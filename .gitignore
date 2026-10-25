@@ -1,0 +1,70 @@
+# Dependencies and reproducible build output
+node_modules/
+/dist/
+/release/
+/.external/
+/.external-tailwind.css
+
+# Local execution data, exports, evidence and caches
+/output/
+/exports/
+/test-results/
+/playwright-report/
+/blob-report/
+/coverage/
+/.temp_exec/
+/.playwright-cli/
+/.unlazy/
+/.unlazy-hook-state.json
+.lvx/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+/venv/
+*.log
+
+# Private environment, provider settings and signing material
+.env
+.env.*
+!.env.example
+.npmrc
+/.codex/
+/.claude/settings.local.json
+/credentials/
+/secrets/
+*.pfx
+*.p12
+
+# Personal editor / OS state; shared project configuration remains eligible
+/.idea/
+/.vs/
+*.code-workspace
+.vscode/*.local.json
+.DS_Store
+Thumbs.db
+Desktop.ini
+*~
+*.swp
+*.swo
+/WORKLOG.md
+
+# Generated verification runs stay local. Keep only documentation and
+# reference inputs required by the repair / roadmap / parity tools.
+/docs/verification/*
+!/docs/verification/README.md
+!/docs/verification/REPAIRS.md
+!/docs/verification/RELEASE-BOUNDARIES.md
+!/docs/verification/baseline-findings.json
+!/docs/verification/browser-fixes.json
+!/docs/verification/execution-fixes.json
+!/docs/verification/storage-fixes.json
+!/docs/verification/future-work-catalog.json
+!/docs/verification/machina-feature-census.json
+!/docs/verification/screenshots/
+/docs/verification/screenshots/*
+!/docs/verification/screenshots/.gitkeep
+
+# Only deliberately reviewed guide images belong in docs/images.
+/docs/screenshots/*
+!/docs/screenshots/.gitkeep

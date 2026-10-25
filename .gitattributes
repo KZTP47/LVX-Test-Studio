@@ -1,0 +1,7 @@
+* text=auto eol=lf
+apps/lvx-machina/** -text
+*.png binary
+*.ico binary
+*.wasm binary
+*.zip binary
+*.whl binary

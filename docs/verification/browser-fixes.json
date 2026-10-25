@@ -1,0 +1,487 @@
+{
+  "scope": "browser",
+  "date": "2026-10-24",
+  "status": "implemented_and_leaf_verified",
+  "command": "node --test tests/browser.test.cjs",
+  "result": {
+    "tests": 26,
+    "pass": 26,
+    "fail": 0,
+    "skipped": 0
+  },
+  "findings": [
+    {
+      "id": "B01",
+      "files": [
+        "security-testing.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "security-testing.js",
+          "line": 1
+        }
+      ],
+      "tests": [
+        "B01: standard OSV arrays, empty fallback and unknown CVSS retain every finding"
+      ],
+      "change": "OSV severity arrays and database fallback are parsed; CVSS v3 base scores are calculated. Unsupported severities remain UNKNOWN findings and block policy.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B02",
+      "files": [
+        "security-testing.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "security-testing.js",
+          "line": 1
+        }
+      ],
+      "tests": [
+        "B02: rejected/non-OK dependency lookups remain ERROR and retry rather than cache clean"
+      ],
+      "change": "Network/HTTP/invalid response and unresolved-version errors remain explicit incomplete coverage, preserve successful findings and are never cached as clean scans.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B03",
+      "files": [
+        "security-testing.js",
+        "security-ui.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "security-testing.js",
+          "line": 733
+        },
+        {
+          "file": "security-ui.js",
+          "line": 1
+        }
+      ],
+      "tests": [
+        "B03: unavailable infrastructure is an explicit ERROR; array and backend object normalize"
+      ],
+      "change": "Infrastructure returns normalized arrays or backend evidence; unavailable scanners and malformed results return ERROR with policyPassed=false and visible unavailable UI. Optional backend delegation is used only if supplied.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B04",
+      "files": [
+        "security-testing.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "security-testing.js",
+          "line": 595
+        }
+      ],
+      "tests": [
+        "B04: every numeric maximum applies before fail-on severity, including low fail-on"
+      ],
+      "change": "Every numeric maximum is checked independently, then cumulative fail-on severity rules apply; unknown findings cannot pass.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B05",
+      "files": [
+        "security-ui.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "security-ui.js",
+          "line": 384
+        }
+      ],
+      "tests": [
+        "B05: policy UI preserves zero and rejects negative/fractional maxima"
+      ],
+      "change": "Zero is preserved, blank fields use defaults, and fractional/negative values show validation errors without saving.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B06",
+      "files": [
+        "security-ui.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "security-ui.js",
+          "line": 486
+        }
+      ],
+      "tests": [
+        "B06: save and selected-suite scan use awaited configured LVXApp storage"
+      ],
+      "change": "Security suite save, selected-suite scan and refresh use the configured awaited LVXApp storage interface.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B07",
+      "files": [
+        "security-ui.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "security-ui.js",
+          "line": 242
+        }
+      ],
+      "tests": [
+        "B07: result rendering orders critical before high and low"
+      ],
+      "change": "Nullish fallback preserves critical severity rank zero when rendering mixed findings.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B08",
+      "files": [
+        "security-testing.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "security-testing.js",
+          "line": 598
+        }
+      ],
+      "tests": [
+        "B08: history retains 100 scans with details and newest-first identity"
+      ],
+      "change": "History reads the full retention window before appending and stores detail/error evidence; 120 writes retain exactly the newest 100.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B09",
+      "files": [
+        "unit-testing.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "unit-testing.js",
+          "line": 828
+        }
+      ],
+      "tests": [
+        "B09/B10/B11: shared const fixtures, awaited promises and teardown on failure"
+      ],
+      "change": "Setup const/let declarations share lexical bindings with async test and teardown closures; an explicit fixture object is also available.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B10",
+      "files": [
+        "unit-testing.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "unit-testing.js",
+          "line": 828
+        }
+      ],
+      "tests": [
+        "B09/B10/B11: shared const fixtures, awaited promises and teardown on failure",
+        "B10: cooperative async timeout fails and aborts its test signal"
+      ],
+      "change": "Custom JavaScript awaits test promises and await-based setup/teardown, reports asynchronous failures and provides a cooperative AbortSignal timeout. Early setup returns cannot silently skip tests.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B11",
+      "files": [
+        "unit-testing.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "unit-testing.js",
+          "line": 891
+        }
+      ],
+      "tests": [
+        "B09/B10/B11: shared const fixtures, awaited promises and teardown on failure",
+        "B11/B12: actual unittest discovery executes failures and always runs teardown"
+      ],
+      "change": "Both languages execute cleanup in finally. JavaScript cleanup closures retain initialized setup bindings even if later setup fails; primary and cleanup errors are separate.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B12",
+      "files": [
+        "unit-testing.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "unit-testing.js",
+          "line": 891
+        }
+      ],
+      "tests": [
+        "B11/B12: actual unittest discovery executes failures and always runs teardown",
+        "B12: actual pytest discovery never passes a failing or empty suite"
+      ],
+      "change": "Python unittest invokes the real loader/runner; pytest invokes real package discovery/main and reads executed counts. Empty tests and unavailable engines fail visibly. Unsupported Jest/Java/.NET modes are not treated as successful browser scripts.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B13",
+      "files": [
+        "visual-web-tester.js",
+        "advanced-assertions.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "visual-web-tester.js",
+          "line": 1
+        },
+        {
+          "file": "advanced-assertions.js",
+          "line": 23
+        }
+      ],
+      "tests": [
+        "B13/B19: every advanced step receives runner window and exact threshold stays zero",
+        "B13/B14: awaitable pipeline visual execution inspects its own page and removes its iframe"
+      ],
+      "change": "Every advanced action receives the actual execution window. An awaited isolated visual executor supports pipeline callers and removes its owned iframe.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B14",
+      "files": [
+        "advanced-assertions.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "advanced-assertions.js",
+          "line": 185
+        }
+      ],
+      "tests": [
+        "B14: unlabelled controls without IDs fail; associated, wrapping and ARIA names pass",
+        "B13/B14: awaitable pipeline visual execution inspects its own page and removes its iframe"
+      ],
+      "change": "Every input/select/textarea is checked for accessible naming including no-ID, associated/wrapping labels, ARIA and relevant native names; hidden controls are excluded.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B15",
+      "files": [
+        "integrations.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "integrations.js",
+          "line": 66
+        }
+      ],
+      "tests": [
+        "B15: each integration receives only its configured success/failure event"
+      ],
+      "change": "Delivery filters each integration by its own all/success/failure preferences and normalized result status.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B16",
+      "files": [
+        "index.html",
+        "collaboration-ui2.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "index.html",
+          "line": 2724
+        },
+        {
+          "file": "collaboration-ui2.js",
+          "line": 382
+        }
+      ],
+      "tests": [
+        "B16: collaboration IDs are unique and version rendering leaves standalone versions intact"
+      ],
+      "change": "Shared root/storage dependency verified: collaboration input/list have distinct IDs and version rendering cannot overwrite standalone controls.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "root/storage dependency"
+    },
+    {
+      "id": "B17",
+      "files": [
+        "monaco-config.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "monaco-config.js",
+          "line": 683
+        }
+      ],
+      "tests": [
+        "B17: Monaco parses complete multiword cells, tab cells and assignment targets"
+      ],
+      "change": "Diagnostics split Robot cells on real separators, preserve complete multiword keywords and handle assignment targets, tabs and continuation rows.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B18",
+      "files": [
+        "debugger.js",
+        "visual-web-tester.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "debugger.js",
+          "line": 283
+        },
+        {
+          "file": "visual-web-tester.js",
+          "line": 651
+        }
+      ],
+      "tests": [
+        "B18: Resume runs to completion, Step pauses once, and Stop unblocks breakpoints",
+        "B18: debugger retains error status and failure details after cleanup"
+      ],
+      "change": "Debugger tracks run/step state, pauses exactly at requested boundaries, handles Stop while paused, exposes live controls and preserves error outcomes after cleanup.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B19",
+      "files": [
+        "visual-web-tester.js",
+        "advanced-assertions.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "visual-web-tester.js",
+          "line": 139
+        },
+        {
+          "file": "advanced-assertions.js",
+          "line": 1
+        }
+      ],
+      "tests": [
+        "B13/B19: every advanced step receives runner window and exact threshold stays zero",
+        "B19: exact image comparison detects one-channel and alpha-only differences"
+      ],
+      "change": "Zero screenshot tolerance remains zero with validated 0..100 input; exact mode detects any changed RGB or alpha channel.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B20",
+      "files": [
+        "element-picker.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "element-picker.js",
+          "line": 179
+        }
+      ],
+      "tests": [
+        "B20: selector proposals escape literal punctuation, digits and attribute quotes"
+      ],
+      "change": "Identifier components use CSS.escape (with fallback), attribute strings are escaped, and each proposed selector is validated against the picked element.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    },
+    {
+      "id": "B21",
+      "files": [
+        "nocode-builder.js",
+        "visual-web-tester.js",
+        "monaco-config.js",
+        "tests/browser.test.cjs"
+      ],
+      "code": [
+        {
+          "file": "nocode-builder.js",
+          "line": 8
+        },
+        {
+          "file": "visual-web-tester.js",
+          "line": 1
+        },
+        {
+          "file": "monaco-config.js",
+          "line": 1
+        }
+      ],
+      "tests": [
+        "B21: generators emit real Robot cells and continuation arguments, and prevent unsupported external checks from passing",
+        "B21: actual Robot dry-run accepts both builders; execution preserves multiline literal arguments",
+        "B21: Monaco completion snippets retain complete keywords and separate every argument cell"
+      ],
+      "change": "Both builders and editor snippets emit proper Robot cells, literal escaped arguments and multiline continuation rows. Universal keyword names match Selenium. Advanced checks save as visual steps; external Robot uses an explicit Fail rather than skipping those checks.",
+      "status": "implemented_and_leaf_verified",
+      "ownership": "browser leaf"
+    }
+  ],
+  "review_passes": [
+    {
+      "pass": 1,
+      "focus": "Complete implementation",
+      "evidence": "All B01-B21 mapped individually; B16 root/storage markup dependency included and independently tested."
+    },
+    {
+      "pass": 2,
+      "focus": "Expert reread",
+      "evidence": "Improved CVSS parsing and incomplete coverage, shared lexical setup/cleanup scope, real framework discovery, real Robot keyword signatures and escaped literal semantics."
+    },
+    {
+      "pass": 3,
+      "focus": "Integration defect hunt",
+      "evidence": "Added awaited visual pipeline executor; advanced saved suites remain savable with explicit failure on unsupported external export. Fixed debug final-step/Stop/error status and load-handler ordering. Real Robot dry-run and fixture argument execution pass."
+    },
+    {
+      "pass": 4,
+      "focus": "Polish and repeat",
+      "evidence": "Zero/negative/fraction policy validation, exact pixel alpha checks, unique live runner IDs, bounded page loads, local Monaco assets, disabled runtime modes and unique DOM routing reviewed; final 26 tests pass."
+    }
+  ],
+  "capability_limits": [
+    "Infrastructure Docker/Kubernetes/network backends are unavailable in this build. They return explicit ERROR; no scanner success is fabricated.",
+    "OSV package lookups require exact resolved versions. Semver ranges produce incomplete-coverage ERROR; lockfile resolution remains future work.",
+    "Jest/JUnit/NUnit browser execution requires a real backend. Unsupported framework modes fail visibly; Custom is an explicit browser assertion-script mode.",
+    "JavaScript timeout cancellation is cooperative via AbortSignal; synchronous loops cannot be preempted on the UI thread.",
+    "Pytest package loading may need network/package availability on first use. Missing packages are a visible failure.",
+    "Advanced visual assertions require the LVX visual executor. External Robot exports contain explicit Fail rows rather than silently omitting advanced steps."
+  ]
+}

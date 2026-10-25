@@ -1,0 +1,37 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),{createPreviewPolicy,configurePreviewContents}=require('../services/security/boundaries.cjs');
+test('website targets keep normal HTTP origins, CSP and navigation inside a private sandbox',()=>{
+ const policy=createPreviewPolicy({websiteTarget:true});
+ for(const url of ['https://staging.example.test/app','http://127.0.0.1:4000/main.mjs','https://cdn.example.test/style.css'])assert.equal(policy.allowsUrl(url),true);
+ for(const url of ['file:///C:/secret.txt','ftp://example.test/file','https://user:pass@example.test/']){assert.equal(policy.allowsUrl(url),false);assert.equal(policy.allowsNavigation(url),false);}
+ assert.equal(policy.allowsNavigation('https://example.test/next'),true);assert.equal(policy.webPreferences.nodeIntegration,false);assert.equal(policy.webPreferences.sandbox,true);assert.equal(policy.webPreferences.contextIsolation,true);assert.equal(policy.allowPermission(),false);assert.deepEqual(policy.allowWindowOpen(),{action:'deny'});
+ const events={},requests={};configurePreviewContents({setWindowOpenHandler(fn){requests.popup=fn;},on(name,fn){events[name]=fn;},session:{setPermissionRequestHandler(fn){requests.permission=fn;},setPermissionCheckHandler(){},on(){},webRequest:{onBeforeRequest(fn){requests.before=fn;},onHeadersReceived(fn){requests.headers=fn;}}}},policy);
+ const headers={'Content-Security-Policy':["default-src 'self'"]};requests.headers({responseHeaders:headers},result=>assert.deepEqual(result.responseHeaders,headers));
+ let prevented=false;events['will-navigate']({preventDefault(){prevented=true;}},'https://example.test/next');assert.equal(prevented,false);events['will-navigate']({preventDefault(){prevented=true;}},'file:///C:/secret.txt');assert.equal(prevented,true);
+});
+test('legacy uploads remain offline, non-navigable and given restrictive CSP',()=>{
+ const policy=createPreviewPolicy();assert.equal(policy.allowsUrl('https://example.test'),false);assert.equal(policy.allowsNavigation('https://example.test'),false);assert.equal(policy.allowsUrl('data:text/html,hello'),true);assert.match(policy.contentSecurityPolicy,/connect-src 'none'/);
+});
+test('saved target suites resolve the real website URL and dispose it after native execution',async()=>{
+ const {executeSuite}=require('../services/machina/suite.cjs');let disposed=0,seen=0;
+ const suite={id:'target-suite',language:'website',name:'Project target',website_target:{version:1,kind:'files',entry:'index.html',files:[{path:'index.html',content:'<h1>Hello</h1>',encoding:'utf8'}]},website_html_content:'<h1>WRONG legacy content</h1>',vwt_steps_json:JSON.stringify([{name:'Element Should Contain',params:{selector:'h1',text:'Hello'}}])};
+ const result=await executeSuite(suite,{getRoot:()=>process.cwd(),inputs:{},context:{parameters:{}},hooks:{resolveWebTarget:async target=>{assert.deepEqual(target,suite.website_target);return{url:'http://127.0.0.1:12345/private/index.html',dispose(){disposed++;}};}},childRun:async payload=>{seen++;assert.equal(payload.engine,'playwright');assert.match(payload.code,/page.goto\("http:\/\/127.0.0.1:12345\/private\/index.html"\)/);assert.doesNotMatch(payload.code,/WRONG|setContent/);return{status:'SUCCESS',total:1,passed:1,failed:0,errors:0};}});
+ assert.equal(result.status,'SUCCESS');assert.equal(seen,1);assert.equal(disposed,1);
+ await assert.rejects(executeSuite({...suite,vwt_steps_json:'bad JSON'},{getRoot:()=>process.cwd(),inputs:{},context:{parameters:{}},hooks:{resolveWebTarget:async()=>({url:'https://example.test',dispose(){disposed++;}})},childRun:async()=>{throw Error('must not run');}}));assert.equal(disposed,2);
+});
+test('import trust fingerprints cover the complete portable website target',async()=>{
+ const {executableHashes}=require('../services/imported-executables.cjs');const target={version:1,kind:'files',entry:'index.html',files:[{path:'index.html',content:'<script src="main.js"></script>',encoding:'utf8'},{path:'main.js',content:'window.hello=1',encoding:'utf8'}]};
+ const imported=await executableHashes({website_target:target}),dispatch=await executableHashes({target});assert.ok(imported.some(hash=>dispatch.includes(hash)));const changed=await executableHashes({target:{...target,files:target.files.map(file=>({...file,content:file.content+'changed'}))}});assert.ok(changed.some(hash=>!dispatch.includes(hash)));
+});
+test('concurrent asynchronous target resolution cannot exceed eight native preview sessions',async()=>{
+ const {EventEmitter}=require('node:events'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');const directory=fs.mkdtempSync(path.join(os.tmpdir(),'lvx-preview-cap-'));let active=0,peak=0;
+ class Window extends EventEmitter{constructor(){super();active++;peak=Math.max(peak,active);this.destroyed=false;this.webContents=new EventEmitter();Object.assign(this.webContents,{setWindowOpenHandler(){},getURL:()=>this.url,executeJavaScriptInIsolatedWorld:async()=>({ok:true,value:'<html><h1>Fixture</h1></html>'}),session:{setPermissionRequestHandler(){},setPermissionCheckHandler(){},on(){},webRequest:{onBeforeRequest(){},onHeadersReceived(){}}}});}isDestroyed(){return this.destroyed;}async loadURL(url){this.url=url;}destroy(){if(this.destroyed)return;this.destroyed=true;active--;this.emit('closed');}}
+ let currentRoot=process.cwd();const service=require('../services/preview/index.cjs').createService({BrowserWindow:Window,dataDir:directory,getWorkspaceRoot:()=>currentRoot});try{const results=await Promise.allSettled(Array.from({length:12},()=>service.handle('open',{target:{version:1,kind:'url',url:'https://fixture.example.test'}})));assert.equal(results.filter(result=>result.status==='fulfilled').length,8);assert.equal(results.filter(result=>result.status==='rejected'&&/maximum eight/.test(result.reason.message)).length,4);assert.equal(peak,8);assert.equal(service.size,8);await service.handle('closeAll');
+  const foreign=service.handle('open',{target:{version:1,kind:'url',url:'https://fixture.example.test'}});currentRoot=os.tmpdir();await assert.rejects(foreign,/Workspace changed/);assert.equal(active,0);currentRoot=process.cwd();
+  const pending=service.handle('open',{target:{version:1,kind:'url',url:'https://fixture.example.test'}}),rejected=assert.rejects(pending,/Workspace changed|closed/);await service.handle('closeAll');await rejected;assert.equal(active,0);assert.equal(service.size,0);
+ }finally{await service.close();assert.equal(active,0);assert.equal(path.dirname(directory),os.tmpdir());fs.rmSync(directory,{recursive:true,force:true,maxRetries:5,retryDelay:50});}
+});
+test('closing a web target service rejects a pending file-server resolution without leaking a listener',async()=>{
+ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),directory=fs.mkdtempSync(path.join(os.tmpdir(),'lvx-target-close-'));const service=require('../services/web-targets/index.cjs').createTargets({dataDir:directory,getWorkspaceRoot:()=>process.cwd()});let prepared;
+ try{const pending=service.resolve({version:1,kind:'files',entry:'index.html',files:[{path:'index.html',content:'<h1>Fixture</h1>',encoding:'utf8'}]}).then(result=>(prepared=result,result)),rejected=assert.rejects(pending,/closed/);await service.close();try{await rejected;}finally{await prepared?.dispose?.();}}finally{await service.close();assert.equal(path.dirname(directory),os.tmpdir());fs.rmSync(directory,{recursive:true,force:true,maxRetries:5,retryDelay:50});}
+});

@@ -1,0 +1,58 @@
+/* Keep the existing Aero surfaces; allow long file trees and commands to wrap. */
+#vwt-toolbox>button { display:block;width:100%;text-align:left; }
+#vwt-canvas .vwt-step-actions { display:flex;flex-wrap:wrap;gap:5px; }
+#vwt-canvas .no-code-step>.flex { flex-wrap:wrap;gap:6px; }
+#vwt-canvas button { min-height:28px; }
+#visual-web-tester-modal .vwt-target-controls { min-width:0; }
+#visual-web-tester-modal .vwt-target-controls label { display:block;font-size:.875rem;font-weight:600;margin:.6rem 0 .25rem; }
+#visual-web-tester-modal .vwt-target-controls input:not([type=checkbox]),
+#visual-web-tester-modal .vwt-target-controls select { box-sizing:border-box;width:100%;min-width:0;padding:.45rem;border-radius:.35rem; }
+#visual-web-tester-modal .vwt-target-controls p { margin:.4rem 0 .65rem;line-height:1.5;overflow-wrap:anywhere; }
+#visual-web-tester-modal .vwt-target-controls button { padding:.4rem .6rem;border-radius:.3rem;white-space:normal; }
+#visual-web-tester-modal .vwt-target-controls [hidden] { display:none!important; }
+#visual-web-tester-modal #vwt-files-preview { max-height:19rem;overflow:auto; }
+#visual-web-tester-modal .vwt-file-row { display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;padding:.45rem 0;border-bottom:1px solid #b5d8ee; }
+#visual-web-tester-modal .vwt-file-row>span { flex:1 0 100%;overflow-wrap:anywhere;font-weight:600; }
+#visual-web-tester-modal #vwt-source-status { padding:.5rem;border:1px solid #9bc7e5;border-radius:.35rem;background:#edf8ff;color:#19486b;overflow-wrap:anywhere; }
+#visual-web-tester-modal #vwt-source-status[data-error=true] { background:#fff1ef;color:#8a251d;border-color:#d58c85; }
+#visual-web-tester-modal #vwt-source-warnings { white-space:pre-line;overflow-wrap:anywhere; }
+#visual-web-tester-modal #vwt-project-log { white-space:pre-wrap;overflow-wrap:anywhere;max-height:12rem;overflow:auto; }
+#visual-web-tester-modal .vwt-checkbox-label { display:flex;align-items:flex-start;gap:.45rem; }
+#visual-web-tester-modal .vwt-checkbox-label input { flex:none;margin-top:.2rem; }
+#visual-web-tester-modal #vwt-project-server { padding:.65rem;background:rgba(207,234,251,.65);border:1px solid #9bc7e5;border-radius:.4rem; }
+#visual-web-tester-modal .vwt-dialog-shell{box-sizing:border-box;min-width:0;min-height:0;max-width:95vw;max-height:95vh;overflow:hidden;}
+#visual-web-tester-modal .vwt-dialog-body,#visual-web-tester-modal .vwt-dialog-body>*,#visual-web-tester-modal .vwt-dialog-header>*{min-width:0;}
+@media(max-width:1100px){
+  #visual-web-tester-modal .vwt-dialog-shell{width:calc(100vw - 1rem)!important;max-width:calc(100vw - 1rem)!important;height:calc(100vh - 1rem)!important;max-height:calc(100vh - 1rem)!important;}
+  #visual-web-tester-modal .vwt-dialog-header{flex-wrap:wrap;gap:.6rem;padding:.65rem;}
+  #visual-web-tester-modal .vwt-dialog-header>div{flex-wrap:wrap;gap:.5rem;}
+  #visual-web-tester-modal .vwt-dialog-header>div:first-child{flex-basis:100%;}
+  #visual-web-tester-modal .vwt-dialog-header>div:last-child{margin-left:auto;}
+  #visual-web-tester-modal .vwt-dialog-header>div:last-child>*{margin-left:0;}
+  #visual-web-tester-modal .vwt-dialog-header h2{font-size:1.3rem;line-height:1.3;overflow-wrap:anywhere;}
+  #visual-web-tester-modal .vwt-dialog-header button{white-space:normal;max-width:100%;padding:.4rem .65rem;}
+  #visual-web-tester-modal #vwt-debug-controls{flex-wrap:wrap;margin-left:0;}
+}
+@media(max-width:900px){
+  #visual-web-tester-modal .vwt-dialog-header{max-height:45vh;overflow-y:auto;flex-shrink:0;}
+  #visual-web-tester-modal .vwt-dialog-body{display:block;overflow:auto;overscroll-behavior:contain;min-height:0;}
+  #visual-web-tester-modal .vwt-dialog-body>.vwt-source-column,
+  #visual-web-tester-modal .vwt-dialog-body>.vwt-build-column,
+  #visual-web-tester-modal .vwt-dialog-body>.vwt-preview-column{box-sizing:border-box;width:100%;max-width:100%;height:auto;display:block;overflow:visible;border-right:0;border-bottom:1px solid #a8cee9;padding:1rem;}
+  #visual-web-tester-modal #vwt-canvas{min-height:12rem;max-height:28rem;overflow:auto;}
+  #visual-web-tester-modal #vwt-properties{min-height:0;max-height:none;overflow:visible;}
+  #visual-web-tester-modal .vwt-preview-frame{height:24rem;min-height:16rem;}
+  #visual-web-tester-modal #vwt-iframe{display:block;width:100%;height:100%;}
+  #visual-web-tester-modal #vwt-logs{box-sizing:border-box;min-width:0;max-width:100%;}
+  #visual-web-tester-modal #vwt-canvas .aero-card{min-width:0;overflow-wrap:anywhere;}
+  #visual-web-tester-modal #vwt-canvas .aero-card .flex{flex-wrap:wrap;min-width:0;}
+  #visual-web-tester-modal .resize-handle-corner{display:none;}
+}
+.vwt-form-dialog{width:min(30rem,calc(100vw - 2rem));padding:1.25rem;border:1px solid #93bbd7;border-radius:.6rem;color:#173f60;background:#edf8ff;box-shadow:0 12px 40px #153a6266;}
+.vwt-form-dialog::backdrop{background:#11334f80;}
+.vwt-form-dialog h3{font-size:1.2rem;font-weight:700;margin:0 0 1rem;}
+.vwt-form-dialog label{display:block;margin:.75rem 0 .3rem;font-weight:600;}
+.vwt-form-dialog input,.vwt-form-dialog textarea{box-sizing:border-box;width:100%;padding:.55rem;}
+.vwt-form-dialog textarea{min-height:5rem;resize:vertical;}
+.vwt-dialog-actions{display:flex;justify-content:flex-end;gap:.65rem;margin-top:1rem;}
+.vwt-dialog-actions button{padding:.55rem 1rem;border-radius:.35rem;}

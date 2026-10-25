@@ -1,0 +1,1 @@
+{"name":"lvx-showcase-calculator","private":true,"version":"1.0.0","scripts":{"test":"node --test calculator.test.cjs"}}

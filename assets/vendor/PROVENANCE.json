@@ -1,0 +1,15 @@
+{
+  "generatedBy": "npm run build:assets",
+  "sheetjs": {
+    "version": "0.20.3",
+    "source": "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js",
+    "sha256": "cc015130aa8521e7f088f88898eba949ccdcbfb38df0bd129b44b7273c3a6f41"
+  },
+  "packages": [
+    "chart.js@4.4.0",
+    "html2canvas@1.4.1",
+    "monaco-editor@0.44.0",
+    "pyodide@0.24.1"
+  ],
+  "licenses": "See node_modules package LICENSE files and THIRD_PARTY_NOTICES.md"
+}

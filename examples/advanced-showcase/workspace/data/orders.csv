@@ -1,0 +1,5 @@
+customer,quantity,coupon,expectedTotal
+Synthetic Ada,1,,298
+Synthetic Lin,2,LAB10,497.2
+Synthetic Sam,3,,747
+Synthetic Nora,12,LAB10,2689.2

@@ -1,0 +1,446 @@
+{
+  "status": "COMPLETE",
+  "reviewedAt": "2026-10-25",
+  "scope": "Source-only comparison of SWE-AF, Herdr/video context, and the public Nexus Harness snapshot for LVX visual Agent Studio. No provider installation, external repository code execution, private chats, credentials, environment files, or project memory vaults were used.",
+  "sources": [
+    {
+      "kind": "repository",
+      "name": "SWE-AF",
+      "url": "https://github.com/Agent-Field/SWE-AF",
+      "commit": "4d3dfe719e5ce9e2e8cd454722295bbe6512542f",
+      "license": "Apache-2.0, root LICENSE inspected",
+      "evidence": [
+        {
+          "path": "swe_af/reasoners/pipeline.py",
+          "lines": "529-617,751-892,897-982",
+          "symbols": [
+            "run_product_manager",
+            "run_architect",
+            "run_tech_lead",
+            "run_sprint_planner"
+          ],
+          "claim": "Planning is separate role calls with persisted PRD, architecture, review and issue artifacts, not an unrestricted conversation graph."
+        },
+        {
+          "path": "swe_af/execution/coding_loop.py",
+          "lines": "515-590,600-737,794-883",
+          "symbols": [
+            "run_coding_loop",
+            "_run_default_path",
+            "_run_flagged_path"
+          ],
+          "claim": "Default coder/reviewer loop; planner guidance selects parallel QA/reviewer and synthesizer. Stuck or exhausted nonblocking iterations with changed files can become completed_with_debt."
+        },
+        {
+          "path": "swe_af/execution/coding_loop.py",
+          "lines": "47-94,124-149",
+          "symbols": [
+            "_iteration_state_path",
+            "_save_iteration_state",
+            "_read_memory_context"
+          ],
+          "claim": "Iteration checkpoints are build-scoped. Opt-in shared learning reads conventions, failures, bugs and completed-dependency interfaces, while project artifacts remain file references."
+        },
+        {
+          "path": "swe_af/execution/dag_executor.py",
+          "lines": "824-851,1270-1330,1560-1584,1651-1665",
+          "symbols": [
+            "_save_checkpoint",
+            "_load_checkpoint",
+            "_execute_level",
+            "run_dag"
+          ],
+          "claim": "Dependency levels execute with bounded asyncio semaphore/gather concurrency; DAG and in-flight state are checkpointed. Checkpoint JSON writes are direct, so advertised recovery does not establish atomicity under mid-write failure."
+        },
+        {
+          "path": "swe_af/execution/schemas.py",
+          "lines": "980-1055",
+          "symbols": [
+            "BuildConfig"
+          ],
+          "claim": "Defaults include five coding iterations, three concurrent issues, bounded replan/fix cycles, learning disabled, ready-for-review PR creation and CI checking enabled."
+        },
+        {
+          "path": "swe_af/runtime/codex_harness_patch.py",
+          "lines": "247-294,335-350",
+          "symbols": [
+            "execute_with_native_structured_output"
+          ],
+          "claim": "Codex path launches exec --json, appends a structured-output contract and returns an empty session_id. Permission mode auto explicitly selects dangerous approval/sandbox bypass; unspecified mode selects workspace-write."
+        },
+        {
+          "path": "swe_af/runtime/providers.py",
+          "lines": "5-49",
+          "symbols": [
+            "normalize_runtime_provider",
+            "runtime_to_harness_adapter"
+          ],
+          "claim": "Native runtime allowlist contains aforge, claude_code, open_code, codex and command_code; it does not contain a native gemini runtime. Google models through OpenCode are not evidence of Gemini subscription CLI support."
+        },
+        {
+          "path": "swe_af/app.py",
+          "lines": "316-428",
+          "symbols": [
+            "_run_ci_gate"
+          ],
+          "claim": "CI is an explicit bounded watch/fix/re-push loop, with attempt limits and outcome notes rather than assumed success when a PR exists."
+        },
+        {
+          "path": "LICENSE",
+          "lines": "1-8",
+          "symbols": [],
+          "claim": "Apache License 2.0 governs upstream reuse; retain applicable notices and identify modifications if adopting source."
+        }
+      ],
+      "limitations": "Static source analysis only; no fleet was run, benchmark was reproduced, provider sign-in was inspected, or subscription entitlement was verified. The dedicated Codex patch is not evidence that all other runtimes are stateless."
+    },
+    {
+      "kind": "repository",
+      "name": "Herdr",
+      "url": "https://github.com/herdrdev/herdr",
+      "commit": "5608de0608918aba2f9d501e7793b984a0ca9cfa",
+      "license": "Apache-2.0, root LICENSE inspected",
+      "evidence": [
+        {
+          "path": "src/api/wait.rs",
+          "lines": "177-283,579-666",
+          "symbols": [
+            "prompt_agent",
+            "agent_get_for_prompt"
+          ],
+          "claim": "Prompt wait checks target identity, records event/state sequence, requires observed working/blocked activity for an initially nonworking agent, and can return agent_prompt_stalled. A lifecycle wait is not a per-turn completion receipt."
+        },
+        {
+          "path": "src/app/api/agents.rs",
+          "lines": "138-181,744-775",
+          "symbols": [
+            "validate_agent_prompt",
+            "agent_prompt_rejects_blocked_agent_without_writing"
+          ],
+          "claim": "Recognized approval/question dialogs reject ordinary prompt injection before terminal input; regression test source asserts no input was written. Test was inspected, not executed."
+        },
+        {
+          "path": "src/agent_resume.rs",
+          "lines": "58-89,199-216",
+          "symbols": [
+            "validate_resume_argv",
+            "plan"
+          ],
+          "claim": "Resume is a provider-specific command plan using a validated session reference, including claude --resume and codex resume. Reattaching is distinct from starting a replacement conversation."
+        },
+        {
+          "path": "docs/next/website/src/content/docs/agents.mdx",
+          "lines": "20-44,65-78",
+          "symbols": [],
+          "claim": "Agent status can be screen-derived or self-reported. Gemini CLI is explicitly state-only and less tested. Unknown dialogs can look idle; status is not permission."
+        },
+        {
+          "path": "docs/next/website/src/content/docs/session-state.mdx",
+          "lines": "17-35,61-65",
+          "symbols": [],
+          "claim": "Detach preserves live processes; server restart restores shape and supported provider sessions, not arbitrary running processes. Pane history is off by default because it may contain sensitive output."
+        },
+        {
+          "path": "src/persist.rs",
+          "lines": "1-23",
+          "symbols": [
+            "SessionWriter",
+            "SessionSnapshot"
+          ],
+          "claim": "Persistence separates layout, optional history and plugins; the architecture does not require importing provider-private stored chats."
+        },
+        {
+          "path": "LICENSE",
+          "lines": "1-8",
+          "symbols": [],
+          "claim": "Apache License 2.0 is present."
+        }
+      ],
+      "limitations": "No Herdr binary was installed or run. Current upstream code postdates the video, and docs/next may differ from a released version. Terminal status inference cannot promise exactly-once turn completion."
+    },
+    {
+      "kind": "repository",
+      "name": "Nexus Harness public snapshot",
+      "url": "https://github.com/KZTP47/nexus-harness",
+      "commit": "d5b799b80e4ade5b22cb0377e085ddc96c65c1d7",
+      "license": "No root LICENSE/LICENSE.md/LICENSE.txt/COPYING or project license field found in the inspected snapshot. THIRD_PARTY_NOTICES.md licenses dependencies, not the whole Nexus project. Independent implementation recommended.",
+      "evidence": [
+        {
+          "path": "src/our_harness/agent_runtime/codex_session.py",
+          "lines": "13-79,103-128",
+          "symbols": [
+            "CodexSession.start",
+            "CodexSession._steer"
+          ],
+          "claim": "Uses persistent app-server thread/start or thread/resume, explicit thread IDs and turn/steer. Rules enter as developerInstructions; access maps both sandbox and approvalPolicy."
+        },
+        {
+          "path": "src/our_harness/agent_runtime/claude_session.py",
+          "lines": "1-3,28-34,54-80,185-189",
+          "symbols": [
+            "ClaudeSession"
+          ],
+          "claim": "Persistent stream-json process with provider resume ID; rules are appended through a system-prompt file. This refutes blanket claims that Nexus always restarts a model for every message."
+        },
+        {
+          "path": "src/our_harness/agent_runtime/acp_session.py",
+          "lines": "13-16,42-43,55-108,116-125",
+          "symbols": [
+            "AcpSession.start",
+            "AcpSession._open",
+            "AcpSession._start_turn"
+          ],
+          "claim": "Gemini/Copilot use ACP capability negotiation and optional session/load; mid-turn steering is unsupported and input queues. Saved account authentication is requested through the CLI, not an extracted credential."
+        },
+        {
+          "path": "src/our_harness/agent_runtime/team.py",
+          "lines": "26-55,186-199,207-223,249-268,427-444",
+          "symbols": [
+            "STANDING_RULES",
+            "TeamRun._workdir",
+            "TeamRun.start",
+            "TeamRun.kickoff",
+            "TeamRun._deliver"
+          ],
+          "claim": "All sessions receive opinionated standing instructions and lead/member briefings. Worktree creation failure falls back to shared project folder. Delivery records unavailable/failed outcomes but still marks the entire mailbox message delivered."
+        },
+        {
+          "path": "src/our_harness/agent_runtime/base.py",
+          "lines": "18-41,91-112",
+          "symbols": [
+            "SeatSpec",
+            "AgentSession.send"
+          ],
+          "claim": "Stable seat differs from provider session; busy agents auto-steer if supported or enqueue. Adapter defaults and behavior must be made explicit to the user."
+        },
+        {
+          "path": "src/our_harness/agent_runtime/mailbox.py",
+          "lines": "31-32,88-106,134-156,183-209",
+          "symbols": [
+            "Mailbox.send",
+            "Mailbox.mark_delivered",
+            "Mailbox.update_task",
+            "Mailbox.reserve"
+          ],
+          "claim": "SQLite messages/tasks/leases are useful primitives, but send slices message text at 20000 characters and one delivered timestamp is not a recipient-by-recipient acknowledgement."
+        },
+        {
+          "path": "src/our_harness/chat.py",
+          "lines": "245-266,361-391",
+          "symbols": [
+            "LONG_HORIZON_CONTEXT_POLICY",
+            "HOW_TO_WORK_TOGETHER",
+            "HOW_TO_WORK_TOGETHER_NATIVE"
+          ],
+          "claim": "Older collaboration engine projects history to 120000 characters plus a 40000-character semantic summary and imposes a structured action schema. These policies are separate from the persistent v3 native sessions."
+        },
+        {
+          "path": "THIRD_PARTY_NOTICES.md",
+          "lines": "1-18",
+          "symbols": [],
+          "claim": "Dependency notices are present; these do not establish permission to copy the Nexus project itself."
+        }
+      ],
+      "limitations": "Source was discovered using gh repository listing, then clean sparse checkout of src and desktop; no local Nexus installation, stored conversations, auth, .env or memory vault was consulted. This is a public commit comparison, not proof it matches the user's installed build or a measured explanation of quality loss."
+    },
+    {
+      "kind": "video",
+      "name": "I Run an AI Civilization in Herdr",
+      "url": "https://www.youtube.com/watch?v=AL-PQuB2wy0",
+      "evidence": [
+        {
+          "url": "https://www.youtube.com/watch?v=AL-PQuB2wy0",
+          "claim": "The user-provided URL resolves to a page with this title; the fetched page did not expose captions or substantive video text."
+        },
+        {
+          "url": "https://github.com/mvschwarz/openrig/discussions/52",
+          "lines": "141-150",
+          "claim": "Author mvschwarz explicitly links this exact video and the companion article while explaining persistent seats, owned work queues and inspectable terminals."
+        },
+        {
+          "url": "https://openrig.dev/blog/agent-civilizations",
+          "lines": "65-84",
+          "claim": "Author's companion article discusses scope inflation, approval by a peer missing relevant context, and Refocus restoring the task-to-project intent chain after compaction."
+        }
+      ],
+      "limitations": "No transcript or playable audiovisual content was retrieved; no timestamped claims, visual layout claims or claim of watching the full video is made. Companion article is separately attributed. Its security-evaluation narrative was not independently investigated and is not treated as factual evidence here."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F1",
+      "title": "Separate persistent agents from optional autonomous recipes",
+      "conclusion": "Herdr manages real terminals, SWE-AF owns a structured engineering pipeline, and Nexus contains both persistent native sessions and older projected action-schema collaboration. Mixing these models hides policy changes from the user.",
+      "evidence": [
+        "SWE-AF:swe_af/execution/coding_loop.py:515",
+        "Herdr:src/api/wait.rs:177",
+        "Nexus:src/our_harness/agent_runtime/codex_session.py:36"
+      ],
+      "confidence": "high static evidence"
+    },
+    {
+      "id": "F2",
+      "title": "Do not convert quality debt into green success",
+      "conclusion": "SWE-AF distinguishes completed_with_debt from complete after a nonblocking stuck/exhausted loop. Default independent QA is not universal. An LVX UI must show evidence, unresolved criteria and the selected recipe rather than an undifferentiated Done badge.",
+      "evidence": [
+        "SWE-AF:swe_af/execution/coding_loop.py:515-590,794-883"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "F3",
+      "title": "Permission and transport are separate contracts",
+      "conclusion": "SWE-AF auto can bypass sandbox/approvals; Herdr prompt status does not authorize a dialog response; Nexus rewrites provider access into several policies. LVX needs user-visible permission mappings and may never infer approval from a communication edge.",
+      "evidence": [
+        "SWE-AF:swe_af/runtime/codex_harness_patch.py:262",
+        "Herdr:src/app/api/agents.rs:168",
+        "Nexus:src/our_harness/agent_runtime/codex_session.py:13-18"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "F4",
+      "title": "Persistent session support must be negotiated per provider",
+      "conclusion": "Nexus demonstrates Codex app-server, Claude stream-json and Gemini ACP with distinct resume/steering capabilities. SWE-AF's native runtime list does not prove Gemini subscription support. A subscription label is never proof of installed CLI readiness, entitlement or current allowance.",
+      "evidence": [
+        "Nexus:src/our_harness/agent_runtime/acp_session.py:55-108",
+        "SWE-AF:swe_af/runtime/providers.py:5-49"
+      ],
+      "confidence": "high implementation distinction; entitlements unverified"
+    },
+    {
+      "id": "F5",
+      "title": "Message admission is not delivery or completed work",
+      "conclusion": "Herdr's effect detection improves confidence but remains lifecycle-based. Nexus can mark a message delivered after failed/unavailable recipients and slices long message text. LVX should persist a per-recipient outbox and explicit acceptance/start/result events, preserving unresolved deliveries after restart.",
+      "evidence": [
+        "Herdr:src/api/wait.rs:244-283",
+        "Nexus:src/our_harness/agent_runtime/team.py:427-444",
+        "Nexus:src/our_harness/agent_runtime/mailbox.py:88-106"
+      ],
+      "confidence": "high source finding; runtime impact not reproduced"
+    },
+    {
+      "id": "F6",
+      "title": "Invisible prompt policy is a credible interference mechanism",
+      "conclusion": "Nexus unconditionally adds standing instructions including a file:// web-page requirement and reporting constraints; older engine requests action-schema JSON. Mid-turn peer steering can add new work to an active turn. These can conflict with ordinary project expectations; they do not establish the cause of reported quality loss without a matched controlled experiment.",
+      "evidence": [
+        "Nexus:src/our_harness/agent_runtime/team.py:26-55,214",
+        "Nexus:src/our_harness/agent_runtime/base.py:98-106",
+        "Nexus:src/our_harness/chat.py:361-391"
+      ],
+      "confidence": "high mechanism; causal explanation unproven"
+    },
+    {
+      "id": "F7",
+      "title": "Parallel writes require real isolation and integration evidence",
+      "conclusion": "SWE-AF caps issue concurrency and integrates dependency levels; Nexus exposes leases but worktree setup can fall back to shared cwd. A diagram edge alone cannot prevent file collisions. Requested isolated worktrees should fail visibly rather than downgrade silently.",
+      "evidence": [
+        "SWE-AF:swe_af/execution/dag_executor.py:1270-1330",
+        "Nexus:src/our_harness/agent_runtime/team.py:186-199"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "F8",
+      "title": "Continuity is more than a conversation dump",
+      "conclusion": "Preserve stable agent seat, provider thread identity, original user intent, task ownership and unresolved messages separately. SWE-AF checkpoints task state rather than proving native conversational continuity; Herdr distinguishes live detach from snapshot/session restore. Refocus is a useful intent-chain idea from the companion article.",
+      "evidence": [
+        "SWE-AF:swe_af/execution/coding_loop.py:47-74",
+        "Herdr:src/agent_resume.rs:199-216",
+        "Nexus:src/our_harness/agent_runtime/base.py:18-41",
+        "Video companion:openrig.dev/blog/agent-civilizations:81-84"
+      ],
+      "confidence": "high source distinction; proposed composition is inference"
+    }
+  ],
+  "recommendations": [
+    {
+      "id": "R1",
+      "priority": "P0",
+      "action": "Make the default a transparent visual session layer: user-selected CLI/model/cwd, provider thread ID, raw user prompt and public provider events. Show an exact briefing preview and make coordinator/reviewer recipes opt-in; never apply a universal product-specific system prompt.",
+      "basis": [
+        "F1",
+        "F6"
+      ]
+    },
+    {
+      "id": "R2",
+      "priority": "P0",
+      "action": "Represent edges as explicit directed communication permissions with recipients and task scope. Queue peer messages at turn boundaries by default; expose interrupt/steer as deliberate operations. Teammate messages are evidence, never user authorization.",
+      "basis": [
+        "F3",
+        "F5",
+        "F6"
+      ]
+    },
+    {
+      "id": "R3",
+      "priority": "P0",
+      "action": "Implement a durable per-recipient outbox with message ID, sequence, attempt, pending/admitted/observed-start/result/failure states. Do not claim exactly-once delivery where a provider cannot prove it; surface uncertain outcomes for reconciliation rather than blind resend.",
+      "basis": [
+        "F5"
+      ]
+    },
+    {
+      "id": "R4",
+      "priority": "P0",
+      "action": "Probe provider protocol capabilities and retain native sign-in. Codex app-server, Claude stream-json and Gemini ACP adapters must advertise resume/steer/tools/approval capabilities independently. Do not read provider auth files or promise that all subscriptions cover every selected model.",
+      "basis": [
+        "F3",
+        "F4"
+      ]
+    },
+    {
+      "id": "R5",
+      "priority": "P1",
+      "action": "Offer a SWE-AF-inspired recipe of plan/implement/review/optional QA/integrate/verify with bounded retries, explicit debt and acceptance-criterion evidence. Keep it independent of free-form agent chat, disable automatic PR/publication side effects by default, and require measured checks before success.",
+      "basis": [
+        "F1",
+        "F2"
+      ]
+    },
+    {
+      "id": "R6",
+      "priority": "P1",
+      "action": "Use isolated worktrees for concurrent writes, fail visibly on setup failure, and attach merged-commit checks as integration evidence. Keep concurrency limits user-controlled and conservative until quota/CPU measurements exist.",
+      "basis": [
+        "F7"
+      ]
+    },
+    {
+      "id": "R7",
+      "priority": "P1",
+      "action": "Persist project-owned append-only events plus atomic snapshots of topology, provider IDs, task state and pending deliveries. Restore into reconnecting/requires-action, never fabricated running/completed state. Make retained content/history visible and configurable.",
+      "basis": [
+        "F5",
+        "F8"
+      ]
+    },
+    {
+      "id": "R8",
+      "priority": "P1",
+      "action": "Run a matched direct-CLI versus LVX experiment with the same repo commit, provider/model/effort, permissions, user prompt and acceptance checks. Compare resulting behavior and prompt diff before adding coordination policies; use the user's actual quality concern as a measurable regression gate.",
+      "basis": [
+        "F6"
+      ]
+    }
+  ],
+  "fourPassReview": [
+    {
+      "pass": 1,
+      "result": "Inspected pinned source for all three repositories and opened the exact video, author discussion and companion article. Built architecture/capability comparison."
+    },
+    {
+      "pass": 2,
+      "result": "Expert pass traced persistent provider adapters, coder/reviewer paths, semaphore limits, checkpoint writes, delivery acknowledgements and optional learning. Replaced marketing-level comparisons with symbols and line evidence."
+    },
+    {
+      "pass": 3,
+      "result": "Refutation pass corrected blanket stateless/truncation claims about Nexus; distinguished its v3 and older engines; separated debt from success, Google API models from Gemini CLI, and Herdr detach from process survival across restart. Explicitly bounded video, runtime, entitlement and causal claims."
+    },
+    {
+      "pass": 4,
+      "result": "Polish pass reconciled JSON and Markdown recommendations, checked commit hashes and source paths/line spans, recorded licensing limits and wrote concrete implementation/failure acceptance scenarios. No upstream code or dependencies executed."
+    }
+  ]
+}

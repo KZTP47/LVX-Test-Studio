@@ -1,0 +1,574 @@
+[
+  {
+    "id": "FW-01",
+    "priority": "P0",
+    "name": "Preemptible execution and cancellation",
+    "evidence": "unit-testing.js: executeJavaScriptUnitTest; script.js: executePythonCode",
+    "current": "Custom scripts execute on the renderer thread. AbortSignal handles cooperative async code, but a synchronous loop cannot be interrupted.",
+    "acceptance": "Run scripts in terminable workers/processes; Cancel must stop a deliberate loop within two seconds and leave the editor responsive.",
+    "file": "01-execution-and-debugging.md",
+    "status": "VERIFIED",
+    "implementation": "Terminable native processes, shared run IDs and process-tree cancellation.",
+    "verification": [
+      "roadmap-execution.json",
+      "roadmap-runtime-isolation.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-02",
+    "priority": "P1",
+    "name": "Real Jest, JUnit and NUnit adapters",
+    "evidence": "unit-testing.js: runUnitTest; index.html framework selectors",
+    "current": "Unsupported framework modes now fail visibly. There is no installed backend for these engines.",
+    "acceptance": "Discover actual project tests, execute their native runners, parse machine-readable results and distinguish zero-tests, failures and runtime errors.",
+    "file": "01-execution-and-debugging.md",
+    "status": "VERIFIED",
+    "implementation": "Actual Jest/JUnit/NUnit project discovery, native reports and zero/failure/error controls.",
+    "verification": [
+      "roadmap-execution.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-03",
+    "priority": "P1",
+    "name": "A native language runtime registry",
+    "evidence": "script.js: executeJavaCode, executeCSharpCode, loadExecutionConfig",
+    "current": "Java/C# execution depends on configured remote services or limited compatibility modes, rather than a managed local JDK/.NET runtime.",
+    "acceptance": "Probe installed runtimes, show versions/capabilities, execute native fixtures locally and report missing dependencies before Run.",
+    "file": "01-execution-and-debugging.md",
+    "status": "VERIFIED",
+    "implementation": "Native runtime registry, version probes, explicit project prerequisites and editable runtime locations.",
+    "verification": [
+      "roadmap-execution.json",
+      "roadmap-e2e-results.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-04",
+    "priority": "P1",
+    "name": "Durable run sessions and process-tree cancellation",
+    "evidence": "services/playwright-runner.js; pipeline-manager.js: execution paths",
+    "current": "Playwright has a bounded child timeout, but there is no shared run-session API, cancellation token or resumable process registry across engines.",
+    "acceptance": "Assign run IDs; stream stdout/stderr; cancel child trees and persist terminal status after renderer reload or crash.",
+    "file": "01-execution-and-debugging.md",
+    "status": "VERIFIED",
+    "implementation": "Durable execution records, streamed output, interrupted-run recovery and SQLite terminal evidence.",
+    "verification": [
+      "roadmap-execution.json",
+      "roadmap-host.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-05",
+    "priority": "P1",
+    "name": "A debugger protocol shared by every engine",
+    "evidence": "debugger.js: TestDebugger; visual-web-tester.js: runTestInDebugMode",
+    "current": "Breakpoint/step fixes apply to visual steps. Python, shell and generated repository tests do not expose a unified debugger session.",
+    "acceptance": "Provide engine capabilities, breakpoint validation, variable inspection and reliable stop/resume with protocol-level integration tests.",
+    "file": "01-execution-and-debugging.md",
+    "status": "VERIFIED",
+    "implementation": "Shared capability protocol; real V8 authored breakpoints, variables and stepping. Other engines explicitly report unavailable interactive debugging.",
+    "verification": [
+      "roadmap-execution.json",
+      "roadmap-runtime-isolation.json",
+      "roadmap-authoring.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-06",
+    "priority": "P2",
+    "name": "Reusable fixtures and parameter schemas",
+    "evidence": "unit-testing.js; script.js: parameters and input_files",
+    "current": "Suite parameters and unit setup code are independent, loosely typed inputs. Shared fixtures are copied rather than versioned dependencies.",
+    "acceptance": "Add typed parameter validation, reusable setup/cleanup fixtures and explicit secret parameters; cleanup runs even when setup or assertions fail.",
+    "file": "01-execution-and-debugging.md",
+    "status": "VERIFIED",
+    "implementation": "Versioned setup/cleanup fixtures, typed parameters and memory-only secret references.",
+    "verification": [
+      "roadmap-execution.json",
+      "roadmap-runtime-isolation.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-07",
+    "priority": "P0",
+    "name": "A real headless CI execution service",
+    "evidence": "cicd-integration.js: generated workflow templates",
+    "current": "Generated CI templates now validate terminal JSON summaries. The corresponding hosted/headless execution API is not supplied by this desktop repository.",
+    "acceptance": "Ship an authenticated CLI/service returning documented total/passed/failed/errors and nonzero exit for failure, error, pending or zero tests; exercise GitHub/GitLab/Jenkins fixtures against it.",
+    "file": "02-pipelines-and-ci.md",
+    "status": "VERIFIED",
+    "implementation": "Authenticated CLI/loopback service, genuine terminal counts and provider templates invoking the shipped runner.",
+    "verification": [
+      "roadmap-execution.json",
+      "roadmap-credential-compat.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-08",
+    "priority": "P1",
+    "name": "Parallel graph scheduling and resource locks",
+    "evidence": "graph-engine.js: execute",
+    "current": "The DAG runs sequentially after topological sorting. The comment mentions future parallelism, but no scheduler or concurrency control exists.",
+    "acceptance": "Run independent nodes concurrently with configurable limits and per-resource locks; preserve dependency isolation, cancellation and deterministic evidence.",
+    "file": "02-pipelines-and-ci.md",
+    "status": "VERIFIED",
+    "implementation": "Parallel dependency scheduler, bounded concurrency and resource locks.",
+    "verification": [
+      "roadmap-execution.json",
+      "roadmap-authoring.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-09",
+    "priority": "P1",
+    "name": "Explicit artifact contracts and provenance",
+    "evidence": "graph-engine.js: _resolveInputs",
+    "current": "Ancestor filtering is repaired, but artifacts still merge by string key. Two ancestors can publish the same name without an explicit conflict strategy.",
+    "acceptance": "Add typed ports, producer/run provenance and validation; reject ambiguous collisions or require an explicit mapping before execution.",
+    "file": "02-pipelines-and-ci.md",
+    "status": "VERIFIED",
+    "implementation": "Typed input/output editors, explicit mappings, collision checks and producer/run provenance.",
+    "verification": [
+      "roadmap-execution.json",
+      "roadmap-authoring.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-10",
+    "priority": "P1",
+    "name": "Run history, retries and failure strategies",
+    "evidence": "pipeline-manager.js: runGraphPipeline, runPipeline",
+    "current": "Pipelines store lastRun/lastStatus and an in-memory console. There is no durable per-node run graph, retry policy or resumable execution.",
+    "acceptance": "Persist every attempt and node state; implement bounded backoff, stop/continue policies and safe rerun-from-failed-node with linked original evidence.",
+    "file": "02-pipelines-and-ci.md",
+    "status": "VERIFIED",
+    "implementation": "Persisted node attempts, bounded retries, failure policy and linked rerun-from-failed evidence.",
+    "verification": [
+      "roadmap-execution.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-11",
+    "priority": "P1",
+    "name": "Versioned workflow schema and graph validation",
+    "evidence": "visual-editor.js: getGraph/loadGraph; graph-engine.js: _getTopologicalSort",
+    "current": "Saved graph objects have no formal schema/version migration layer. Cycle errors are handled at run time.",
+    "acceptance": "Validate dangling edges, duplicate IDs, missing configuration and cycles before Save/Run; migrate old underscore types without data loss.",
+    "file": "02-pipelines-and-ci.md",
+    "status": "VERIFIED",
+    "implementation": "Versioned graph schema, migration and pre-save/run structural validation.",
+    "verification": [
+      "roadmap-execution.json",
+      "roadmap-e2e-results.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-12",
+    "priority": "P2",
+    "name": "Portable workflow import, templates and scheduling",
+    "evidence": "pipeline-manager.js; collaboration.js exports",
+    "current": "Test sharing exists; a complete portable workspace/pipeline package and background scheduler do not. Removed automatic demo suites must not return.",
+    "acceptance": "Export versioned dependency bundles; offer explicitly chosen templates without seeding user data; add opt-in schedules with missed-run policy and cancellation.",
+    "file": "02-pipelines-and-ci.md",
+    "status": "VERIFIED",
+    "implementation": "Explicit templates, checksummed fixture bundles and workspace-scoped opt-in schedules; imports disable timers.",
+    "verification": [
+      "roadmap-execution.json",
+      "roadmap-runtime-isolation.json",
+      "roadmap-host.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-13",
+    "priority": "P0",
+    "name": "OS-backed credential storage and redaction",
+    "evidence": "visual-editor.js: cfg-ai-apikey and node.data.apiKey; script.js: execution_config",
+    "current": "API keys/configuration can be persisted with application data or graph objects. There is no central credential reference store or general log/export redactor.",
+    "acceptance": "Store secrets with Electron safeStorage/OS facilities, persist opaque references, redact exports/logs and test backups for accidental secret inclusion.",
+    "file": "03-security-and-trust.md",
+    "status": "VERIFIED",
+    "implementation": "OS-encrypted vault, protected legacy configs, opaque references, actual protected HTTP and redacted evidence.",
+    "verification": [
+      "roadmap-security.json",
+      "roadmap-credential-compat.json",
+      "roadmap-host.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-14",
+    "priority": "P0",
+    "name": "Workspace trust and scoped desktop capabilities",
+    "evidence": "preload.js; main.js: file-ops, sys-ops, git-ops",
+    "current": "The renderer can request filesystem and command operations. Running user-authored tests is intentional, but there is no explicit workspace trust/capability model.",
+    "acceptance": "Bind each run to a selected workspace, validate IPC payloads and sender, scope read/write/command access and require explicit trust for imported executable workflows.",
+    "file": "03-security-and-trust.md",
+    "status": "VERIFIED",
+    "implementation": "Validated main-frame IPC, canonical workspace scope, imported-code review and stale read/write binding.",
+    "verification": [
+      "roadmap-security.json",
+      "roadmap-host.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-15",
+    "priority": "P1",
+    "name": "Actual infrastructure scanner adapters",
+    "evidence": "security-testing.js: scanInfrastructure and Docker/K8s/network scanners",
+    "current": "The old green stubs are replaced by explicit unavailable errors. No Docker, Kubernetes or network scanning backend ships in the app.",
+    "acceptance": "Implement separately installable, versioned adapters with authorized targets, structured findings, coverage/error state and real positive/negative fixtures.",
+    "file": "03-security-and-trust.md",
+    "status": "VERIFIED",
+    "implementation": "Versioned installable local configuration/network adapters, authorized targets and explicit unsupported modes.",
+    "verification": [
+      "roadmap-security.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-16",
+    "priority": "P1",
+    "name": "Dependency resolution from lockfiles and SBOMs",
+    "evidence": "security-testing.js: DependencyScanner",
+    "current": "OSV lookups now fail incomplete coverage for unresolved ranges. Exact direct versions work, but transitive lockfile inventory is absent.",
+    "acceptance": "Parse package-lock/pnpm/yarn/Python lockfiles or CycloneDX; deduplicate exact versions, track every lookup and fail incomplete coverage without losing findings.",
+    "file": "03-security-and-trust.md",
+    "status": "VERIFIED",
+    "implementation": "Supported lockfile/SBOM exact-version inventory, deduplication and complete lookup accounting.",
+    "verification": [
+      "roadmap-security.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-17",
+    "priority": "P1",
+    "name": "Scanner evidence, policy scope and suppressions",
+    "evidence": "security-testing.js: SASTScanner, SecretsScanner, checkPolicy",
+    "current": "Local checks are pattern based. There is no syntax-aware taint analysis, reviewed suppression workflow or signed coverage record.",
+    "acceptance": "Document supported rules/languages, add locations and fingerprints, expiring reviewed suppressions and explicit completeness; never advertise heuristic checks as proof of security.",
+    "file": "03-security-and-trust.md",
+    "status": "VERIFIED",
+    "implementation": "Stated rule coverage, locations/fingerprints, policy scope and expiring reviewed suppressions.",
+    "verification": [
+      "roadmap-security.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-18",
+    "priority": "P1",
+    "name": "Controlled preview isolation and network policy",
+    "evidence": "visual-web-tester.js: iframe execution; main.js: BrowserWindow",
+    "current": "Uploaded HTML/JS runs for testing and desktop IPC can execute authored commands. Cross-origin and untrusted-content behavior needs a deliberate trust design.",
+    "acceptance": "Separate preview origin/process from privileged renderer, restrict bridge exposure, define CSP/network policy and test that untrusted content cannot access desktop capabilities.",
+    "file": "03-security-and-trust.md",
+    "status": "VERIFIED",
+    "implementation": "Static picker snapshots, isolated browser execution and authenticated allowlisted DOM evidence.",
+    "verification": [
+      "roadmap-preview.json",
+      "roadmap-host.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-19",
+    "priority": "P0",
+    "name": "Transactional workspace persistence and backup",
+    "evidence": "script.js: LocalStorageBackend; indexeddb-version-storage.js",
+    "current": "Concurrent in-process suite mutations are repaired. Suites/settings/history remain split across localStorage and IndexedDB rather than one transactional workspace store.",
+    "acceptance": "Introduce schema-versioned SQLite/IndexedDB storage, transactional multi-record changes, export/import backup and recovery tests for quota, abort, corruption and interrupted migration.",
+    "file": "04-data-and-collaboration.md",
+    "status": "VERIFIED",
+    "implementation": "SQLite/WAL transactions, durable migrations, quota/recovery controls and visual corrupt-database archive recovery.",
+    "verification": [
+      "roadmap-workspace.json",
+      "roadmap-storage-bridge.json",
+      "roadmap-recovery.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-20",
+    "priority": "P1",
+    "name": "Cross-window conflict detection",
+    "evidence": "script.js: LocalStorageBackend pending queue; collaboration.js",
+    "current": "The mutation queue protects one renderer. Multiple windows/processes or cloud writers do not share that queue or revision compare-and-swap.",
+    "acceptance": "Use record revisions and atomic writes; surface conflict UI, merge/reload choices and tests with two actual app windows.",
+    "file": "04-data-and-collaboration.md",
+    "status": "VERIFIED",
+    "implementation": "Actual two-window CAS, field-selection merges, reload, draft export and deleted-record copy.",
+    "verification": [
+      "roadmap-storage-bridge.json",
+      "roadmap-authoring.json",
+      "roadmap-host.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-21",
+    "priority": "P1",
+    "name": "A complete portable project archive",
+    "evidence": "collaboration.js: exportForTeam; data-manager.js; environment-manager.js",
+    "current": "Sharing covers suites/snapshots. Referenced datasets, environment secrets, baselines, pipelines and artifact history are not one validated portable archive.",
+    "acceptance": "Define an archive manifest with checksums/schema, include selected dependencies, exclude secrets by default and validate/preview imports before atomic commit.",
+    "file": "04-data-and-collaboration.md",
+    "status": "VERIFIED",
+    "implementation": "Checksummed selected record dependencies, binary evidence, native baselines/configuration and precommit validation.",
+    "verification": [
+      "roadmap-workspace.json",
+      "roadmap-host.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-22",
+    "priority": "P1",
+    "name": "Authenticated team workspaces and permissions",
+    "evidence": "collaboration.js; script.js: FirebaseBackend, PostgRESTBackend",
+    "current": "Share/export helpers and configurable storage are not a full team service with roles, audit log, conflict resolution and tenant isolation.",
+    "acceptance": "Provide authenticated identities, owner/editor/viewer policies, revocable shares, server-enforced authorization and concurrent edit tests.",
+    "file": "04-data-and-collaboration.md",
+    "status": "VERIFIED",
+    "implementation": "Authenticated loopback team service, server roles, identity revocation and concurrent revisions.",
+    "verification": [
+      "roadmap-workspace.json",
+      "roadmap-e2e-results.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-23",
+    "priority": "P1",
+    "name": "Artifact storage and retention controls",
+    "evidence": "advanced-assertions.js: baseline_screenshots; reporting-dashboard.js: test_execution_history",
+    "current": "Screenshots/history use browser storage with fixed caps. There is no configurable filesystem artifact repository, quota management or retention UI.",
+    "acceptance": "Store binary artifacts by run ID, show disk usage, configure retention and pin evidence; deletions must preserve pinned runs and report recoverable errors.",
+    "file": "04-data-and-collaboration.md",
+    "status": "VERIFIED",
+    "implementation": "Binary/log/result artifacts by run, disk usage, pinning and previewable retention.",
+    "verification": [
+      "roadmap-workspace.json",
+      "roadmap-host.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-24",
+    "priority": "P2",
+    "name": "Dataset types, large files and privacy controls",
+    "evidence": "data-manager.js: parseCSV, saveDataSet, replaceVariables",
+    "current": "CSV escaping and literal replacement are repaired. There is no typed schema, streaming import or masking/generation policy for sensitive columns.",
+    "acceptance": "Validate required/type/range constraints with row-level errors, stream large inputs and offer deterministic synthetic data plus opt-in masking.",
+    "file": "04-data-and-collaboration.md",
+    "status": "VERIFIED",
+    "implementation": "Typed/ranged/required streaming CSV validation, saved datasets, deterministic generation, masking and explicit row batches.",
+    "verification": [
+      "roadmap-workspace.json",
+      "roadmap-authoring.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-25",
+    "priority": "P1",
+    "name": "Accessible application navigation and dialogs",
+    "evidence": "index.html; styles.css; modal open/close functions",
+    "current": "SVG icons, focus-visible styling and reduced motion are added. Full modal focus trapping, return focus, keyboard graph editing and screen-reader coverage remain incomplete.",
+    "acceptance": "Audit with a keyboard and screen reader, implement dialog semantics/focus lifecycle and accessible graph alternatives; test common flows at 200% zoom.",
+    "file": "05-product-quality-and-release.md",
+    "status": "EXTERNAL PREREQUISITE",
+    "implementation": "Named accessibility tree, semantic dialogs, trapped Tab, Escape/focus return, accessible workflow list and 200% zoom.",
+    "verification": [
+      "roadmap-e2e-results.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "Automated accessibility-tree, keyboard and 200% zoom controls pass; an actual screen-reader session remains unverified.",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-26",
+    "priority": "P1",
+    "name": "Capability-aware onboarding and diagnostics",
+    "evidence": "index.html: execution/storage settings; script.js: initialization",
+    "current": "A fresh profile starts empty. There is no unified capability page explaining which local/remote engines are ready, missing or unsupported.",
+    "acceptance": "Show runtime/browser/adapter versions, test connections, actionable recovery and exportable redacted diagnostics; never use a green badge for an unavailable engine.",
+    "file": "05-product-quality-and-release.md",
+    "status": "VERIFIED",
+    "implementation": "Guided empty start, runtime/adapter diagnostics, truthful unavailable states, recovery and redacted exports.",
+    "verification": [
+      "roadmap-e2e-results.json",
+      "roadmap-authoring.json",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-27",
+    "priority": "P1",
+    "name": "Signed releases, installer tests and update strategy",
+    "evidence": "package.json: electron-builder build; main.js",
+    "current": "An unpacked Windows build can be verified locally. There is no configured publisher certificate, signed release pipeline or verified auto-update feed.",
+    "acceptance": "Add reproducible release CI, signing/secrets management, install/uninstall and upgrade tests, release checksums and a signed rollback-capable update policy.",
+    "file": "05-product-quality-and-release.md",
+    "status": "EXTERNAL PREREQUISITE",
+    "implementation": "Protected signing workflow, installer lifecycle/upgrade controls, checksums and verified signed update/rollback policy.",
+    "verification": [
+      "installer-results.json",
+      "tests/roadmap-product.test.cjs",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "A publisher certificate and a genuinely signed candidate are still required.",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-28",
+    "priority": "P1",
+    "name": "Portable development and CI verification",
+    "evidence": "tests/*.test.cjs; scripts/e2e.cjs",
+    "current": "Regression/E2E evidence is local Windows evidence. Python engines and browser payload preparation are explicit requirements; other OS distributions are not validated.",
+    "acceptance": "Run clean-clone setup in Windows CI, install pinned test extras and retain screenshots/logs; add macOS/Linux only after real platform jobs pass.",
+    "file": "05-product-quality-and-release.md",
+    "status": "EXTERNAL PREREQUISITE",
+    "implementation": "Pinned preparation, Windows CI configuration, clean-directory installation and actual source/desktop verification.",
+    "verification": [
+      "clean-room-results.json",
+      ".github/workflows/verify.yml",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "The hosted Windows workflow has no remote execution receipt; local clean-directory evidence is separate.",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-29",
+    "priority": "P2",
+    "name": "Modular architecture and stable extension API",
+    "evidence": "script.js; index.html; visual-editor.js",
+    "current": "The application still uses large global scripts, inline event handlers and compatibility SVG hydration for legacy dynamic views.",
+    "acceptance": "Extract modules with typed contracts, remove global load-order dependencies, publish extension capabilities and migrate remaining legacy renderers to semantic SVG components.",
+    "file": "05-product-quality-and-release.md",
+    "status": "VERIFIED",
+    "implementation": "Explicit service/compiler contracts, typed extension capabilities and dependency-validated synchronous legacy facade with direct SVG.",
+    "verification": [
+      "roadmap-ui-modules.json",
+      "tests/roadmap-product.test.cjs",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  },
+  {
+    "id": "FW-30",
+    "priority": "P2",
+    "name": "Project governance, documentation and release notes",
+    "evidence": "repository root; docs/verification",
+    "current": "The original repository had no explicit project license, support policy or release process. A README cannot choose legal licensing on the owner’s behalf.",
+    "acceptance": "Owner selects a license; add contribution guidelines, compatibility/support matrix, changelog and issue templates that request reproducible redacted evidence.",
+    "file": "05-product-quality-and-release.md",
+    "status": "VERIFIED",
+    "implementation": "Owner-selected MIT, contribution/security/support guidance, issue template and versioned release notes.",
+    "verification": [
+      "LICENSE",
+      "CONTRIBUTING.md",
+      "SECURITY.md",
+      "docs/SUPPORT.md",
+      "CHANGELOG.md",
+      "final-delivery-results.json",
+      "regression-results.json"
+    ],
+    "remaining": "",
+    "sourceDigest": "e91f113dc376ee0f520e1e9aaaccbf6c4d8c76249e71c85d2a3a1729dded7d9a"
+  }
+]

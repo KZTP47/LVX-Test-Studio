@@ -1,0 +1,1128 @@
+/* ============================================
+   WINDOWS VISTA AERO FRUTIGER STYLE
+   ============================================ */
+
+/* CRITICAL FIX: Ensure hidden elements are actually hidden 
+   even if Tailwind CDN fails to load or lags. */
+.hidden {
+    display: none !important;
+}
+
+body {
+    font-family: 'Segoe UI', 'Inter', sans-serif;
+    min-height: 100vh;
+    background: linear-gradient(180deg, #C5E7FF 0%, #E8F4FF 50%, #F0F8FF 100%);
+    color: #003366;
+    /* transition for padding-bottom */
+    transition: padding-bottom 0.3s ease-out;
+}
+
+.code-area {
+    font-family: 'Consolas', 'Monaco', monospace;
+    min-height: 200px;
+    background: #FFFFFF;
+    border: 1px solid #B8D4E8;
+    border-radius: 4px;
+}
+
+.modal-open {
+    overflow: hidden;
+}
+
+.spinner {
+    border: 3px solid rgba(76, 194, 255, 0.3);
+    border-radius: 50%;
+    border-top: 3px solid #4CC2FF;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Aero Glass Effect for Cards */
+.aero-card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 102, 204, 0.15),
+        0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+    backdrop-filter: blur(10px);
+}
+
+/* Glossy Buttons - Aero Style */
+.aero-button {
+    background: linear-gradient(180deg, #E3F2FD 0%, #BBDEFB 100%);
+    border: 1px solid #90CAF9;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 102, 204, 0.2),
+        0 1px 0 rgba(255, 255, 255, 0.8) inset;
+    color: #1565C0;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.aero-button:hover {
+    background: linear-gradient(180deg, #E8F5FD 0%, #C5E3FB 100%);
+    box-shadow: 0 3px 6px rgba(0, 102, 204, 0.25),
+        0 1px 0 rgba(255, 255, 255, 0.9) inset;
+    border-color: #64B5F6;
+}
+
+.aero-button:active {
+    background: linear-gradient(180deg, #BBDEFB 0%, #90CAF9 100%);
+    box-shadow: 0 1px 2px rgba(0, 102, 204, 0.3) inset;
+}
+
+.aero-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: linear-gradient(180deg, #E0E0E0 0%, #BDBDBD 100%);
+}
+
+/* Primary Action Buttons */
+.aero-button-primary {
+    background: linear-gradient(180deg, #64B5F6 0%, #42A5F5 50%, #2196F3 100%);
+    border: 1px solid #1E88E5;
+    color: #FFFFFF;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+.aero-button-primary:hover {
+    background: linear-gradient(180deg, #6EC1FF 0%, #4DB0FF 50%, #2BA3FF 100%);
+    box-shadow: 0 3px 8px rgba(33, 150, 243, 0.4),
+        0 1px 0 rgba(255, 255, 255, 0.3) inset;
+}
+
+/* Success Buttons */
+.aero-button-success {
+    background: linear-gradient(180deg, #81C784 0%, #66BB6A 50%, #4CAF50 100%);
+    border: 1px solid #43A047;
+    color: #FFFFFF;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+.aero-button-success:hover {
+    background: linear-gradient(180deg, #90D494 0%, #75C979 50%, #5CBF60 100%);
+}
+
+/* Warning Buttons */
+.aero-button-warning {
+    background: linear-gradient(180deg, #FFB74D 0%, #FFA726 50%, #FF9800 100%);
+    border: 1px solid #F57C00;
+    color: #FFFFFF;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+.aero-button-warning:hover {
+    background: linear-gradient(180deg, #FFC166 0%, #FFB540 50%, #FFA51A 100%);
+}
+
+/* Danger Buttons */
+.aero-button-danger {
+    background: linear-gradient(180deg, #E57373 0%, #EF5350 50%, #F44336 100%);
+    border: 1px solid #E53935;
+    color: #FFFFFF;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+.aero-button-danger:hover {
+    background: linear-gradient(180deg, #EE8484 0%, #F66361 50%, #F55549 100%);
+}
+
+/* Purple Buttons */
+.aero-button-purple {
+    background: linear-gradient(180deg, #BA68C8 0%, #AB47BC 50%, #9C27B0 100%);
+    border: 1px solid #8E24AA;
+    color: #FFFFFF;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+.aero-button-purple:hover {
+    background: linear-gradient(180deg, #C678D2 0%, #B958C8 50%, #A93CBE 100%);
+}
+
+/* Info Buttons */
+.aero-button-info {
+    background: linear-gradient(180deg, #4DD0E1 0%, #26C6DA 50%, #00BCD4 100%);
+    border: 1px solid #00ACC1;
+    color: #FFFFFF;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+.aero-button-info:hover {
+    background: linear-gradient(180deg, #5DDAEB 0%, #37D1E5 50%, #13CDDF 100%);
+}
+
+/* Gray Buttons */
+.aero-button-gray {
+    background: linear-gradient(180deg, #E0E0E0 0%, #BDBDBD 100%);
+    border: 1px solid #9E9E9E;
+    color: #424242;
+}
+
+.aero-button-gray:hover {
+    background: linear-gradient(180deg, #EEEEEE 0%, #CECECE 100%);
+}
+
+/* Input Fields - Aero Style */
+.aero-input {
+    background: linear-gradient(180deg, #FAFAFA 0%, #FFFFFF 100%);
+    border: 1px solid #B8D4E8;
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0, 102, 204, 0.1) inset,
+        0 0 0 1px rgba(255, 255, 255, 0.8);
+    color: #003366;
+}
+
+.aero-input:focus {
+    outline: none;
+    border-color: #4CC2FF;
+    box-shadow: 0 0 0 3px rgba(76, 194, 255, 0.2),
+        0 1px 2px rgba(0, 102, 204, 0.1) inset;
+}
+
+/* Modal Backdrop */
+.aero-modal-backdrop {
+    background: rgba(100, 181, 246, 0.3);
+    backdrop-filter: blur(4px);
+}
+
+/* Modal Content */
+.aero-modal {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 248, 255, 0.95) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0, 102, 204, 0.25),
+        0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+    /* Allow resizing */
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Headers with Aero Gradient */
+.aero-header {
+    background: linear-gradient(180deg, #E3F2FD 0%, #BBDEFB 100%);
+    border-bottom: 1px solid #90CAF9;
+    box-shadow: 0 2px 8px rgba(0, 102, 204, 0.1);
+}
+
+/* Text Colors */
+.aero-text-primary {
+    color: #1565C0;
+}
+
+.aero-text-secondary {
+    color: #0277BD;
+}
+
+.aero-text-muted {
+    color: #546E7A;
+}
+
+.aero-text-warning {
+    color: #F57C00;
+}
+
+.aero-text-success {
+    color: #43A047;
+}
+
+.aero-text-danger {
+    color: #E53935;
+}
+
+/* Status Badges */
+.aero-badge-success {
+    background: linear-gradient(180deg, #81C784 0%, #66BB6A 100%);
+    color: #FFFFFF;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);
+}
+
+.aero-badge-error {
+    background: linear-gradient(180deg, #E57373 0%, #EF5350 100%);
+    color: #FFFFFF;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 4px rgba(244, 67, 54, 0.3);
+}
+
+.aero-badge-info {
+    background: linear-gradient(180deg, #64B5F6 0%, #42A5F5 100%);
+    color: #FFFFFF;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 4px rgba(33, 150, 243, 0.3);
+}
+
+/* Glass Panel Effect */
+.aero-glass-panel {
+    background: linear-gradient(135deg,
+            rgba(255, 255, 255, 0.85) 0%,
+            rgba(240, 248, 255, 0.75) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 102, 204, 0.12),
+        0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+    backdrop-filter: blur(8px);
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 14px;
+    height: 14px;
+}
+
+::-webkit-scrollbar-track {
+    background: linear-gradient(90deg, #E3F2FD 0%, #BBDEFB 100%);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #90CAF9 0%, #64B5F6 100%);
+    border-radius: 10px;
+    border: 2px solid #E3F2FD;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #9DD4FF 0%, #6EC1FF 100%);
+}
+
+/* Divider Lines */
+.aero-divider {
+    border-color: #B8D4E8;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+/* Website Testing Iframe */
+#test-website-iframe {
+    box-shadow: 0 8px 32px rgba(0, 102, 204, 0.3);
+    border: 2px solid #4CC2FF !important;
+}
+
+/* Website Integration Badge */
+.website-integration-badge {
+    background: linear-gradient(135deg, #4CC2FF 0%, #2196F3 100%);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+
+/* ============================================
+   NO-CODE BUILDER STYLES
+   ============================================ */
+
+#nocode-canvas {
+    min-height: 500px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* Ensure the main droppable area shows scroll indicators */
+.droppable-area {
+    border: 2px dashed #B8D4E8;
+    border-radius: 8px;
+    transition: background-color 0.2s ease;
+    position: relative;
+}
+
+/* Add a subtle shadow when scrolling to indicate more content */
+.droppable-area::-webkit-scrollbar {
+    width: 12px;
+}
+
+.droppable-area::-webkit-scrollbar-track {
+    background: linear-gradient(90deg, #E3F2FD 0%, #BBDEFB 100%);
+    border-radius: 8px;
+    margin: 4px;
+}
+
+.droppable-area::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #64B5F6 0%, #42A5F5 100%);
+    border-radius: 8px;
+    border: 2px solid #E3F2FD;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+}
+
+.droppable-area::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #6EC1FF 0%, #4DB0FF 100%);
+}
+
+.drag-over {
+    background-color: rgba(76, 194, 255, 0.1);
+    border-color: #4CC2FF;
+}
+
+.no-code-step {
+    cursor: grab;
+    user-select: none;
+    transition: all 0.2s ease;
+}
+
+.no-code-step:active {
+    cursor: grabbing;
+    opacity: 0.8;
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 102, 204, 0.2);
+}
+
+/* ============================================
+   NEW VISUAL WEB TESTER STYLES
+   ============================================ */
+
+/* Style for highlighting a step being dropped on */
+.drag-over-item {
+    border-top: 2px solid #1E88E5;
+    box-shadow: 0 4px 12px rgba(0, 102, 204, 0.2);
+}
+
+/* ============================================
+   NEW MINIMIZE BAR STYLES
+   ============================================ */
+
+#minimize-bar {
+    box-shadow: 0 -4px 16px rgba(0, 102, 204, 0.15);
+    border-top: 1px solid #90CAF9;
+}
+
+#minimize-bar-items-wrapper {
+    white-space: nowrap;
+}
+
+/* Hide scrollbar by default, but allow scrolling */
+#minimize-bar-items-wrapper::-webkit-scrollbar {
+    display: none;
+}
+
+.minimized-test-item {
+    display: inline-flex;
+    align-items: center;
+    background: linear-gradient(180deg, #64B5F6 0%, #42A5F5 50%, #2196F3 100%);
+    border: 1px solid #1E88E5;
+    color: #FFFFFF;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+    height: 3rem;
+    /* 48px */
+    padding-left: 1rem;
+    padding-right: 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.minimized-test-item:hover {
+    background: linear-gradient(180deg, #6EC1FF 0%, #4DB0FF 50%, #2BA3FF 100%);
+    box-shadow: 0 3px 8px rgba(33, 150, 243, 0.4);
+}
+
+.minimized-test-item .close-btn {
+    background: linear-gradient(180deg, #E57373 0%, #EF5350 50%, #F44336 100%);
+    border: 1px solid #E53935;
+    color: #FFFFFF;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+    margin-left: 0.75rem;
+    width: 1.5rem;
+    /* 24px */
+    height: 1.5rem;
+    /* 24px */
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    line-height: 1;
+    font-weight: bold;
+    transition: all 0.2s ease;
+}
+
+.minimized-test-item .close-btn:hover {
+    background: linear-gradient(180deg, #EE8484 0%, #F66361 50%, #F55549 100%);
+}
+
+/* ny style för multitests */
+
+.minimized-test-item.status-success {
+    background: linear-gradient(180deg, #81C784 0%, #66BB6A 50%, #4CAF50 100%);
+    border-color: #43A047;
+}
+
+.minimized-test-item.status-failure {
+    background: linear-gradient(180deg, #E57373 0%, #EF5350 50%, #F44336 100%);
+    border-color: #E53935;
+}
+
+/* AI Summary Item Styles */
+.ai-summary-item {
+    background: linear-gradient(180deg, #BA68C8 0%, #AB47BC 50%, #9C27B0 100%) !important;
+    border-color: #8E24AA !important;
+}
+
+.ai-summary-item:hover {
+    background: linear-gradient(180deg, #C678D2 0%, #B958C8 50%, #A93CBE 100%) !important;
+    box-shadow: 0 3px 8px rgba(156, 39, 176, 0.4) !important;
+}
+
+
+/* ============================================
+   UNIT TESTING SYSTEM STYLES
+   ============================================ */
+
+#unit-test-setup-editor,
+#unit-test-code-editor,
+#unit-test-teardown-editor {
+    background: #FFFFFF;
+    border: 1px solid #B8D4E8;
+    border-radius: 4px;
+}
+
+.unit-test-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.unit-test-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 102, 204, 0.2);
+}
+
+.suite-unit-test-count {
+    background: linear-gradient(135deg, #4CC2FF 0%, #2196F3 100%);
+    color: white;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 2px 4px rgba(33, 150, 243, 0.3);
+}
+
+/* Detailed Log Viewer */
+.unit-test-log-viewer {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.8rem;
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    border-radius: 6px;
+    padding: 12px;
+    overflow-x: auto;
+    max-height: 300px;
+    line-height: 1.5;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.unit-test-log-entry {
+    border-bottom: 1px solid #333;
+    padding: 2px 0;
+}
+
+.unit-test-log-entry:last-child {
+    border-bottom: none;
+}
+
+.unit-test-log-time {
+    color: #569cd6;
+    margin-right: 8px;
+}
+
+.unit-test-log-info {
+    color: #d4d4d4;
+}
+
+.unit-test-log-error {
+    color: #f48771;
+    font-weight: bold;
+}
+
+.unit-test-log-success {
+    color: #81c784;
+}
+
+.unit-test-log-warn {
+    color: #cca700;
+}
+
+
+/* ============================================
+   PIPELINE BUILDER STYLES
+   ============================================ */
+
+.pipeline-step {
+    transition: all 0.2s ease;
+}
+
+.pipeline-step:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+}
+
+.draggable-suite:active {
+    cursor: grabbing;
+    opacity: 0.6;
+}
+
+/* Pipeline Runner Styles */
+#pipeline-console-output {
+    font-family: 'Consolas', 'Monaco', monospace;
+    line-height: 1.4;
+}
+
+#pipeline-console-output::-webkit-scrollbar {
+    width: 8px;
+}
+
+#pipeline-console-output::-webkit-scrollbar-thumb {
+    background-color: #444;
+    border-radius: 4px;
+}
+
+#pipeline-console-output::-webkit-scrollbar-track {
+    background-color: #111;
+}
+
+/* ============================================
+   RESIZE HANDLES
+   ============================================ */
+
+#sidebar-resizer {
+    width: 6px;
+    cursor: col-resize;
+    background-color: rgba(184, 212, 232, 0.5);
+    border-left: 1px solid rgba(255, 255, 255, 0.5);
+    border-right: 1px solid rgba(0, 0, 0, 0.1);
+    transition: background-color 0.2s;
+    flex-shrink: 0;
+    margin: 0 4px;
+    border-radius: 3px;
+}
+
+#sidebar-resizer:hover,
+#sidebar-resizer.active {
+    background-color: #4CC2FF;
+}
+
+.resize-handle-corner {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 16px;
+    height: 16px;
+    cursor: se-resize;
+    background: linear-gradient(135deg, transparent 50%, #1565C0 50%);
+    border-radius: 0 0 8px 0;
+    /* Matches modal border radius */
+    opacity: 0.5;
+    z-index: 10;
+}
+
+/* ============================================
+   VISUAL EDITOR STYLES (GRAPH)
+   ============================================ */
+
+.visual-editor-container {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    background-color: #f0f2f5;
+    background-image: radial-gradient(#dbe1e8 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+.ve-canvas {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+.ve-viewport {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+.ve-svg-layer,
+.ve-node-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.ve-node {
+    position: absolute;
+    width: 300px;
+    background: white;
+    border: 1px solid #b8d4e8;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 10;
+    user-select: none;
+    cursor: move;
+}
+
+.ve-node:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    border-color: #4cc2ff;
+}
+
+.ve-node-selected {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25), 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.ve-node-header {
+    background: linear-gradient(180deg, #e3f2fd 0%, #bbdefb 100%);
+    padding: 8px 12px;
+    font-weight: 600;
+    border-bottom: 1px solid #b8d4e8;
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #003366;
+}
+
+.ve-ports {
+    position: relative;
+    height: 20px;
+}
+
+.ve-port {
+    width: 12px;
+    height: 12px;
+    background: #90caf9;
+    border: 2px solid #1565c0;
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: crosshair;
+    transition: all 0.2s;
+}
+
+.ve-port:hover {
+    transform: translateY(-50%) scale(1.2);
+    background: #4caf50;
+}
+
+.ve-input-port {
+    left: -6px;
+}
+
+.ve-output-port {
+    right: -6px;
+}
+
+.ve-delete-node {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 20px;
+    height: 20px;
+    background: #ff5252;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    z-index: 10;
+}
+
+.ve-node-run-btn {
+    width: 20px;
+    height: 20px;
+    background: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    /* Square with rounded corners */
+    font-size: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    /* Push to right */
+    margin-right: 5px;
+}
+
+.ve-node-run-btn:hover {
+    background: #43a047;
+    transform: scale(1.1);
+}
+
+.ve-node:hover .ve-delete-node {
+    display: flex;
+}
+
+.ve-toolbar {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    bottom: 20px;
+    /* Stretch to bottom with margin */
+    width: 250px;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
+    border: 1px solid #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    padding: 10px;
+    z-index: 20;
+    display: flex;
+    /* Flex layout */
+    flex-direction: column;
+}
+
+.ve-toolbar-header {
+    font-weight: bold;
+    color: #444;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+    flex-shrink: 0;
+}
+
+.ve-suite-list {
+    flex: 1;
+    /* Take remaining space */
+    overflow-y: auto;
+    /* Scrollable */
+    min-height: 0;
+    /* Flex fix */
+    margin-bottom: 10px;
+    padding-right: 5px;
+    /* Space for scrollbar */
+}
+
+/* Custom scrollbar for suite list */
+.ve-suite-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ve-suite-list::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 3px;
+}
+
+.ve-toolbar-btn-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 0;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+    flex-shrink: 0;
+}
+
+.ve-zoom-controls {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    z-index: 20;
+}
+
+.ve-zoom-controls button {
+    width: 32px;
+    height: 32px;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    color: #555;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.ve-zoom-controls button:hover {
+    background: #f5f5f5;
+}
+
+.ve-zoom-controls button.active {
+    background: #dbeafe;
+    border-color: #3b82f6;
+    color: #1d4ed8;
+}
+
+.run-progress-track {
+    width: 100%;
+    height: 10px;
+    background: rgba(148, 163, 184, 0.28);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.run-progress-fill {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #38bdf8 0%, #22c55e 100%);
+    transition: width 0.25s ease;
+}
+
+body.theme-dark {
+    background: linear-gradient(180deg, #0f172a 0%, #111827 55%, #172033 100%);
+    color: #dbeafe;
+}
+
+body.theme-dark .aero-header,
+body.theme-dark .aero-card,
+body.theme-dark .aero-modal,
+body.theme-dark .aero-glass-panel,
+body.theme-dark .ve-node,
+body.theme-dark .ve-toolbar,
+body.theme-dark .ve-top-action-bar,
+body.theme-dark .ve-zoom-controls button {
+    background: linear-gradient(180deg, rgba(30, 41, 59, 0.96) 0%, rgba(15, 23, 42, 0.94) 100%);
+    color: #e2e8f0;
+    border-color: rgba(148, 163, 184, 0.35);
+    box-shadow: 0 8px 32px rgba(2, 6, 23, 0.45);
+}
+
+body.theme-dark .aero-input {
+    background: linear-gradient(180deg, #111827 0%, #0f172a 100%);
+    color: #e2e8f0;
+    border-color: rgba(96, 165, 250, 0.4);
+}
+
+body.theme-dark .aero-input:focus {
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18), 0 1px 2px rgba(15, 23, 42, 0.5) inset;
+}
+
+body.theme-dark .aero-text-primary {
+    color: #93c5fd;
+}
+
+body.theme-dark .aero-text-secondary {
+    color: #bfdbfe;
+}
+
+body.theme-dark .aero-text-muted {
+    color: #cbd5e1;
+}
+
+body.theme-dark .aero-divider {
+    border-color: rgba(148, 163, 184, 0.35);
+    box-shadow: none;
+}
+
+body.theme-dark .aero-modal-backdrop {
+    background: rgba(2, 6, 23, 0.55);
+}
+
+body.theme-dark .ve-node-header {
+    border-bottom-color: rgba(148, 163, 184, 0.35);
+}
+
+.ve-zoom-level {
+    min-width: 56px;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    color: #374151;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+}
+
+/* ============================================
+   SECURITY TESTING CENTER STYLES
+   ============================================ */
+
+/* Security Tab Buttons */
+.security-tab-btn {
+    transition: all 0.2s ease;
+}
+
+.security-tab-btn.active {
+    background: linear-gradient(180deg, #64B5F6 0%, #42A5F5 50%, #2196F3 100%) !important;
+    border: 1px solid #1E88E5 !important;
+    color: #FFFFFF !important;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+/* Security Vulnerability Cards */
+.security-vuln-card {
+    transition: all 0.2s ease;
+}
+
+.security-vuln-card:hover {
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Severity Border Classes */
+.border-critical {
+    border-left-color: #dc2626 !important;
+}
+
+.border-high {
+    border-left-color: #f97316 !important;
+}
+
+.border-medium {
+    border-left-color: #eab308 !important;
+}
+
+.border-low {
+    border-left-color: #22c55e !important;
+}
+
+/* Security Code Display */
+.security-code-snippet {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.85rem;
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    border-radius: 4px;
+    padding: 8px 12px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Security Stats Cards */
+.security-stat-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.security-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* Policy Status Indicators */
+.policy-passed {
+    border-left: 4px solid #22c55e;
+    background: linear-gradient(90deg, rgba(34, 197, 94, 0.1) 0%, transparent 100%);
+}
+
+.policy-failed {
+    border-left: 4px solid #dc2626;
+    background: linear-gradient(90deg, rgba(220, 38, 38, 0.1) 0%, transparent 100%);
+}
+
+/* Security History Items */
+.security-history-item {
+    transition: all 0.2s ease;
+}
+
+.security-history-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Animated Scan Progress */
+@keyframes security-scan-pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.security-scanning {
+    animation: security-scan-pulse 1.5s ease-in-out infinite;
+}
+
+/* Security Badge Styles */
+.security-badge-critical {
+    background: linear-gradient(180deg, #fca5a5 0%, #f87171 100%);
+    color: #7f1d1d;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.security-badge-high {
+    background: linear-gradient(180deg, #fed7aa 0%, #fdba74 100%);
+    color: #7c2d12;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.security-badge-medium {
+    background: linear-gradient(180deg, #fef08a 0%, #facc15 100%);
+    color: #713f12;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.security-badge-low {
+    background: linear-gradient(180deg, #bbf7d0 0%, #86efac 100%);
+    color: #14532d;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* Security Code Snippet Boxes */
+.security-vuln-card pre,
+.security-vuln-card code,
+.security-vuln-card .code-snippet,
+#security-results-container pre,
+#security-results-container code {
+    color: #ffffff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Ensure any box with dark gradient has white text */
+.bg-gradient-to-r code,
+[style*="linear-gradient"] code,
+[style*="linear-gradient"] pre {
+    color: #ffffff !important;
+}

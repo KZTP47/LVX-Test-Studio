@@ -1,0 +1,3 @@
+pytest==8.4.2
+robotframework==7.3.2
+robotframework-seleniumlibrary==6.8.0

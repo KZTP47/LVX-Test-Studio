@@ -1,0 +1,80 @@
+{
+  "status": "COMPLETE",
+  "reviewedAt": "2026-10-25",
+  "method": "Static source review of pinned read-only git checkout; no installs, external scripts, provider execution, credentials or private conversations.",
+  "sources": [
+    {
+      "kind": "repository",
+      "url": "https://github.com/mvschwarz/openrig",
+      "commit": "9bb29d38819bdd2bbe5b8527ce057db606c82cf9",
+      "commitDate": "2026-10-24",
+      "license": "Apache-2.0",
+      "evidence": [
+        {"path":"LICENSE","start":1,"end":4,"supports":"Root Apache-2.0 declaration"},
+        {"path":"packages/daemon/src/domain/runtime-adapter.ts","start":85,"end":159,"supports":"Readiness, native resume failures and identity-aware launch result"},
+        {"path":"packages/daemon/src/adapters/codex-runtime-adapter.ts","start":728,"end":825,"supports":"Native interactive Codex fresh, resume and fork launch"},
+        {"path":"packages/daemon/src/adapters/codex-runtime-adapter.ts","start":863,"end":944,"supports":"Model/effort propagation plus managed config, permission/network and directory changes"},
+        {"path":"packages/daemon/src/adapters/claude-code-adapter.ts","start":290,"end":365,"supports":"Native Claude model/effort, session identity and fork flags"},
+        {"path":"packages/daemon/src/domain/built-in-runtimes.ts","start":1,"end":8,"supports":"No built-in Gemini adapter"},
+        {"path":"packages/daemon/src/adapters/community-harness-runtime-adapter.ts","start":31,"end":165,"supports":"Community extension limits and weaker readiness provenance"},
+        {"path":"packages/daemon/src/adapters/tmux.ts","start":851,"end":908,"supports":"Unique buffers, bracketed raw-LF paste and separate submission"},
+        {"path":"packages/daemon/src/lib/pane-envelope.ts","start":94,"end":129,"supports":"Addressed peer envelope and reply metadata"},
+        {"path":"packages/daemon/src/domain/session-transport.ts","start":1588,"end":1596,"supports":"Caller cancellation before input versus committed delivery"},
+        {"path":"packages/daemon/src/domain/session-transport.ts","start":2878,"end":2982,"supports":"Busy/unknown default advisory sends and positive interactive prompt guard"},
+        {"path":"packages/daemon/src/domain/session-transport.ts","start":3124,"end":3171,"supports":"Delivery render verification and rendered-unconfirmed outcome"},
+        {"path":"packages/daemon/src/domain/outbox-handler.ts","start":264,"end":378,"supports":"CAS state, explicit reclaim and ambiguous crash recovery"},
+        {"path":"packages/daemon/src/domain/seat-lifecycle-service.ts","start":853,"end":944,"supports":"Reasoned, leased and identity-checked managed seat stop"},
+        {"path":"packages/daemon/src/domain/event-bus.ts","start":53,"end":145,"supports":"Durable sequence and transactional notification envelope"},
+        {"path":"packages/daemon/src/routes/events.ts","start":15,"end":93,"supports":"SSE replay high-water mark, buffering and Last-Event-ID"},
+        {"path":"packages/daemon/src/domain/context-packs/profile-composer.ts","start":170,"end":220,"supports":"Dependency closure and budget reporting without truncation"},
+        {"path":"packages/daemon/src/domain/seat-launch-additions.ts","start":247,"end":261,"supports":"Selected agent prompt may replace native default system prompt"},
+        {"path":"packages/daemon/src/adapters/kernel-authority.ts","start":63,"end":103,"supports":"Managed compaction and operational launch settings"},
+        {"path":"packages/daemon/src/adapters/yolo-mode.ts","start":36,"end":81,"supports":"Permission floor differs from untouched CLI and explicit bypass modes"},
+        {"path":"packages/ui/src/components/topology/HostMultiRigGraph.tsx","start":348,"end":399,"supports":"React Flow graph and nodesDraggable false"},
+        {"path":"packages/ui/src/components/topology/HybridTopologyNodes.tsx","start":117,"end":198,"supports":"Agent cards, runtime identity, activity metrics and terminal preview"},
+        {"path":"packages/ui/src/components/terminal/ProgressiveTerminal.tsx","start":56,"end":100,"supports":"Static-to-live terminal with shared view cap"},
+        {"path":"packages/ui/src/components/terminal/FocusedTerminal.tsx","start":157,"end":163,"supports":"Terminal family explicitly has no chat/thread panel"},
+        {"path":"packages/ui/src/lib/topology-events.ts","start":16,"end":97,"supports":"Single EventSource hub and initially unbounded server replay request"},
+        {"path":"packages/daemon/test/draft-aware-delivery-native.test.ts","start":23,"end":109,"supports":"Real tmux simulated-composer draft protection fixture; win32 skip, no live model proof"},
+        {"path":"packages/daemon/test/outbox-handler.test.ts","start":86,"end":135,"supports":"Read-only inspection of indeterminate CAS tests"},
+        {"path":"docs/reference/developing.md","start":50,"end":54,"supports":"Experimental maintenance-mode web UI, CLI primary"},
+        {"path":"README.md","start":38,"end":45,"supports":"tmux, macOS/Linux and WSL2 Windows route, no native Windows support"}
+      ]
+    }
+  ],
+  "findings": [
+    {"id":"OR01","claim":"The daemon owns native sessions and state; HTTP/SSE/web UI are projections and controls.","evidence":["packages/daemon/src/server.ts:735-779","packages/daemon/src/domain/event-bus.ts:53-145","packages/daemon/src/db/connection.ts:7-13"],"implication":"Keep LVX sessions alive independently of graph views."},
+    {"id":"OR02","claim":"Claude and Codex launch native interactive CLIs with session resume/fork identity and optional model/effort flags.","evidence":["packages/daemon/src/adapters/claude-code-adapter.ts:290-365","packages/daemon/src/adapters/codex-runtime-adapter.ts:728-825","packages/daemon/src/adapters/codex-runtime-adapter.ts:879-944"],"implication":"Preserve provider-native conversation IDs and model/effort choices without generic chat emulation."},
+    {"id":"OR03","claim":"Gemini is not built in; community harness readiness is weaker and fork is unsupported.","evidence":["packages/daemon/src/domain/built-in-runtimes.ts:1-8","packages/daemon/src/adapters/community-harness-runtime-adapter.ts:31-165"],"implication":"Build and independently capability-test a Gemini native adapter."},
+    {"id":"OR04","claim":"Native executable preservation does not imply prompt/config preservation: startup can project guidance/skills/hooks and launch settings.","evidence":["packages/daemon/src/adapters/codex-runtime-adapter.ts:674-725","packages/daemon/src/adapters/codex-runtime-adapter.ts:863-939","packages/daemon/src/adapters/claude-code-adapter.ts:190-241"],"implication":"Do not import OpenRig's full bootstrap as LVX default."},
+    {"id":"OR05","claim":"Claude selected agent prompts can replace the default main-agent prompt; appended prompt changes may remain pending.","evidence":["packages/daemon/src/domain/seat-launch-additions.ts:247-261","packages/daemon/src/domain/seat-launch-additions.ts:378-387"],"implication":"No default role synthesis or invisible system-prompt replacement."},
+    {"id":"OR06","claim":"Peer messages use bracketed paste and explicit From/To envelopes; native terminal shells need a separate unwrapped path.","evidence":["packages/daemon/src/adapters/tmux.ts:851-908","packages/daemon/src/lib/pane-envelope.ts:94-129","packages/daemon/src/domain/session-transport.ts:2229-2237"],"implication":"Use exact full message bodies and explicit source/target metadata, with transport-specific escaping."},
+    {"id":"OR07","claim":"Busy or unknown target readiness normally sends with advisory; positive interactive prompts block unless explicitly overridden.","evidence":["packages/daemon/src/domain/session-transport.ts:2878-2982"],"implication":"LVX should default peer collaboration to an idle mailbox and distinct human steering."},
+    {"id":"OR08","claim":"Rendered-unconfirmed is honest post-write uncertainty, and delivery verification does not prove reasoning or work acceptance.","evidence":["packages/daemon/src/domain/session-transport.ts:3124-3171"],"implication":"Separate execution, transport and quality statuses."},
+    {"id":"OR09","claim":"Outbox CAS and abandoned-sending recovery preserve uncertainty, but explicit claimForDelivery can reclaim indeterminate rows.","evidence":["packages/daemon/src/domain/outbox-handler.ts:264-321","packages/daemon/src/domain/outbox-handler.ts:362-378"],"implication":"Do not claim universal exactly-once; retry only with effect knowledge."},
+    {"id":"OR10","claim":"Cancellation before write differs from interruption after input, and stop can bind expected node/session identity.","evidence":["packages/daemon/src/domain/session-transport.ts:1588-1596","packages/daemon/src/domain/seat-lifecycle-service.ts:853-944"],"implication":"Separate cancel queued turn, interrupt active turn, stop process and close panel."},
+    {"id":"OR11","claim":"SSE handles subscription-before-replay and high-water dedup; buffer growth/live write backpressure deserves validation.","evidence":["packages/daemon/src/routes/events.ts:15-93","packages/ui/src/lib/topology-events.ts:16-97"],"confidence":"Scaling concern inferred from static source; no measured performance regression.","implication":"Use bounded replay and snapshot sequence with explicit resync."},
+    {"id":"OR12","claim":"Runtime-aware context closure fails loudly; token budgets report overage without truncating pieces.","evidence":["packages/daemon/src/domain/context-packs/profile-composer.ts:170-220"],"implication":"Retain task/output fidelity while making context cost visible."},
+    {"id":"OR13","claim":"React Flow graph, agent badges, activity and progressive terminals already exist, but nodes are not draggable and the terminal family is not a chat UI.","evidence":["packages/ui/src/components/topology/HostMultiRigGraph.tsx:348-399","packages/ui/src/components/topology/HybridTopologyNodes.tsx:117-198","packages/ui/src/components/terminal/ProgressiveTerminal.tsx:56-100","packages/ui/src/components/terminal/FocusedTerminal.tsx:157-163"],"implication":"Borrow presentation concepts while building LVX conversation/history controls explicitly."},
+    {"id":"OR14","claim":"The web UI is experimental/maintenance mode; native Windows is unsupported, WSL2 is the documented route.","evidence":["docs/reference/developing.md:50-54","README.md:38-45"],"implication":"Avoid wholesale runtime/UI dependency for a native Windows studio."},
+    {"id":"OR15","claim":"Default permission floors and managed compaction settings differ from an untouched CLI.","evidence":["packages/daemon/src/adapters/yolo-mode.ts:36-81","packages/daemon/src/adapters/kernel-authority.ts:63-103"],"implication":"Preserve chosen native policy; never add bypass to make orchestration succeed."},
+    {"id":"OR16","claim":"Inspected draft and outbox test source provides useful race fixtures but no local/live-provider verification.","evidence":["packages/daemon/test/draft-aware-delivery-native.test.ts:23-109","packages/daemon/test/outbox-handler.test.ts:86-135"],"implication":"Create LVX fixtures plus separately disclosed real native-provider smoke checks."}
+  ],
+  "recommendations": [
+    {"id":"R1","priority":"required","action":"Native adapter contract with start/runTurn/resume/interrupt/stop and optional fork, capability probing, exact effective launch metadata, provider-native conversation ID and generation.","basis":["OR02","OR03","OR10"]},
+    {"id":"R2","priority":"required","action":"Default to no generated project guidance, system/main-agent prompt, plugin installation, forced compaction or yolo. Pass original task unchanged; preserve omitted model/effort as provider defaults.","basis":["OR04","OR05","OR15"]},
+    {"id":"R3","priority":"required","action":"Durable full-text peer mailbox with IDs/body hashes, from/to and generation metadata, idle admission, one active turn per conversation and visible bounded routing.","basis":["OR06","OR07","OR09"]},
+    {"id":"R4","priority":"required","action":"Separate queued/admitted/started/completed/blocked execution from transport receipts and unreviewed/accepted/rejected quality; retain complete provider output and artifact paths.","basis":["OR08","OR12"]},
+    {"id":"R5","priority":"required","action":"Daemon-owned sessions, append-only sequenced events, bounded SSE replay, snapshot resync and cancellation that cannot later write a cancelled queued turn.","basis":["OR01","OR10","OR11"]},
+    {"id":"R6","priority":"recommended","action":"Draggable graph with provider/model/state cards, human/peer/routing edge distinctions, selected-node conversation drawer, full peer history, inspectable settings and optional native terminal.","basis":["OR13","OR14"]},
+    {"id":"R7","priority":"required","action":"Run untouched-CLI versus LVX acceptance trials with equal provider/model/effort, cwd snapshot and task, verifying tool behavior, context retention, full-output fidelity, resume and peer handoff before claiming model-quality parity.","basis":["OR04","OR05","OR08","OR12","OR16"]},
+    {"id":"R8","priority":"required","action":"Test fake CLI partial Unicode/multiline output, auth/permission gates, delayed completion, cancellation at both effect boundaries, mismatched resumes and post-write unknown outcomes; use manual native smoke checks only for installed authenticated providers.","basis":["OR03","OR09","OR10","OR16"]}
+  ],
+  "fourPasses": {
+    "implementation":"Traced actual daemon, adapter, transport, state and UI source; wrote complete report and structured findings.",
+    "expertReread":"Separated native identity, delivery render, execution completion and quality acceptance; checked model/effort and prompt mutation semantics.",
+    "refutation":"Corrected unsupported Gemini parity, untouched-native-context assumption, universal exactly-once claim, terminal-receipt quality claim and editable/supported web canvas assumption.",
+    "polish":"Pinned line anchors, made each recommendation concrete, recorded static-only limits and prepared artifact/source-anchor self-check. Parent depth review remains independent."
+  },
+  "limitations":["No dependency installation or external repository code executed.","Source tests inspected but not run.","No live provider sessions, credentials, private user chats or Obsidian vaults accessed.","No measured native Windows/WSL compatibility, throughput or model-quality parity.","Repository license reviewed; complete third-party dependency/license audit not performed."]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "copy-of-copy-of-lvx-machina---automated-test-manager",
+  "private": true,
+  "version": "0.0.0",
+  "main": "main.js",
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "electron-updater": "^6.1.7"
+  }
+}

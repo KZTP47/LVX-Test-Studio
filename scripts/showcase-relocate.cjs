@@ -1,0 +1,20 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict'),crypto=require('node:crypto'),{spawnSync,spawn,execFileSync}=require('node:child_process');const {root,hash}=require('./source-manifest.cjs');const {folder,BASE,MARKER,launch,until}=require('./build-showcase.cjs');
+async function run(stage){
+ const proofFile=path.join(folder,'evidence/relocation-results.json');let proof;
+ if(stage==='prepare'){
+  const destination=path.join(root,'exports','Showcase-relocated-'+Date.now());assert.equal(path.dirname(destination),path.join(root,'exports'));assert.ok(!fs.existsSync(destination));
+  execFileSync('python',['-c','import pathlib,sys,zipfile; z=zipfile.ZipFile(sys.argv[1]); d=pathlib.Path(sys.argv[2]).resolve(); assert all(p.resolve().is_relative_to(d) for p in (d / n for n in z.namelist())); z.extractall(d)',folder+'.zip',destination],{windowsHide:true});
+  const denied=spawnSync('powershell.exe',['-NoProfile','-File',path.join(destination,'Start Showcase.ps1')],{encoding:'utf8',windowsHide:true});assert.notEqual(denied.status,0);assert.match(denied.stderr,/another copy of this lab/);assert.ok(fs.existsSync(path.join(destination,'workspace/source/.git/HEAD')));
+  proof={status:'PREPARED',archiveSha256:hash(fs.readFileSync(path.join(folder,'LVX-Advanced-Showcase.lvx.json'))),zipSha256:hash(fs.readFileSync(folder+'.zip')),destination,differentCopyServiceRejected:true,sourceGitIncluded:true};fs.writeFileSync(proofFile,JSON.stringify(proof,null,2));console.log('LVX_SHOWCASE_RELOCATION_PREPARED');return;
+ }
+ proof=JSON.parse(fs.readFileSync(proofFile));const destination=proof.destination,project=path.join(destination,'workspace');assert.equal(path.dirname(destination),path.join(root,'exports'));assert.ok(destination!==folder);
+ let service,client;try{
+  service=spawn(process.execPath,[path.join(destination,'lab-server.cjs')],{cwd:destination,windowsHide:true,stdio:'ignore'});await until(()=>fetch(BASE+'/health').then(r=>r.json()).then(h=>h.workspace===fs.realpathSync(project)).catch(()=>false),'relocated service workspace identity',10000);
+  const profileName='relocation-'+Date.now();await require('./open-showcase.cjs').open(destination,{verifyOnly:true,profileName});const profile=path.join(process.env.LOCALAPPDATA,'LVXShowcases',crypto.createHash('sha256').update(fs.realpathSync(destination)+profileName).digest('hex').slice(0,20));client=await launch(profile,project);
+  const graphs=(await client.invoke('workspace','list',{collection:'workflows'})).records.map(r=>r.value),done=[];
+  for(const name of ['02','04']){let workflow=graphs.find(g=>g.name.startsWith(name));if(name==='02')workflow={...workflow,nodes:workflow.nodes.slice(0,3),edges:workflow.edges.filter(e=>!['ai-tests','ai-test-logs'].includes(e.source)&&!['ai-tests','ai-test-logs'].includes(e.target))};const started=await client.invoke('execution','runWorkflow',{workflow});const result=await until(async()=>{const r=await client.invoke('execution','getRun',{id:started.id});return ['SUCCESS','ERROR','FAILURE','CANCELLED'].includes(r.status)?r:null;},'relocated '+name);assert.equal(result.status,'SUCCESS',result.stderr);done.push({workflow:workflow.name,runId:result.id,status:result.status,scope:name==='02'?'Real local Git clone, branch and existing six Node tests; paid generation omitted in this relocation check':'Complete recovery, typed artifacts and resource-lock graph'});}
+  proof={...proof,status:'SUCCESS',at:new Date().toISOString(),workspace:project,runs:done,noProviderCalls:true};fs.writeFileSync(proofFile,JSON.stringify(proof,null,2)+'\n');console.log('LVX_SHOWCASE_RELOCATION_VERIFIED');
+ }finally{await client?.app.close();if(service){const h=await fetch(BASE+'/health').then(r=>r.json()).catch(()=>null);if(h?.workspace===fs.realpathSync(project))await fetch(BASE+'/admin/stop',{method:'POST'}).catch(()=>{});}}
+}
+if(require.main===module)run(process.argv[2]).catch(error=>{console.error(error);process.exitCode=1;});

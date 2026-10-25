@@ -1,0 +1,58 @@
+name: Windows verification
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.18.0
+          cache: npm
+      - run: node scripts/verify-repository-contents.cjs check
+      - run: node scripts/verify-public-files.cjs check
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - run: npm ci
+      - run: python -m pip install --target .external/python-test-packages --requirement tests/requirements.txt
+      - run: npm run setup
+      - run: node scripts/dependency-check.cjs
+      - run: node scripts/check-vendor.cjs
+      - run: node services/execution/prepare-native-fixtures.cjs
+      - run: npm test
+      - run: npm run test:e2e
+      - run: npm run test:roadmap
+      - run: npm run test:machina
+      - run: npm run test:agent-style
+      - run: npm run test:agent-board
+      - run: node scripts/coordination-e2e.cjs
+      - run: node scripts/node-config-style-e2e.cjs
+      - run: npm run build:desktop
+      - run: npm run verify:desktop
+      - run: node scripts/roadmap-e2e.cjs --packaged
+      - run: node scripts/machina-e2e.cjs --packaged
+      - run: node scripts/agent-style-e2e.cjs --packaged
+      - run: node scripts/agent-studio-e2e.cjs --packaged
+      - run: node scripts/coordination-e2e.cjs --packaged
+      - run: node scripts/node-config-style-e2e.cjs --packaged
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-verification-evidence
+          path: |
+            docs/verification/*results.json
+            docs/verification/screenshots/**
+            docs/screenshots/*.png
+            test-results/**
+          retention-days: 14

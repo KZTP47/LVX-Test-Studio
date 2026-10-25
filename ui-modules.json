@@ -1,0 +1,362 @@
+{
+  "schemaVersion": 1,
+  "description": "Initialization dependencies for retained classic renderer scripts. Deferred global event-handler facades are intentional; root ESM UI imports its own modules separately.",
+  "output": "assets/app-modules.js",
+  "modules": [
+    {
+      "id": "runtime-assets",
+      "source": "runtime-assets.js",
+      "external": true,
+      "dependsOn": []
+    },
+    {
+      "id": "icons",
+      "source": "icons.js",
+      "external": true,
+      "dependsOn": []
+    },
+    {
+      "id": "chart",
+      "source": "assets/vendor/chart.umd.js",
+      "external": true,
+      "dependsOn": []
+    },
+    {
+      "id": "pyodide",
+      "source": "assets/vendor/pyodide/pyodide.js",
+      "external": true,
+      "dependsOn": []
+    },
+    {
+      "id": "monaco-loader",
+      "source": "assets/vendor/monaco/vs/loader.js",
+      "external": true,
+      "dependsOn": []
+    },
+    {
+      "id": "xlsx",
+      "source": "assets/vendor/xlsx.full.min.js",
+      "external": true,
+      "dependsOn": []
+    },
+    {
+      "id": "html2canvas",
+      "source": "assets/vendor/html2canvas.min.js",
+      "external": true,
+      "dependsOn": []
+    },
+    {
+      "id": "protected-config",
+      "source": "protected-config.js",
+      "dependsOn": []
+    },
+    {
+      "id": "monaco-config",
+      "source": "monaco-config.js",
+      "dependsOn": [
+        "runtime-assets",
+        "monaco-loader"
+      ]
+    },
+    {
+      "id": "data-manager",
+      "source": "data-manager.js",
+      "dependsOn": [
+        "icons",
+        "xlsx"
+      ]
+    },
+    {
+      "id": "environment-manager",
+      "source": "environment-manager.js",
+      "dependsOn": [
+        "icons",
+        "protected-config"
+      ]
+    },
+    {
+      "id": "version-control",
+      "source": "version-control.js",
+      "dependsOn": []
+    },
+    {
+      "id": "indexeddb-version-storage",
+      "source": "indexeddb-version-storage.js",
+      "dependsOn": [
+        "version-control"
+      ]
+    },
+    {
+      "id": "graph-engine",
+      "source": "graph-engine.js",
+      "dependsOn": []
+    },
+    {
+      "id": "pipeline-manager",
+      "source": "pipeline-manager.js",
+      "dependsOn": [
+        "icons",
+        "protected-config",
+        "graph-engine"
+      ]
+    },
+    {
+      "id": "visual-editor",
+      "source": "visual-editor.js",
+      "dependsOn": [
+        "icons",
+        "graph-engine"
+      ]
+    },
+    {
+      "id": "reporting-dashboard",
+      "source": "reporting-dashboard.js",
+      "dependsOn": [
+        "icons",
+        "chart"
+      ]
+    },
+    {
+      "id": "script",
+      "source": "script.js",
+      "dependsOn": [
+        "runtime-assets",
+        "icons",
+        "protected-config",
+        "monaco-config",
+        "data-manager",
+        "environment-manager",
+        "version-control",
+        "indexeddb-version-storage",
+        "graph-engine",
+        "pipeline-manager",
+        "visual-editor",
+        "reporting-dashboard",
+        "pyodide",
+        "html2canvas",
+        "execution-validation"
+      ]
+    },
+    {
+      "id": "nocode-builder",
+      "source": "nocode-builder.js",
+      "dependsOn": [
+        "script"
+      ]
+    },
+    {
+      "id": "element-picker",
+      "source": "element-picker.js",
+      "dependsOn": [
+        "script",
+        "icons"
+      ]
+    },
+    {
+      "id": "advanced-assertions",
+      "source": "advanced-assertions.js",
+      "dependsOn": [
+        "script",
+        "icons",
+        "html2canvas"
+      ]
+    },
+    {
+      "id": "debugger",
+      "source": "debugger.js",
+      "dependsOn": [
+        "script"
+      ]
+    },
+    {
+      "id": "visual-web-tester",
+      "source": "visual-web-tester.js",
+      "dependsOn": [
+        "script",
+        "icons",
+        "element-picker",
+        "advanced-assertions",
+        "debugger"
+      ]
+    },
+    {
+      "id": "unit-testing",
+      "source": "unit-testing.js",
+      "dependsOn": [
+        "script",
+        "icons",
+        "protected-config",
+        "graph-engine"
+      ]
+    },
+    {
+      "id": "cicd-integration",
+      "source": "cicd-integration.js",
+      "dependsOn": [
+        "script",
+        "protected-config"
+      ]
+    },
+    {
+      "id": "integrations",
+      "source": "integrations.js",
+      "dependsOn": [
+        "script",
+        "icons",
+        "protected-config"
+      ]
+    },
+    {
+      "id": "collaboration",
+      "source": "collaboration.js",
+      "dependsOn": [
+        "script",
+        "protected-config",
+        "indexeddb-version-storage"
+      ]
+    },
+    {
+      "id": "collaboration-ui",
+      "source": "collaboration-ui.js",
+      "dependsOn": [
+        "collaboration"
+      ]
+    },
+    {
+      "id": "collaboration-ui2",
+      "source": "collaboration-ui2.js",
+      "dependsOn": [
+        "collaboration-ui",
+        "icons"
+      ]
+    },
+    {
+      "id": "security-testing",
+      "source": "security-testing.js",
+      "dependsOn": [
+        "script",
+        "protected-config"
+      ]
+    },
+    {
+      "id": "security-ui",
+      "source": "security-ui.js",
+      "dependsOn": [
+        "security-testing",
+        "integrations",
+        "icons"
+      ]
+    },
+    {
+      "id": "studio-storage",
+      "source": "studio-storage.js",
+      "dependsOn": [
+        "script",
+        "protected-config"
+      ]
+    },
+    {
+      "id": "studio-accessibility",
+      "source": "studio-accessibility.js",
+      "dependsOn": [
+        "script",
+        "icons",
+        "modal-backdrop"
+      ]
+    },
+    {
+      "id": "studio-recovery",
+      "source": "studio-recovery.js",
+      "dependsOn": [
+        "studio-storage",
+        "icons"
+      ]
+    },
+    {
+      "id": "mock-runtime",
+      "source": "mock-runtime.js",
+      "dependsOn": []
+    },
+    {
+      "id": "mock-builder",
+      "source": "mock-builder.js",
+      "dependsOn": [
+        "mock-runtime",
+        "icons",
+        "protected-config"
+      ]
+    },
+    {
+      "id": "legacy-importer",
+      "source": "legacy-importer.js",
+      "dependsOn": []
+    },
+    {
+      "id": "machina-data",
+      "source": "machina-data.js",
+      "dependsOn": [
+        "mock-builder",
+        "legacy-importer",
+        "studio-storage",
+        "icons"
+      ]
+    },
+    {
+      "id": "code-review-node",
+      "source": "code-review-node.js",
+      "dependsOn": [
+        "icons",
+        "protected-config",
+        "script"
+      ]
+    },
+    {
+      "id": "machina-graph-bridge",
+      "source": "machina-graph-bridge.js",
+      "dependsOn": [
+        "visual-editor",
+        "pipeline-manager",
+        "code-review-node",
+        "protected-config"
+      ]
+    },
+    {
+      "id": "machina-product",
+      "source": "machina-product.js",
+      "dependsOn": [
+        "machina-graph-bridge",
+        "script",
+        "icons",
+        "mock-builder"
+      ]
+    },
+    {
+      "id": "execution-validation",
+      "source": "execution-validation.js",
+      "dependsOn": []
+    },
+    {
+      "id": "modal-backdrop",
+      "source": "modal-backdrop.js",
+      "dependsOn": []
+    },
+    {
+      "id": "machina-retention",
+      "source": "machina-retention.js",
+      "dependsOn": [
+        "icons",
+        "protected-config"
+      ]
+    },
+    {
+      "id": "machina-settings",
+      "source": "machina-settings.js",
+      "dependsOn": [
+        "icons",
+        "protected-config",
+        "environment-manager",
+        "script"
+      ]
+    }
+  ]
+}

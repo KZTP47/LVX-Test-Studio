@@ -1,0 +1,111 @@
+/* Theme pairs live together: changing foregrounds must also change their surfaces.
+   Keep the original colored Aero actions and independent Machina/Nexus node themes. */
+:root {
+  --lvx-focus:#005fae;
+  --lvx-focus-halo:#fff;
+}
+.aero-text-secondary { color:#104e8e; }
+.aero-text-danger { color:#8c1d25; }
+.aero-modal .text-gray-500 { color:#4b5563; }
+:is(.aero-button-primary,.aero-button-warning) .text-white { color:inherit; }
+:is(.aero-modal,.aero-glass-panel) .text-green-600 { color:#166534; }
+:is(.aero-modal,.aero-glass-panel) :is(.text-orange-500,.text-orange-400) { color:#8d3c10; }
+#user-avatar { color:#000; }
+.theme-dark {
+  --lvx-surface:#15212f;
+  --lvx-panel:#1f3042;
+  --lvx-raised:#273d52;
+  --lvx-ink:#e6eff7;
+  --lvx-muted:#c0d2e0;
+  --lvx-heading:#9dd9ff;
+  --lvx-line:#7897af;
+  --lvx-focus:#a6e2ff;
+  --lvx-focus-halo:#0b2030;
+}
+.theme-dark .lvx-project-bar {
+  background:linear-gradient(#2b4259,#22364a);
+  color:var(--lvx-ink);
+}
+.theme-dark .aero-glass-panel { background:linear-gradient(#293e53,#213448); color:var(--lvx-ink); border-color:var(--lvx-line); box-shadow:0 2px 8px #0003; }
+.theme-dark .aero-button :is(.aero-text-primary,.aero-text-secondary,.aero-text-muted) { color:#143c5b; }
+.theme-dark :is(.aero-text-primary,.aero-text-secondary),.theme-dark #lvx-tool-label { color:var(--lvx-heading); }
+.theme-dark :is(.aero-text-muted,.studio-empty,.studio-path,.lvx-home-check p) { color:var(--lvx-muted); }
+.theme-dark #studio-task-surface :is(.studio-section,.studio-journey>li,.studio-steps>li) {
+  background:var(--lvx-panel);
+  color:var(--lvx-ink);
+  border-color:var(--lvx-line);
+}
+.theme-dark #studio-task-surface .studio-page-title {
+  background:linear-gradient(#2b465f,#21374c);
+  color:var(--lvx-ink);
+}
+.theme-dark #studio-task-surface :is(.studio-page-title h2,.studio-section>h3) { color:var(--lvx-heading); }
+.theme-dark #studio-task-surface :is(.studio-page-title p,.studio-section>p,.studio-journey p,.studio-record-list small) { color:var(--lvx-muted); }
+.theme-dark #studio-task-surface .studio-journey>li::before { color:var(--lvx-heading); border-color:var(--lvx-line); background:var(--lvx-surface); }
+.theme-dark :is(.studio-output,.studio-evidence pre) { background:#101d2a; color:var(--lvx-ink); }
+.theme-dark :is(.aero-input,.aero-select,.aero-textarea) { background:#132436; color:var(--lvx-ink); border-color:var(--lvx-line); box-shadow:none; }
+.theme-dark :is(.aero-card,.aero-modal,#app) :is(.text-gray-400,.text-gray-500,.text-gray-600) { color:var(--lvx-muted); }
+.theme-dark :is(.aero-text-success,.aero-modal .text-green-400),.theme-dark #exec-mode-display .text-green-400 { color:#9aefb3; }
+.theme-dark :is(.aero-text-warning,.aero-modal .text-yellow-400),.theme-dark #exec-mode-display .text-yellow-400 { color:#ffe19a; }
+.theme-dark :is(.aero-text-error,.aero-text-danger,.aero-modal .text-red-400) { color:#ffb4b4; }
+.theme-dark .aero-modal .text-blue-400 { color:#aad9ff; }
+.theme-dark .aero-modal :is(.text-orange-400,.text-orange-500,.text-green-600) { color:#ffd09a; }
+.theme-dark .aero-button .text-green-600 { color:#166534; }
+.theme-dark .aero-button .aero-text-success { color:#14532d; }
+.theme-dark .aero-button .aero-text-warning { color:#743c00; }
+.theme-dark #selector-choice-modal :is(.text-blue-700,.text-blue-600,.text-gray-500) { color:#c7e7ff; }
+.theme-dark #selector-choice-modal .bg-blue-100 { background:#314e66; color:#e4f2ff; }
+.theme-dark #selector-choice-modal .selector-option:hover { background:#365775; }
+.theme-dark .agent-board { color:var(--lvx-ink); }
+.theme-dark .agent-board :is(.ab-heading h2,.ab-heading p,.ab-start-guide,.ab-notice,.ab-board-tools>.ab-field,.ab-run-tools>.ab-field) { color:var(--lvx-ink); }
+.theme-dark .agent-board>.ab-help { color:var(--lvx-muted); }
+.theme-dark .agent-board .ab-revision { background:var(--lvx-raised); color:var(--lvx-ink); border-color:var(--lvx-line); }
+.theme-dark .agent-board :is(.ab-goal-strip,.ab-run-status) { background:linear-gradient(#293e53,#213448); color:var(--lvx-ink); }
+/* Retained saturated footer colors need dark lettering, also on hover. */
+.mg-dialog :is(#cfg-wait-save,#cfg-perf-save,#cfg-contract-save,#cfg-ux-save) { color:#030c12!important; }
+.mg-dialog[data-node-type] :is(#cfg-ai-save,#cfg-ai-generate) { color:#030c12!important; }
+.mg-dialog .mg-action-label { display:inline-block; padding:1px 5px; border-radius:3px; background:#152b3c; color:#fff; }
+#studio-task-surface .agent-board .agent-projects button:is(.ap-primary,.ap-run) { color:#030c12; }
+.ab-save-dialog [data-save-submit] { color:#030c12; }
+body .mg-dialog[data-node-type="ai-log-summary"]>.aero-modal>h3 { background:#28123e; padding:6px 9px; border-radius:5px; }
+body .mg-dialog[data-node-type="start-runner"]>.aero-modal>:is(h3,p) { color:#052e16!important; background:#effbdc; padding:6px 9px; border-radius:5px; }
+body .mg-dialog[data-node-type="wait-delay"] .text-blue-100 { color:#fff; }
+.theme-dark a:not([class*="aero-button"]) { color:#a6dcff; text-decoration:underline; text-underline-offset:.18em; }
+.theme-dark :is(.aero-modal,.aero-card) :is(.bg-white,.bg-gray-50,.bg-blue-50,.bg-gray-100) { background:var(--lvx-raised); color:var(--lvx-ink); }
+.theme-dark :is(.aero-modal,.aero-card) :is(.bg-blue-100,.bg-green-100,.bg-yellow-100) { color:#143449; }
+/* Pseudo-placeholder text is content too. Match the owning field, including
+   deliberately light fields inside retained dark or colorful node forms. */
+input::placeholder,textarea::placeholder { opacity:1; }
+.theme-dark :is(.aero-input,.aero-select,.aero-textarea,.aero-glass-panel)::placeholder,
+.theme-dark #studio-task-surface :is(input,textarea)::placeholder { color:#c0d2e0; }
+.theme-dark #studio-task-surface .agent-projects :is(input,textarea)::placeholder { color:#415668; }
+/* A two-color focus ring remains visible on both glossy and dark surfaces. */
+:is(button,a,input,select,textarea,summary,[tabindex]):focus-visible,
+#studio-task-surface :is(button,a,input,select,textarea,summary,[tabindex]):focus-visible {
+  outline:3px solid var(--lvx-focus);
+  outline-offset:3px;
+  box-shadow:0 0 0 3px var(--lvx-focus-halo);
+}
+.mg-dialog[data-node-type] :is(input,select,textarea):focus-visible { outline:3px solid var(--lvx-focus); outline-offset:3px; box-shadow:0 0 0 3px var(--lvx-focus-halo); }
+.ve-node-header button { min-width:24px; min-height:24px; }
+:is(button,a,input,select,textarea,summary,[tabindex]) { scroll-margin:12px; }
+::selection { color:#062b4b; background:#b8dcfc; }
+.theme-dark { scrollbar-color:#89b9db #172b3c; }
+/* Retain explicit progress text without spinning or animated layout changes. */
+@media(prefers-reduced-motion:reduce) {
+  html { scroll-behavior:auto; }
+  body,.aero-button,[class*="aero-button-"],.aero-card,.ve-node,.ab-node { transition:none!important; }
+  .spinner { animation:none!important; border-color:currentColor; border-right-color:transparent; }
+}
+@media(forced-colors:active) {
+  :is(button,input,select,textarea,summary) { border:1px solid ButtonText!important; }
+  :is(button,a,input,select,textarea,summary,[tabindex]):focus-visible { outline:3px solid Highlight!important; box-shadow:none!important; }
+  [aria-current="page"] { outline:2px solid Highlight!important; }
+}
+.lvx-mascot-trigger { display:inline-flex; flex-shrink:0; align-items:center; justify-content:center; width:48px; height:48px; padding:0; border:0; border-radius:8px; background:transparent; cursor:zoom-in; }
+.lvx-mascot-preview { position:fixed; inset:auto; margin:0; width:min(420px,calc(100vw - 24px)); max-height:calc(100vh - 24px); box-sizing:border-box; padding:16px; border:1px solid #7eabc8; border-radius:12px; background:#f5fbff; color:#123e64; box-shadow:0 12px 32px rgba(0,35,65,.28); overflow:auto; }
+.lvx-mascot-preview img { display:block; width:100%; height:auto; max-height:calc(100vh - 112px); object-fit:contain; }
+.lvx-mascot-preview figcaption { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px 16px; margin-top:12px; font:14px/1.4 'Segoe UI',sans-serif; }
+.lvx-mascot-preview figcaption span { font-size:12px; }
+.theme-dark .lvx-mascot-preview { background:#203344; color:#edf6ff; border-color:#7898ad; }
+@media (forced-colors:active) { .lvx-mascot-preview { background:Canvas; color:CanvasText; border-color:CanvasText; } }

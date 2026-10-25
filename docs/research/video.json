@@ -1,0 +1,515 @@
+{
+  "status": "COMPLETE",
+  "reviewedAt": "2026-10-25",
+  "scope": "Complete exported public YouTube transcript analysis, compared with pinned source and frozen current LVX mechanics. Documentation only; no application, provider, hook, memory or runtime changes.",
+  "sources": [
+    {
+      "kind": "video-transcript",
+      "url": "https://www.youtube.com/watch?v=AL-PQuB2wy0",
+      "title": "I Run an AI Civilization in Herdr",
+      "sha256": "9ac79da5c05a5cb8f2b9b30226afaeaaa4e049afa57597813fad633a07d6cc24",
+      "bytes": 26615,
+      "coverage": {
+        "firstTimestamp": "0:00",
+        "lastTimestamp": "24:47",
+        "segments": 448,
+        "language": "en",
+        "captionLabel": "authored or unspecified",
+        "read": "Complete exported text, including all 448 timestamped segments and final caption",
+        "audiovisualPlayback": "Not performed; transcript cannot establish visual layouts, tone, or omitted on-screen text"
+      },
+      "acquisition": "Parent browser session exported the public transcript from the exact video; this leaf read and hashed the complete untrusted text. The raw export remains outside the repository and is not committed.",
+      "evidence": [
+        {
+          "timestamp": "0:10-2:21",
+          "seconds": 10,
+          "claim": "Speaker describes an established multi-agent environment, then recurring coordination loops and bureaucratic busywork during prolonged unattended operation. This is personal experience, not a controlled benchmark."
+        },
+        {
+          "timestamp": "2:36-3:37",
+          "seconds": 156,
+          "claim": "OpenRig is presented as the coordination system; the speaker explicitly says Herdr is the terminal wrapper in this setup and its coordination features are not being used."
+        },
+        {
+          "timestamp": "3:58-5:18",
+          "seconds": 238,
+          "claim": "Independent visible coding sessions communicate across machines; the aim is coordinating existing Claude/Codex harnesses while retaining their subscription-based use, rather than replacing them with a new model runtime."
+        },
+        {
+          "timestamp": "5:21-6:47",
+          "seconds": 321,
+          "claim": "A stable seat combines address, configuration and inherited guidance; pods/rigs arrange seats, and reusable configuration describes a team. These are distinct from a specific provider conversation."
+        },
+        {
+          "timestamp": "7:10-8:57",
+          "seconds": 430,
+          "claim": "Projects contain missions and slices; dependencies determine parallel or sequential work. A slice has an intended outcome and completion evidence, connected to the larger purpose."
+        },
+        {
+          "timestamp": "9:04-9:55",
+          "seconds": 544,
+          "claim": "The speaker distinguishes agent-directed plans from an optional background workflow that tracks sequence state and guides the orchestrator without removing its decisions."
+        },
+        {
+          "timestamp": "11:17-12:56",
+          "seconds": 677,
+          "claim": "A failure leads to a check, then checking that the check happened, then checking its evidence; process completion can displace the actual result. Excessive proof refinement may continue after the task itself is done."
+        },
+        {
+          "timestamp": "13:05-14:38",
+          "seconds": 785,
+          "claim": "Individually plausible additions expand a small requested deliverable into a much larger unfinished system; more agents can amplify this drift. The example is illustrative, not experimental proof."
+        },
+        {
+          "timestamp": "15:54-16:40",
+          "seconds": 954,
+          "claim": "A peer with strategic context but missing operational details can approve a proposal from a worker with the opposite context gap. The causal concern is fragmented decision evidence and misplaced authority."
+        },
+        {
+          "timestamp": "16:58-18:22",
+          "seconds": 1018,
+          "claim": "Project context supplies the difference between generic model knowledge and the actual local environment; specialists need different relevant context rather than every agent receiving identical material."
+        },
+        {
+          "timestamp": "18:29-19:39",
+          "seconds": 1109,
+          "claim": "Refocus follows the task-to-project intent chain and sends a reminder around compaction or configured triggers. The argument is to restore relevant purpose without restarting every task or reloading everything."
+        },
+        {
+          "timestamp": "20:10-21:54",
+          "seconds": 1210,
+          "claim": "Mistaken guidance can be retained in notes and retaught across replacements and machines; the speaker recounts tracing and correcting its spread. This anecdote does not establish that automatic environment-wide cleanup is generally safe or shipped by default."
+        },
+        {
+          "timestamp": "22:04-23:42",
+          "seconds": 1324,
+          "claim": "Instrumentation compares coordination activity with actual project movement, surfaces warnings and routes investigation to an agent with relevant context. The speaker's Slack/diagnosis arrangement is a setup description, not evidence of universal defaults."
+        },
+        {
+          "timestamp": "23:48-24:47",
+          "seconds": 1428,
+          "claim": "The conclusion frames these as software-engineering problems and OpenRig as one implementation. Broad claims about a separate security incident remain the speaker's interpretation, not independently verified findings here."
+        }
+      ]
+    },
+    {
+      "kind": "repository",
+      "url": "https://github.com/mvschwarz/openrig",
+      "commit": "9bb29d38819bdd2bbe5b8527ce057db606c82cf9",
+      "license": "Apache-2.0 as independently recorded in the companion pinned source review",
+      "evidence": [
+        {
+          "path": "packages/daemon/assets/plugins/openrig-core/hooks/scripts/refocus.cjs",
+          "lines": "134-140,329-355,453-485",
+          "symbols": [
+            "workPacketEnabled",
+            "runsForThisSeatsProject"
+          ],
+          "claim": "Refocus is a concrete hook path gated by enablement/project identity, compaction/on-demand/growth state and an actionable prompt boundary. Rich work packets are off by default for Claude and Codex."
+        },
+        {
+          "path": "packages/daemon/assets/plugins/openrig-core/skills/refocusing/scripts/trace-to-root.py",
+          "lines": "217-250,397-429,522-558",
+          "symbols": [
+            "light_learned"
+          ],
+          "claim": "Trace code assembles orientation and reports missing links or unknown work instead of inventing a current mission; inherited guidance is selected from bounded relevant sections."
+        },
+        {
+          "path": "docs/reference/refocus-channel.md",
+          "lines": "85-96,146-157",
+          "symbols": [],
+          "claim": "Documentation explicitly identifies unestablished overlapping-hook behavior and keeps work-packet defaults off until native evidence exists. A feature's presence does not prove reliable live-model improvement."
+        },
+        {
+          "path": "packages/daemon/src/domain/health-detectors.ts",
+          "lines": "378-438",
+          "symbols": [
+            "evaluateCoordination",
+            "evaluatePassiveCeremony"
+          ],
+          "claim": "Health code distinguishes candidate ceremony signals, attributed progress assessment, indeterminate state and confirmation; counts alone do not confirm a pathology. Unchanged review returns can trigger a separate signal."
+        },
+        {
+          "path": "packages/daemon/src/domain/health-policy.ts",
+          "lines": "19-25",
+          "symbols": [
+            "DEFAULT_HEALTH_POLICY"
+          ],
+          "claim": "Default diagnosis is disabled with no owner and no human address; the speaker's autonomous Slack/analyst setup is not a universal default."
+        },
+        {
+          "path": "packages/daemon/src/domain/seat-launch-additions.ts",
+          "lines": "247-261",
+          "symbols": [
+            "seatLaunchAdditionsReport"
+          ],
+          "claim": "Upstream itself reports when a selected Claude agent prompt replaces the provider default. Running a native executable does not imply untouched native guidance."
+        }
+      ],
+      "limits": "Current pinned source may have changed since recording. Read-only static inspection; no hook, fleet, provider, inherited note or repository test code was executed."
+    },
+    {
+      "kind": "repository",
+      "url": "https://github.com/herdrdev/herdr",
+      "commit": "5608de0608918aba2f9d501e7793b984a0ca9cfa",
+      "license": "Apache-2.0, root LICENSE inspected in companion source review",
+      "evidence": [
+        {
+          "path": "src/api/wait.rs",
+          "lines": "177-283",
+          "symbols": [
+            "prompt_agent"
+          ],
+          "claim": "Herdr provides real agent prompting/waiting independently of the speaker's decision not to use its coordination features. It checks identity and observed lifecycle activity, not semantic task quality."
+        },
+        {
+          "path": "src/app/api/agents.rs",
+          "lines": "138-181",
+          "symbols": [
+            "validate_agent_prompt"
+          ],
+          "claim": "Recognized blocked prompts reject ordinary input. This transport behavior is not authority to approve work or proof of correctness."
+        },
+        {
+          "path": "src/agent_resume.rs",
+          "lines": "199-216",
+          "symbols": [
+            "plan"
+          ],
+          "claim": "Provider-specific native conversation restore differs from stable rig/seat identity and from process persistence."
+        }
+      ]
+    },
+    {
+      "kind": "workspace-source",
+      "url": "https://github.com/KZTP47/LVX-Test-Studio",
+      "sourceDigest": "58c81794ffd9a471827940a2d0c58ca8401b782c45944931c099119c60afb9ed",
+      "binding": "Frozen local candidate; this URL identifies the project, not a claim that this exact digest was already pushed at the time of review.",
+      "evidence": [
+        {
+          "path": "services/agents/index.cjs",
+          "sha256": "1b00efec6ba477be28b209007e0b1c09b6d3bccd823d494bbe16aff218666b41",
+          "lines": "130-149,169-207,223-242,262-295,311-340,435-464",
+          "symbols": [
+            "pump",
+            "executeTurn",
+            "finishTurn",
+            "submit"
+          ],
+          "claim": "Current LVX queues by agent, caps turn/concurrency budgets, frames full peer text, tracks attempts/generations and exact native IDs, fences ambiguous states and restart work, and separates explicit acceptance execution. Goal starters get the goal; downstream peers receive predecessor output, not an automatically constructed hierarchy/intent packet."
+        },
+        {
+          "path": "services/agents/native.cjs",
+          "sha256": "e70fb0d2a83676426254c9515b36583535b3426f6d282b5d0d644a7350e7b700",
+          "lines": "38-68,96-179",
+          "symbols": [
+            "buildInvocation"
+          ],
+          "claim": "Structured headless CLI invocations resume native conversation IDs; blank model/effort/additions preserve configured defaults. This is not an always-running cross-machine terminal fleet; each native turn launches an owned process."
+        },
+        {
+          "path": "agent-board.js",
+          "sha256": "2c1a90bdc0a5239dd2446d663945a102ffeae444d197a87409c86bb99939cebf",
+          "lines": "24-37,684-704,967-985",
+          "symbols": [
+            "emptyBoard"
+          ],
+          "claim": "Board exposes goals, criteria, explicit instructions, directed links, limits, native policy and a linked-checks control. Default new boards are manual with eight turns and concurrency one; backend validation defaults differ for omitted legacy fields."
+        },
+        {
+          "path": "services/agents/session-proof.cjs",
+          "sha256": "3aaf0a1a3ffd01f0eb1e2bd88098b103276d30a4c782b65aaf7ddb5dfeb28161",
+          "lines": "1-32",
+          "symbols": [],
+          "claim": "Project/provider/generation-bound native provenance supports controlled resume; its key is application provenance, not a provider credential."
+        }
+      ],
+      "limits": "Source mechanisms were read; no live model, subscription authentication, fresh model-quality experiment or GUI playback was performed by this leaf. Existing other-agent test receipts are not recast as independent live-model proof."
+    }
+  ],
+  "findings": [
+    {
+      "id": "V01",
+      "title": "Two products own different layers",
+      "timestamps": [
+        "2:36-3:37",
+        "3:58-5:18"
+      ],
+      "causalMechanism": "Attributing all behavior to the terminal wrapper hides where coordination, context mutation and work ownership occur. Copying a screen layout would not reproduce the underlying coordination system.",
+      "currentLVX": "Already separates graph view from main-process native/session routing and exposes real chats. It does not run Herdr or OpenRig and is not the speaker's distributed factory.",
+      "status": "implemented separation; distributed parity absent",
+      "evidence": [
+        "services/agents/index.cjs:223-242",
+        "services/agents/native.cjs:96-179",
+        "Herdr:src/api/wait.rs:177-283"
+      ],
+      "confidence": "high layer distinction; no visual inspection"
+    },
+    {
+      "id": "V02",
+      "title": "More checks can displace useful work",
+      "timestamps": [
+        "11:17-12:56",
+        "22:04-23:07"
+      ],
+      "causalMechanism": "Each local guard creates another evidence obligation, leading agents to optimize proof/process completion after the deliverable is adequate. Repeated unchanged reviews consume context, time and quota without reducing risk.",
+      "currentLVX": "Already limits turns and requires deliberate Run checks, with transport distinct from acceptance. It has no semantic ceremony detector; a turn cap bounds damage but does not diagnose whether the work is productive.",
+      "status": "bounded and evidence-separated; semantic diagnosis optional",
+      "evidence": [
+        "services/agents/index.cjs:201-207,435-464",
+        "OpenRig:packages/daemon/src/domain/health-detectors.ts:378-438"
+      ],
+      "confidence": "plausible mechanism supported by anecdote and independent source implementation, not comparative benchmark"
+    },
+    {
+      "id": "V03",
+      "title": "Peer-output chains can lose original intent",
+      "timestamps": [
+        "13:05-14:38",
+        "18:29-19:39"
+      ],
+      "causalMechanism": "A downstream agent may optimize a locally sensible proposal without the original objective/non-goals or the reason its task exists. Repeated output forwarding can amplify scope additions.",
+      "currentLVX": "Already shows/saves the goal and criteria and sends the exact goal to selected starters. Linked downstream input is full predecessor text plus peer identity, not a constructed project/mission/slice ancestry packet. Native resume can retain an agent's earlier context, but an unstated hierarchy cannot be assumed.",
+      "status": "goal visible and initial delivery implemented; automatic intent ancestry absent",
+      "evidence": [
+        "services/agents/index.cjs:223-225,282-289,317-338",
+        "OpenRig:packages/daemon/assets/plugins/openrig-core/hooks/scripts/refocus.cjs:453-485"
+      ],
+      "confidence": "high current mechanics; scope effect is a risk to measure"
+    },
+    {
+      "id": "V04",
+      "title": "Communication permission does not create decision authority",
+      "timestamps": [
+        "15:54-16:40",
+        "23:20-23:42"
+      ],
+      "causalMechanism": "A worker and reviewer can each have only half the evidence; a confident peer answer may be treated as approval even though neither has authority or a complete decision basis.",
+      "currentLVX": "Already keeps provider permissions and explicit user instructions intact, labels peer origins and avoids automatic busy-agent steering. Directed links authorize routing, not employment of a delegated approval policy. It does not semantically validate that every peer answer respects authority boundaries.",
+      "status": "transport and native permission boundaries implemented; semantic delegated authority not implemented",
+      "evidence": [
+        "services/agents/index.cjs:223-225",
+        "services/agents/native.cjs:38-68",
+        "Herdr:src/app/api/agents.rs:138-181"
+      ],
+      "confidence": "high distinction; no adversarial live-agent evaluation"
+    },
+    {
+      "id": "V05",
+      "title": "Retained mistakes can survive individual correction",
+      "timestamps": [
+        "5:59-6:13",
+        "20:10-21:54"
+      ],
+      "causalMechanism": "Long-lived seat notes and peer context can preserve a mistaken convention and teach it again to replacement agents. Fixing one active conversation does not remove other sources of the same false rule.",
+      "currentLVX": "Already retains full conversation provenance and explicit generations; it does not install automatic shared-learning files or import another project's memory. Existing conversation/provider context and forwarded peer answers can still carry errors. A new generation is a context boundary, not proof of truth.",
+      "status": "no automatic tribal-learning feature; provenance/generation implemented; belief validation absent",
+      "evidence": [
+        "services/agents/index.cjs:130-149,223-242,282-289",
+        "services/agents/session-proof.cjs:1-32"
+      ],
+      "confidence": "high dataflow distinction; anecdotal spread mechanism"
+    },
+    {
+      "id": "V06",
+      "title": "Native executable preservation does not guarantee untouched behavior",
+      "timestamps": [
+        "4:42-5:18",
+        "16:58-17:43"
+      ],
+      "causalMechanism": "A wrapper may keep the official CLI while replacing guidance, launching plugins or inserting roles. The wrapper's rules can then create exactly the coordination failures it aims to prevent.",
+      "currentLVX": "Already adds only user-entered instructions, leaves blank model/effort unchanged and does not configure provider hooks. Native headless invocation and resume are explicit engineering choices, not proof of identical outputs to a direct interactive terminal.",
+      "status": "nonintrusive instruction default implemented; answer-quality parity unmeasured",
+      "evidence": [
+        "services/agents/native.cjs:38-68",
+        "OpenRig:packages/daemon/src/domain/seat-launch-additions.ts:247-261"
+      ],
+      "confidence": "high static policy evidence; causal quality effect requires matched experiment"
+    },
+    {
+      "id": "V07",
+      "title": "Workflow automation should externalize sequence state without becoming mandatory",
+      "timestamps": [
+        "7:10-9:55"
+      ],
+      "causalMechanism": "An agent trying to retain the entire plan can forget the next phase after long work or compaction. An external state machine can reduce this burden, but forcing it onto every short request adds bureaucracy.",
+      "currentLVX": "Already offers optional saved executable acceptance workflows and free-form manual/linked conversations. It does not implement OpenRig's project/mission/slice hierarchy or agent-orchestrator workflow engine. A linked test workflow is not equivalent to that engine.",
+      "status": "optional acceptance implemented; hierarchical orchestration optional and absent",
+      "evidence": [
+        "services/agents/index.cjs:311-340,435-464",
+        "agent-board.js:684-704"
+      ],
+      "confidence": "high distinction"
+    },
+    {
+      "id": "V08",
+      "title": "Message volume is a weak productivity measurement",
+      "timestamps": [
+        "22:04-23:42"
+      ],
+      "causalMechanism": "A high activity count can represent meaningful complex work or unproductive handoffs. Inferring health from traffic alone creates false alarms and may trigger more unnecessary agents.",
+      "currentLVX": "Already exposes chronological events, turn budgets and linked acceptance separately. It has no product-outcome census, context-qualified automatic analyst or Slack alert loop. Upstream OpenRig source itself requires attributed outcome judgment and defaults automatic diagnosis off.",
+      "status": "inspectable evidence implemented; semantic productivity/notification layer absent",
+      "evidence": [
+        "services/agents/index.cjs:112-129,282-295,435-464",
+        "OpenRig:packages/daemon/src/domain/health-detectors.ts:420-438",
+        "OpenRig:packages/daemon/src/domain/health-policy.ts:19-25"
+      ],
+      "confidence": "high source evidence; no chosen universal threshold justified"
+    },
+    {
+      "id": "V09",
+      "title": "A fleet's scale does not establish better answers",
+      "timestamps": [
+        "0:10-0:27",
+        "3:16-4:08",
+        "14:34-14:38"
+      ],
+      "causalMechanism": "Additional agents multiply both useful parallel work and propagation of bad scope decisions; subscription quota, file contention and coordination overhead can dominate.",
+      "currentLVX": "Already caps global workers at four and per-board concurrency at one to four. New UI boards default to one. Nodes are not always-running cross-host agents, and no local or paid-model throughput/quality benchmark establishes a scaling benefit.",
+      "status": "bounded local concurrency implemented; distributed fleet/quality scaling absent",
+      "evidence": [
+        "services/agents/index.cjs:169-179",
+        "agent-board.js:24-37"
+      ],
+      "confidence": "high implementation; scaling outcome unmeasured"
+    },
+    {
+      "id": "V10",
+      "title": "Task context and check evidence must remain proportionate and explicit",
+      "timestamps": [
+        "7:55-8:25",
+        "17:49-18:22",
+        "23:32-23:42"
+      ],
+      "causalMechanism": "Giving every agent all available history wastes attention, but withholding task-critical requirements makes review unreliable. A test pass or a transport receipt can be mistaken for the whole task being correct.",
+      "currentLVX": "Already preserves complete eligible API turns and native session identity rather than silently summarizing peers. API nodes have no automatic filesystem tools. Acceptance criteria remain text for human review; only the selected workflow can produce the linked-check verdict, and its scope may be insufficient for the goal.",
+      "status": "full explicit history and scoped check verdict implemented; automatic role context/relevance and criterion completeness absent",
+      "evidence": [
+        "services/agents/index.cjs:223-242,435-464",
+        "agent-board.js:684-704"
+      ],
+      "confidence": "high mechanics; adequacy is task-dependent"
+    }
+  ],
+  "recommendations": [
+    {
+      "id": "VR1",
+      "status": "already implemented; retain",
+      "action": "Keep independent visible conversations, exact peer text, explicit node instructions and turn-boundary delivery. Keep ordinary Send separate from linked goal routing; do not introduce a default coordinator or hidden role prompt to imitate the video.",
+      "basis": [
+        "V01",
+        "V04",
+        "V06"
+      ]
+    },
+    {
+      "id": "VR2",
+      "status": "existing manual capability; operating guidance",
+      "action": "For linked runs, explicitly include the required task purpose, boundaries and relevant criteria in starter/peer requests. Review downstream input rather than assuming every agent automatically received the board's original intent. Keep the initial experiment to a small team and a bounded run.",
+      "basis": [
+        "V03",
+        "V09",
+        "V10"
+      ]
+    },
+    {
+      "id": "VR3",
+      "status": "optional future design; not implemented by this task",
+      "action": "If repeatable intent loss is observed, propose a user-visible project-to-task intent packet with source/version and per-agent scope. Preview exactly what will be added and deliver at a safe turn boundary. Do not install compaction hooks, read private provider history or start repeating prompts merely because the video uses Refocus.",
+      "basis": [
+        "V03",
+        "V06",
+        "V07"
+      ]
+    },
+    {
+      "id": "VR4",
+      "status": "already implemented boundary; task-specific review needed",
+      "action": "Treat completed provider turns as transport evidence and VERIFIED as the selected workflow's result only. Stop unchanged proof/review loops once agreed outcome checks pass, unless a concrete new failure, changed artifact or new risk justifies another cycle.",
+      "basis": [
+        "V02",
+        "V08",
+        "V10"
+      ]
+    },
+    {
+      "id": "VR5",
+      "status": "optional analysis using existing evidence; no new monitor",
+      "action": "When a run looks stuck, inspect parent-message chains, repeated text, artifact/check changes and unresolved criteria together. Do not calculate productivity from message count alone. Any later automatic detector should report uncertainty and route a bounded evidence packet to a context-qualified reviewer; notifications require a separate user request.",
+      "basis": [
+        "V02",
+        "V04",
+        "V08"
+      ]
+    },
+    {
+      "id": "VR6",
+      "status": "existing provenance supports manual review; automatic knowledge system absent",
+      "action": "Correct bad guidance at its identifiable project source and review dependent conversations before repeating it. Keep historical evidence intact and make any new guidance project-owned, source-linked, dated and revisable. Do not reproduce the speaker's environment-wide autonomous cleanup as an authorized feature.",
+      "basis": [
+        "V05"
+      ]
+    },
+    {
+      "id": "VR7",
+      "status": "optional future validation; not run",
+      "action": "Compare direct official CLI versus LVX with the same repository commit, model/effort, permissions, original prompt and task checks. Inspect the invocation/prompt diff and resulting artifacts before making quality claims. Add a second agent only where a measured role or independent review justifies the cost.",
+      "basis": [
+        "V06",
+        "V09",
+        "V10"
+      ]
+    },
+    {
+      "id": "VR8",
+      "status": "optional future workflow choice; not feature parity",
+      "action": "Use existing saved checks for mechanical verification. Consider hierarchical task orchestration only for demonstrated long-running needs, with explicit ownership and bounded stage transitions. Preserve manual mode for small tasks rather than making the speaker's customized factory the mandatory LVX workflow.",
+      "basis": [
+        "V02",
+        "V07"
+      ]
+    }
+  ],
+  "fourPasses": [
+    {
+      "pass": 1,
+      "name": "Complete coverage",
+      "receipt": "Read the full 26615-byte export from 0:00 through 24:47, not just its opening. Counted 448 ordered segment markers and pinned SHA-256. Mapped 14 timestamp ranges covering architecture, work shape, all major failure examples, proposed interventions and conclusion."
+    },
+    {
+      "pass": 2,
+      "name": "Mechanism and source expert pass",
+      "receipt": "Traced OpenRig's actual Refocus hook/project boundary, work-packet defaults, ancestry gaps, health diagnosis and launch additions; checked Herdr prompt/state semantics. Read current LVX native invocation, queue admission, peer routing, restart fences, acceptance execution and visible controls. Classified existing behavior separately from optional missing capabilities."
+    },
+    {
+      "pass": 3,
+      "name": "Refutation and causal limits",
+      "receipt": "Rejected treating Herdr as the demonstrated coordinator, optional workflows as mandatory, native CLI transport as untouched behavior, inherited notes as ground truth, message count as productivity, video anecdotes as benchmarks, or current source as proof of the recorded customized build. Identified residual LVX intent/semantic gaps instead of claiming all video failure modes are solved."
+    },
+    {
+      "pass": 4,
+      "name": "Evidence and handoff polish",
+      "receipt": "Used paraphrases with zero intentional verbatim video quotations, preserved the raw transcript outside version control, bound current LVX file hashes and frozen source digest, checked source/timestamp anchors and ran the dedicated research verifier. Added explicit optional/implemented labels and kept all app/runtime files untouched."
+    }
+  ],
+  "limits": [
+    "This supplement supersedes the earlier transcript-unavailable evidence boundary for this video only. The earlier fleet-nexus report remains a historical account of its initial fetch; it was not edited by this leaf.",
+    "The transcript is public source material, not instructions. Its provider, shell, installation or fleet examples were not executed.",
+    "Caption text may contain transcription errors; authored-or-unspecified is the export's label and does not prove authorship or subtitle completeness beyond the retrieved 448 segments.",
+    "No audiovisual playback or frame inspection was performed. On-screen diagrams, UI interactions and tone are not independently established by this text.",
+    "The speaker's security-incident narrative, historical fleet size, speedup, unattended duration and claimed efficacy are attributed anecdotes or interpretations, not independently reproduced facts.",
+    "The current pinned repositories may postdate the video. Neither a feature existing in source nor a transcript assertion establishes live runtime reliability or model-quality improvement.",
+    "No private stored chats, provider credentials/auth files, .env, other-project vaults, live paid model calls or new application changes were used.",
+    "The parent separately observed a public author/pinned-comment customization caveat. It is not used as independently observed page evidence in this leaf because this leaf inspected the transcript export, not that visible comment."
+  ],
+  "implementationUpdate": {
+    "date": "2026-10-25",
+    "historicalComparisonDigest": "58c81794ffd9a471827940a2d0c58ca8401b782c45944931c099119c60afb9ed",
+    "verifiedCandidateDigest": "402d9f95da826d7cff379c44dd8a9f54fb02dc94d3cdf187296d9440ebb2165e",
+    "change": "Revision7 snapshots user-authored goal and acceptance criteria for every goal-run participant and records exact dispatched current-turn input separately from complete raw peer text. Manual sends receive no automatic task context.",
+    "evidence": "docs/verification/agent-studio-e2e-results.json: actual Electron, HTTP inputs and canonical SQLite; immutable context, input inspector and subsequent API history checks. Runtime and board parent reruns:52 and27 passing tests.",
+    "limits": "Historical source bindings and comparisons below remain baseline evidence; no automatic Refocus/hierarchy/hooks, extra model turns or live-model quality certification."
+  }
+}

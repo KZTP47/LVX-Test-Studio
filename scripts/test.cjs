@@ -1,0 +1,17 @@
+const {spawnSync}=require('node:child_process');
+const fs=require('node:fs'),path=require('node:path');
+const root=path.resolve(__dirname,'..');
+const {sourceManifest,hash}=require('./source-manifest.cjs'),source=sourceManifest();
+const files=fs.readdirSync(path.join(root,'tests')).filter(f=>f.endsWith('.test.cjs')).map(f=>'tests/'+f).concat(fs.readdirSync(root).filter(f=>f.endsWith('.test.js')));
+if(files.length<3)throw Error('Missing regression suites');
+const testManifest=files.map(file=>({file,sha256:hash(fs.readFileSync(path.join(root,file)))}));
+const result=spawnSync(process.execPath,['--test','--test-concurrency=2',...files],{cwd:path.resolve(__dirname,'..'),encoding:'utf8',maxBuffer:16*1024*1024});
+fs.mkdirSync(path.join(root,'output'),{recursive:true});fs.writeFileSync(path.join(root,'output/regression-last.log'),(result.stdout||'')+(result.stderr||''));
+process.stdout.write(result.stdout||'');process.stderr.write(result.stderr||'');
+if(result.status!==0)process.exit(result.status||1);
+const count=name=>Number(result.stdout.match(new RegExp('^# '+name+' (\\d+)$','m'))?.[1]);
+if(!count('tests')||count('fail')!==0||count('skipped')!==0||count('cancelled')!==0||count('pass')!==count('tests'))throw Error('Incomplete regression run');
+if(sourceManifest().digest!==source.digest)throw Error('Application source changed during regression verification');
+for(const entry of testManifest)if(hash(fs.readFileSync(path.join(root,entry.file)))!==entry.sha256)throw Error('Test source changed during regression verification: '+entry.file);
+fs.writeFileSync(path.join(root,'docs/verification/regression-results.json'),JSON.stringify({date:new Date().toISOString(),sourceDigest:source.digest,tests:count('tests'),pass:count('pass'),fail:0,skipped:0,files:testManifest},null,2));
+console.log('LVX_REGRESSION_VERIFIED');

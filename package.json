@@ -1,0 +1,105 @@
+{
+  "name": "lvx-test-studio",
+  "version": "0.9.2",
+  "description": "A visual desktop workspace for AI-assisted test automation, pipelines and evidence.",
+  "private": true,
+  "main": "main.js",
+  "author": "Karokh Kappen Araf",
+  "scripts": {
+    "start": "npm run build:assets && electron .",
+    "dev": "node scripts/dev-server.cjs",
+    "build": "npm run build:assets",
+    "build:assets": "node scripts/build-assets.cjs",
+    "build:desktop": "npm run build:assets && electron-builder --win --x64 --dir",
+    "dist": "npm run build:assets && electron-builder --win nsis --x64",
+    "test": "node scripts/test.cjs",
+    "test:e2e": "node scripts/e2e.cjs",
+    "verify:desktop": "node scripts/verify-desktop.cjs",
+    "verify:delivery": "node scripts/verify-delivery.cjs all",
+    "setup": "node scripts/setup.cjs",
+    "test:roadmap": "node scripts/roadmap-e2e.cjs",
+    "release:checksums": "node scripts/release-checksums.cjs",
+    "test:installer": "node scripts/installer-smoke.cjs",
+    "test:machina": "node scripts/machina-e2e.cjs",
+    "test:agents": "node --test tests/agents-runtime.test.cjs tests/agent-board.test.cjs tests/agent-api-transport.test.cjs",
+    "test:agent-board": "node scripts/agent-studio-e2e.cjs",
+    "test:agent-style": "node scripts/agent-style-e2e.cjs",
+    "verify:agents": "node scripts/verify-agent-studio.cjs release"
+  },
+  "build": {
+    "appId": "com.kztp47.lvx-test-studio",
+    "productName": "LVX Test Studio",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/playwright/**",
+      "node_modules/playwright-core/**",
+      "services/**"
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "assets/icons"
+    },
+    "files": [
+      "*.js",
+      "index.html",
+      "styles.css",
+      "assets/**",
+      "services/**",
+      "package.json",
+      "!**/*.test.js",
+      "THIRD_PARTY_NOTICES.md",
+      "LICENSE"
+    ],
+    "extraResources": [
+      {
+        "from": ".external/playwright-browsers",
+        "to": "playwright-browsers",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": ".external/python-runtime-packages",
+        "to": "python-packages",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!bin/**"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icons/lvx-test-studio.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "LVX Test Studio",
+      "runAfterFinish": false
+    }
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "dependencies": {
+    "playwright": "1.58.0"
+  },
+  "devDependencies": {
+    "axe-core": "4.14.0",
+    "chart.js": "4.4.0",
+    "electron": "44.9.3",
+    "electron-builder": "26.18.0",
+    "html2canvas": "1.4.1",
+    "monaco-editor": "0.44.0",
+    "pyodide": "0.24.1",
+    "sharp": "0.35.5",
+    "tailwindcss": "3.4.17"
+  },
+  "license": "MIT",
+  "overrides": {
+    "postcss-selector-parser": "7.1.6"
+  }
+}

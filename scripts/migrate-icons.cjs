@@ -1,0 +1,7 @@
+// One-time, idempotent conversion of static legacy markup and icon definitions.
+const fs=require('node:fs'),path=require('node:path');
+const root=path.resolve(__dirname,'..');process.env.PLAYWRIGHT_BROWSERS_PATH=path.join(root,'.external/playwright-browsers');
+(async()=>{const browser=await require('playwright').chromium.launch({headless:true});try{const page=await browser.newPage();await page.addScriptTag({content:fs.readFileSync(path.join(root,'icons.js'),'utf8')});
+ const html=await page.evaluate(source=>{const doc=new DOMParser().parseFromString(source,'text/html');LVXIcons.hydrate(doc.body);return '<!DOCTYPE html>\n'+doc.documentElement.outerHTML+'\n';},fs.readFileSync(path.join(root,'index.html'),'utf8'));fs.writeFileSync(path.join(root,'index.html'),html);
+ for(const file of fs.readdirSync(root).filter(f=>f.endsWith('.js')&&f!=='icons.js')){const source=fs.readFileSync(path.join(root,file),'utf8');const matches=[...source.matchAll(/icon:\s*'([^']+)'/g)].filter(m=>/\p{Extended_Pictographic}/u.test(m[1]));let next=source;for(const m of matches){const name=await page.evaluate(g=>LVXIcons.nameOf(g),m[1]);next=next.replace(m[0],`icon: window.LVXIcons?.svg('${name}') || ''`);}if(next!==source)fs.writeFileSync(path.join(root,file),next);}
+ console.log('Static markup and semantic icon definitions migrated to SVG');}finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

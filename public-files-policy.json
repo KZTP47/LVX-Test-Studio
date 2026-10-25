@@ -1,0 +1,1106 @@
+{
+  "schemaVersion": 1,
+  "scope": "Git-tracked and nonignored upload candidates only. No broad vendor/test exclusions.",
+  "textFingerprint": "UTF-8 content with CRLF normalized to LF; binary reviews and audit snapshots retain exact byte hashes.",
+  "scanner": {
+    "version": "8.30.1",
+    "executableSha256": "17157e2ee8b76fc8b1d8bee607a250e34b8a8023c8bc81822d4b5ee4d78fcb7c",
+    "releaseArchiveSha256": "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e"
+  },
+  "reviewedBinaries": [
+    {
+      "file": "assets/icons/lvx-128.png",
+      "sha256": "1d23c34126da76ca2c39fea2103d7a9e809c8e50df9db134a7e0c4dd28e9720f",
+      "review": "Owner-supplied mascot/icon; PNG metadata inspected, no private text metadata."
+    },
+    {
+      "file": "assets/icons/lvx-16.png",
+      "sha256": "a66e539bda188f09e0d5bd3601a640c04364b43f140df2da5000da784d10f567",
+      "review": "Owner-supplied mascot/icon; PNG metadata inspected, no private text metadata."
+    },
+    {
+      "file": "assets/icons/lvx-24.png",
+      "sha256": "8fac01c202d918f6eea1996c6941195041754ae16c091695018c16ce63da38e5",
+      "review": "Owner-supplied mascot/icon; PNG metadata inspected, no private text metadata."
+    },
+    {
+      "file": "assets/icons/lvx-256.png",
+      "sha256": "f339868d4ad72da5ed858a75b5205d0072cc6c40b1c77322c7df05f82496283b",
+      "review": "Owner-supplied mascot/icon; PNG metadata inspected, no private text metadata."
+    },
+    {
+      "file": "assets/icons/lvx-32.png",
+      "sha256": "bf0f81ced717826790b351ce1a03f447af26697a50bb0200a5e1da92dbab694a",
+      "review": "Owner-supplied mascot/icon; PNG metadata inspected, no private text metadata."
+    },
+    {
+      "file": "assets/icons/lvx-48.png",
+      "sha256": "3441f91b395fd0b662e0d19b09b2103ebc6c776a200958951d1b2a524f1739da",
+      "review": "Owner-supplied mascot/icon; PNG metadata inspected, no private text metadata."
+    },
+    {
+      "file": "assets/icons/lvx-64.png",
+      "sha256": "84b093723c3bbed2e2ce68e03864cc02cd9c478c4e82271d8e2f2d91930fa56c",
+      "review": "Owner-supplied mascot/icon; PNG metadata inspected, no private text metadata."
+    },
+    {
+      "file": "assets/icons/lvx-test-studio.ico",
+      "sha256": "2cdda60a66028e884ccc4a14cecf04fa9d57653a14647297c4a16fa3d8966a2f",
+      "review": "Owner-supplied mascot/icon; PNG metadata inspected, no private text metadata."
+    },
+    {
+      "file": "assets/icons/lvx-test-studio.png",
+      "sha256": "2ee9ff581febd0ebe5c56a0be8234ad0ba8b2024e40500348bf36f6200466508",
+      "review": "Owner-supplied mascot/icon; PNG metadata inspected, no private text metadata."
+    },
+    {
+      "file": "assets/vendor/monaco/vs/base/browser/ui/codicons/codicon/codicon.ttf",
+      "sha256": "8b349ebca35dda64fb587658b26e17cc34c6c1d934fc509bef044e6edb89db49",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "assets/vendor/pyodide/atomicwrites-1.4.1-py2.py3-none-any.whl",
+      "sha256": "063f2b3b44ced9aaf70df0b5bd11c44b79dcde963718fc5aefdf13f7e001e7e7",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "assets/vendor/pyodide/attrs-23.1.0-py3-none-any.whl",
+      "sha256": "e063ece77fa88a4c86a87366a4faadae9b2679796496718ddba3ee4dce4a8ce1",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "assets/vendor/pyodide/distutils-1.0.0.zip",
+      "sha256": "9fb37736051f39d184c9887552689677735f81aa1c8402c36445aab889f5c5e4",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "assets/vendor/pyodide/exceptiongroup-1.1.3-py3-none-any.whl",
+      "sha256": "5ed86397c3bd9833934cfdd7a51014f22ac913f57e843d4b53c05f04e0f80bdd",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "assets/vendor/pyodide/iniconfig-2.0.0-py3-none-any.whl",
+      "sha256": "c66bb3327b847ac8bbc77276550e6d6578dabe9a0c65d34de58b809f77e29fa9",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "assets/vendor/pyodide/micropip-0.5.0-py3-none-any.whl",
+      "sha256": "494f8d406706f76bec373188ca54141ba34e52babebb484dad9878bdd1f3f911",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "assets/vendor/pyodide/more_itertools-10.1.0-py3-none-any.whl",
+      "sha256": "e18834fd5980e78d63ea8a06eb3061622bd4a486f09e17847d469e98fca15dfa",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "assets/vendor/pyodide/packaging-23.1-py3-none-any.whl",
+      "sha256": "81fc5c9676c2a1e121bc66df30bbd2672ce7b7c182dc9b742582750cacc2cb4f",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "assets/vendor/pyodide/pluggy-1.2.0-py3-none-any.whl",
+      "sha256": "c612b42cc23042ef865ec92d1c56d086e56811ede1aa5a6dd622ed97a30379af",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "assets/vendor/pyodide/py-1.11.0-py2.py3-none-any.whl",
+      "sha256": "a8ac0add59f79fd14910a24abbf4fa161f4633134c3f12cb50e5de3ea2258f97",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "assets/vendor/pyodide/pyodide.asm.wasm",
+      "sha256": "f7141d4928ef91480c6080e2746ebb93fd4f3567bf0077f6a7f65b0ad11b9da5",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "assets/vendor/pyodide/pyparsing-3.1.1-py3-none-any.whl",
+      "sha256": "71d8acf329ed9b1e64dc32106fd6733592756a899011975378b84d0bca5a0d67",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "assets/vendor/pyodide/pytest-7.2.2-py3-none-any.whl",
+      "sha256": "77cda70385fd05825bf8a72c52fd0056facc74c4b89b5bcd8872869a4c63f650",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "assets/vendor/pyodide/python_stdlib.zip",
+      "sha256": "573b362d25c0ade9f5c2c2d2313fae9a92bc46adf66dd2374130d1f80b5ec9ca",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "assets/vendor/pyodide/setuptools-68.1.2-py3-none-any.whl",
+      "sha256": "e1efc157dd6c7c49599612c531c0d54868c134f149d03c9b02f14c350dfd102b",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "assets/vendor/pyodide/six-1.16.0-py2.py3-none-any.whl",
+      "sha256": "a47befbaf42007f62531b1253c935c54c4f84dd1aaedd30ab00fee1eb105bcf0",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "assets/vendor/python/robotframework-7.3.2-py3-none-any.whl",
+      "sha256": "14ef2afa905285cc073df6ce06d0cd3af4a113df6f815532718079e00c98cca4",
+      "review": "Pinned upstream library/archive/font binary; archive members and credential formats reviewed; no user configuration."
+    },
+    {
+      "file": "docs/images/agent-board-collaboration.png",
+      "sha256": "ad894c0f480b245a314ffad35997dd79fdf00da9c69b185ce78b6cc4a03afa52",
+      "review": "Visually reviewed fixture screenshot; no personal path or real credential."
+    },
+    {
+      "file": "docs/images/coordination-proposal.png",
+      "sha256": "5ea8ea05d00581bae9dc7fdf159450c2c73b6ebf6bf8d68e64708aae4cdd326b",
+      "review": "Visually reviewed fixture screenshot; no personal path or real credential."
+    },
+    {
+      "file": "docs/images/coordination-tasks.png",
+      "sha256": "198b4d157e9e6d67a6ddef96cbf7c59025f49e6dbe9992ee34e94540c88363b3",
+      "review": "Visually reviewed fixture screenshot; no personal path or real credential."
+    },
+    {
+      "file": "docs/images/nexus-board.png",
+      "sha256": "dbd00fac2ba8bd19ac819711b9bd6a0b40ad7ea1924736401488472d3aa8b94d",
+      "review": "Visually reviewed fixture screenshot; no personal path or real credential."
+    },
+    {
+      "file": "docs/images/nexus-chats.png",
+      "sha256": "82e62c61af17a9bcad7bc568a8efdb8ec44adfdd9a48a88bece51310ab752df9",
+      "review": "Visually reviewed fixture screenshot; no personal path or real credential."
+    },
+    {
+      "file": "docs/images/readme-runs.png",
+      "sha256": "7b14add5f9d11e7175ead65c8e68835093006af887fd280e5d271efa8351c6d5",
+      "review": "Visually reviewed fixture screenshot; no personal path or real credential."
+    },
+    {
+      "file": "docs/images/runtime-setup-plan.png",
+      "sha256": "bc6f0f65346fe95da172e714e29a7ef903304723f35c3be0322bbb54b73c8fbc",
+      "review": "Visually reviewed fixture screenshot; no personal path or real credential."
+    },
+    {
+      "file": "docs/images/unified-home.png",
+      "sha256": "257ec1c2b733ae780bb0c2010d189933193ac6c7912de3ac928c0528b6a67447",
+      "review": "Visually reviewed fixture screenshot; no personal path or real credential."
+    }
+  ],
+  "syntheticMatches": [
+    {
+      "file": "agent-board.js",
+      "rule": "literal-credential",
+      "line": 1983,
+      "matchSha256": "e6baa35b09f581acf02d3f15a693766ed5d44d5cfb0c675d97c42359b2154bea",
+      "fileSha256": "e9dc5b25572c3c66f0027af222241527b7c6eaea8f1dc4eabd909511b91ab746",
+      "reason": "Reviewed UI field/schema/error-map text, not a stored user credential or literal authentication value."
+    },
+    {
+      "file": "apps/lvx-machina/ai-log-summary.test.js",
+      "rule": "literal-credential",
+      "line": 222,
+      "matchSha256": "68f879abda90f272dbb409f9afd6038293e56cb40b80161d6d21088f9e236e95",
+      "fileSha256": "776bf5b784fee3b108ebe09338d05f82e2f69343e535647441b7e0531eb143b8",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "apps/lvx-machina/environment-manager.js",
+      "rule": "literal-credential",
+      "line": 107,
+      "matchSha256": "793279215673b6d1550d36699e7eb18d3ab16bb49e3be4a90e199bb30efc42a4",
+      "fileSha256": "93d192b714e4a5ce1e6a61bfff7fad225b2dd50bc71d290a54aa47748cfb3176",
+      "reason": "Reviewed UI field/schema/error-map text, not a stored user credential or literal authentication value."
+    },
+    {
+      "file": "apps/lvx-machina/index.html",
+      "rule": "literal-credential",
+      "line": 3373,
+      "matchSha256": "b495c35ed693ae776653d4cb22d394d6d20fd140cdf81f3e5b6028ae979f7204",
+      "fileSha256": "2c55fcf2d26bf2e9738f3b473f84c9e01c42f7b7e74abf6bf13631cda493c4b3",
+      "reason": "Reviewed UI field/schema/error-map text, not a stored user credential or literal authentication value."
+    },
+    {
+      "file": "apps/lvx-machina/mock-builder.js",
+      "rule": "literal-credential",
+      "line": 300,
+      "matchSha256": "691464b6e6dfcce21345ddebaf33e285ac0dfec15bd040f24bbae8e5f975ca15",
+      "fileSha256": "decca55ccbe167b6f10cb612366565c2601862a98ec5ee1262330cbcbdcb2725",
+      "reason": "Synthetic mock generator label or example value, not a personal credential."
+    },
+    {
+      "file": "apps/lvx-machina/phase1-bugfixes.test.js",
+      "rule": "literal-credential",
+      "line": 85,
+      "matchSha256": "e3324645fe21f3717759d5f360b6d62b2700f84fd0feba21c2f06fd0113b0c9f",
+      "fileSha256": "0610d85e11fc3d7485133c7a9bc08bd8575d1c215f4e6293131d184f0452c046",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "apps/lvx-machina/script.js",
+      "rule": "provider-token",
+      "line": 5166,
+      "matchSha256": "1a5d44a2dca19669d72edf4c4f1c27c4c1ca4b4408fbb17f6ce4ad452d78ddb3",
+      "fileSha256": "d30a1514d736bf7aa7c1b5b2a48cd0d04ba3858b81b692f29247adaaef9ddae6",
+      "reason": "Deliberate legacy security-scanner demonstration string, not saved user configuration."
+    },
+    {
+      "file": "apps/lvx-machina/script.js",
+      "rule": "provider-token",
+      "line": 5198,
+      "matchSha256": "19d4f7f65889a5fedb187418b8d1f508ffcfd5fb1a80c3f74d8498e3e540241f",
+      "fileSha256": "d30a1514d736bf7aa7c1b5b2a48cd0d04ba3858b81b692f29247adaaef9ddae6",
+      "reason": "Deliberate legacy security-scanner demonstration string, not saved user configuration."
+    },
+    {
+      "file": "apps/lvx-machina/script.js",
+      "rule": "credential-in-url",
+      "line": 5174,
+      "matchSha256": "5e74f4c19b0ac2e9c7e23725ef171ee862b4586dbf1da6b1b4782e502994d469",
+      "fileSha256": "d30a1514d736bf7aa7c1b5b2a48cd0d04ba3858b81b692f29247adaaef9ddae6",
+      "reason": "Deliberate legacy security-scanner demonstration string, not saved user configuration."
+    },
+    {
+      "file": "apps/lvx-machina/script.js",
+      "rule": "literal-credential",
+      "line": 5165,
+      "matchSha256": "bc8004e44530b886b5d6bc51540f0ef0c0dc1280ac216cf5f00b485c7f7eb4f4",
+      "fileSha256": "d30a1514d736bf7aa7c1b5b2a48cd0d04ba3858b81b692f29247adaaef9ddae6",
+      "reason": "Deliberate legacy security-scanner demonstration string, not saved user configuration."
+    },
+    {
+      "file": "apps/lvx-machina/script.js",
+      "rule": "literal-credential",
+      "line": 5166,
+      "matchSha256": "d6e65440c06f1c9924ae242b2934efd6515430f1034741d386d06a256134fa4c",
+      "fileSha256": "d30a1514d736bf7aa7c1b5b2a48cd0d04ba3858b81b692f29247adaaef9ddae6",
+      "reason": "Deliberate legacy security-scanner demonstration string, not saved user configuration."
+    },
+    {
+      "file": "apps/lvx-machina/script.js",
+      "rule": "literal-credential",
+      "line": 5197,
+      "matchSha256": "8341e14afc16d9e4e960ee170ae136f892a1bc21dc84a5f85ba588da00dea17b",
+      "fileSha256": "d30a1514d736bf7aa7c1b5b2a48cd0d04ba3858b81b692f29247adaaef9ddae6",
+      "reason": "Deliberate legacy security-scanner demonstration string, not saved user configuration."
+    },
+    {
+      "file": "apps/lvx-machina/script.js",
+      "rule": "literal-credential",
+      "line": 5198,
+      "matchSha256": "4dbef7ac47c44af4e8049d39b46e15321fd13876f406bd1bd40f78d2d350c060",
+      "fileSha256": "d30a1514d736bf7aa7c1b5b2a48cd0d04ba3858b81b692f29247adaaef9ddae6",
+      "reason": "Deliberate legacy security-scanner demonstration string, not saved user configuration."
+    },
+    {
+      "file": "apps/lvx-machina/security-testing.test.js",
+      "rule": "provider-token",
+      "line": 199,
+      "matchSha256": "1a5d44a2dca19669d72edf4c4f1c27c4c1ca4b4408fbb17f6ce4ad452d78ddb3",
+      "fileSha256": "3c11f522ab13ead576e96e3577aaf3a8bec258a93754364ab25c248f9f40d3fe",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "apps/lvx-machina/security-testing.test.js",
+      "rule": "provider-token",
+      "line": 207,
+      "matchSha256": "0993d710aac920d7f6edbf50e437a91026d836f8c223282882d61a313864d3e0",
+      "fileSha256": "3c11f522ab13ead576e96e3577aaf3a8bec258a93754364ab25c248f9f40d3fe",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "apps/lvx-machina/security-testing.test.js",
+      "rule": "provider-token",
+      "line": 243,
+      "matchSha256": "1a5d44a2dca19669d72edf4c4f1c27c4c1ca4b4408fbb17f6ce4ad452d78ddb3",
+      "fileSha256": "3c11f522ab13ead576e96e3577aaf3a8bec258a93754364ab25c248f9f40d3fe",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "apps/lvx-machina/security-testing.test.js",
+      "rule": "provider-token",
+      "line": 248,
+      "matchSha256": "1a5d44a2dca19669d72edf4c4f1c27c4c1ca4b4408fbb17f6ce4ad452d78ddb3",
+      "fileSha256": "3c11f522ab13ead576e96e3577aaf3a8bec258a93754364ab25c248f9f40d3fe",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "apps/lvx-machina/security-testing.test.js",
+      "rule": "provider-token",
+      "line": 423,
+      "matchSha256": "1a5d44a2dca19669d72edf4c4f1c27c4c1ca4b4408fbb17f6ce4ad452d78ddb3",
+      "fileSha256": "3c11f522ab13ead576e96e3577aaf3a8bec258a93754364ab25c248f9f40d3fe",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "apps/lvx-machina/security-testing.test.js",
+      "rule": "private-key",
+      "line": 221,
+      "matchSha256": "8bcac7908eb950419537b91e19adc83ce2c9cbfdacf4f81157fdadfec11f7017",
+      "fileSha256": "3c11f522ab13ead576e96e3577aaf3a8bec258a93754364ab25c248f9f40d3fe",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "apps/lvx-machina/security-testing.test.js",
+      "rule": "credential-in-url",
+      "line": 236,
+      "matchSha256": "a38903718fa186fcbb8f0cd85efcb0727baef4b7450b836743b52eab0ba8d39d",
+      "fileSha256": "3c11f522ab13ead576e96e3577aaf3a8bec258a93754364ab25c248f9f40d3fe",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "apps/lvx-machina/security-testing.test.js",
+      "rule": "literal-credential",
+      "line": 142,
+      "matchSha256": "bc8004e44530b886b5d6bc51540f0ef0c0dc1280ac216cf5f00b485c7f7eb4f4",
+      "fileSha256": "3c11f522ab13ead576e96e3577aaf3a8bec258a93754364ab25c248f9f40d3fe",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "apps/lvx-machina/security-testing.test.js",
+      "rule": "literal-credential",
+      "line": 304,
+      "matchSha256": "54d084b540f8b3e783da7459688445d8528aa7551da64c6771b9015f65f45a98",
+      "fileSha256": "3c11f522ab13ead576e96e3577aaf3a8bec258a93754364ab25c248f9f40d3fe",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "apps/lvx-machina/security-testing.test.js",
+      "rule": "literal-credential",
+      "line": 423,
+      "matchSha256": "d6e65440c06f1c9924ae242b2934efd6515430f1034741d386d06a256134fa4c",
+      "fileSha256": "3c11f522ab13ead576e96e3577aaf3a8bec258a93754364ab25c248f9f40d3fe",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "apps/lvx-machina/storage-manager.test.js",
+      "rule": "literal-credential",
+      "line": 269,
+      "matchSha256": "f3514b82babd401537bf7f8694e21661c0306e267cf42ef8367cb24145e8198c",
+      "fileSha256": "dfb9ce8e9bbc59534f3fb2394a3e037faed7056b07ff93da78456ecfc4f9ac09",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "assets/app-modules.js",
+      "rule": "literal-credential",
+      "line": 449,
+      "matchSha256": "a95b6eb0a91a013ff230bdda524f412043041e31ec1513fa36dffd6ec9f990c5",
+      "fileSha256": "03d5d5e009dc2bf7974829bb69dde02f7b9ac640bb173fd9f0e6818828dc99a3",
+      "reason": "Reviewed UI field/schema/error-map text, not a stored user credential or literal authentication value."
+    },
+    {
+      "file": "assets/vendor/monaco/vs/language/typescript/tsWorker.js",
+      "rule": "personal-home-path",
+      "line": 22983,
+      "matchSha256": "f05c2d6f911dd3dd7f0745a3123fbf4d57e16b770606f21fa3033ea8c0aad9aa",
+      "fileSha256": "18391726fb4327a04611617a7cbc50aed0255b1d4fa829fbf22d6c11d3a7ac86",
+      "reason": "Unmodified upstream TypeScript documentation URL path, not an operating-system home directory."
+    },
+    {
+      "file": "assets/vendor/monaco/vs/language/typescript/tsWorker.js",
+      "rule": "personal-home-path",
+      "line": 22988,
+      "matchSha256": "f05c2d6f911dd3dd7f0745a3123fbf4d57e16b770606f21fa3033ea8c0aad9aa",
+      "fileSha256": "18391726fb4327a04611617a7cbc50aed0255b1d4fa829fbf22d6c11d3a7ac86",
+      "reason": "Unmodified upstream TypeScript documentation URL path, not an operating-system home directory."
+    },
+    {
+      "file": "assets/vendor/pyodide/pyodide.asm.js",
+      "rule": "personal-home-path",
+      "line": 9,
+      "matchSha256": "4899316c3df8d4e171501719674377e217e901124b9c57cc56818f0a14418708",
+      "fileSha256": "71250bb1cf7216d1f848505f1056f351bd02187fbb112e966f6e9745465d0c4f",
+      "reason": "Unmodified upstream virtual filesystem or runtime setting, not a local account path or personal credential."
+    },
+    {
+      "file": "assets/vendor/pyodide/pyodide.js",
+      "rule": "personal-home-path",
+      "line": 9,
+      "matchSha256": "b8df7225d2ddf4162ee3795350b798cf5dd4970febc5d9d808a4324c4ec21e14",
+      "fileSha256": "b67a1e4ed23ed8c3ee0b50f3b054f4fccf2cb9dda2f6db0cb69a531bd21107da",
+      "reason": "Unmodified upstream virtual filesystem or runtime setting, not a local account path or personal credential."
+    },
+    {
+      "file": "index.html",
+      "rule": "literal-credential",
+      "line": 2846,
+      "matchSha256": "b495c35ed693ae776653d4cb22d394d6d20fd140cdf81f3e5b6028ae979f7204",
+      "fileSha256": "695a27ce549f937e2ec90dd1b3ca47da317e3a264b78289ed7ee0a9fa49fa6ee",
+      "reason": "Reviewed UI field/schema/error-map text, not a stored user credential or literal authentication value."
+    },
+    {
+      "file": "mock-runtime.js",
+      "rule": "literal-credential",
+      "line": 12,
+      "matchSha256": "a95b6eb0a91a013ff230bdda524f412043041e31ec1513fa36dffd6ec9f990c5",
+      "fileSha256": "f039493b8ea715f78441b649323c59fd28d9ae0d080baf159b0d9ab2b51716f4",
+      "reason": "Synthetic mock generator label or example value, not a personal credential."
+    },
+    {
+      "file": "scripts/machina-e2e.cjs",
+      "rule": "literal-credential",
+      "line": 85,
+      "matchSha256": "cde8eba0cebea83e96d196dad098925286ab58f1c7a1d32cf10177a860d2666f",
+      "fileSha256": "5e7d68783e72a35fd3c4bf6f634e22ea971d09caf80abbd052b07b3f67541028",
+      "reason": "Explicit disposable native-test fixture or fake provider input; never a live account credential."
+    },
+    {
+      "file": "scripts/roadmap-e2e.cjs",
+      "rule": "literal-credential",
+      "line": 38,
+      "matchSha256": "6d177c23ef7bb6ca50a17b447aa91ebcf5fef3274db8c3b9096402b560067189",
+      "fileSha256": "216284e3db5921fcfa3c40c420de2b38db0cc60902d82f1a947b78068376f911",
+      "reason": "Explicit disposable native-test fixture or fake provider input; never a live account credential."
+    },
+    {
+      "file": "security-testing.test.js",
+      "rule": "provider-token",
+      "line": 166,
+      "matchSha256": "1a5d44a2dca19669d72edf4c4f1c27c4c1ca4b4408fbb17f6ce4ad452d78ddb3",
+      "fileSha256": "495cf05c39bcabae46b45252ebe7d0482bc9ce3f6a90a951ed293cbae185351d",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "security-testing.test.js",
+      "rule": "provider-token",
+      "line": 174,
+      "matchSha256": "0993d710aac920d7f6edbf50e437a91026d836f8c223282882d61a313864d3e0",
+      "fileSha256": "495cf05c39bcabae46b45252ebe7d0482bc9ce3f6a90a951ed293cbae185351d",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "security-testing.test.js",
+      "rule": "provider-token",
+      "line": 210,
+      "matchSha256": "1a5d44a2dca19669d72edf4c4f1c27c4c1ca4b4408fbb17f6ce4ad452d78ddb3",
+      "fileSha256": "495cf05c39bcabae46b45252ebe7d0482bc9ce3f6a90a951ed293cbae185351d",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "security-testing.test.js",
+      "rule": "provider-token",
+      "line": 215,
+      "matchSha256": "1a5d44a2dca19669d72edf4c4f1c27c4c1ca4b4408fbb17f6ce4ad452d78ddb3",
+      "fileSha256": "495cf05c39bcabae46b45252ebe7d0482bc9ce3f6a90a951ed293cbae185351d",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "security-testing.test.js",
+      "rule": "provider-token",
+      "line": 392,
+      "matchSha256": "1a5d44a2dca19669d72edf4c4f1c27c4c1ca4b4408fbb17f6ce4ad452d78ddb3",
+      "fileSha256": "495cf05c39bcabae46b45252ebe7d0482bc9ce3f6a90a951ed293cbae185351d",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "security-testing.test.js",
+      "rule": "private-key",
+      "line": 188,
+      "matchSha256": "8bcac7908eb950419537b91e19adc83ce2c9cbfdacf4f81157fdadfec11f7017",
+      "fileSha256": "495cf05c39bcabae46b45252ebe7d0482bc9ce3f6a90a951ed293cbae185351d",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "security-testing.test.js",
+      "rule": "credential-in-url",
+      "line": 203,
+      "matchSha256": "a38903718fa186fcbb8f0cd85efcb0727baef4b7450b836743b52eab0ba8d39d",
+      "fileSha256": "495cf05c39bcabae46b45252ebe7d0482bc9ce3f6a90a951ed293cbae185351d",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "security-testing.test.js",
+      "rule": "literal-credential",
+      "line": 109,
+      "matchSha256": "bc8004e44530b886b5d6bc51540f0ef0c0dc1280ac216cf5f00b485c7f7eb4f4",
+      "fileSha256": "495cf05c39bcabae46b45252ebe7d0482bc9ce3f6a90a951ed293cbae185351d",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "security-testing.test.js",
+      "rule": "literal-credential",
+      "line": 271,
+      "matchSha256": "54d084b540f8b3e783da7459688445d8528aa7551da64c6771b9015f65f45a98",
+      "fileSha256": "495cf05c39bcabae46b45252ebe7d0482bc9ce3f6a90a951ed293cbae185351d",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "security-testing.test.js",
+      "rule": "literal-credential",
+      "line": 392,
+      "matchSha256": "d6e65440c06f1c9924ae242b2934efd6515430f1034741d386d06a256134fa4c",
+      "fileSha256": "495cf05c39bcabae46b45252ebe7d0482bc9ce3f6a90a951ed293cbae185351d",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "services/security/index.js",
+      "rule": "literal-credential",
+      "line": 18,
+      "matchSha256": "65ecbda3445e03274e45d6df53434bb12c589c4396cded60a2e25a227f1b76ea",
+      "fileSha256": "99a17976b56503f49216cc3b4c3266bfa3a6982e4f48d5f727fb138fcf729845",
+      "reason": "Reviewed UI field/schema/error-map text, not a stored user credential or literal authentication value."
+    },
+    {
+      "file": "tests/agent-board.test.cjs",
+      "rule": "credential-in-url",
+      "line": 766,
+      "matchSha256": "ac3ab59f737e1609941596374087782d7efd6e2f44828de17a86323f424d8f2c",
+      "fileSha256": "ccd0568ffe4b98a3cb5070667b19a11b38efc03713122922e6a5c30397049790",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/agent-board.test.cjs",
+      "rule": "literal-credential",
+      "line": 764,
+      "matchSha256": "bcad394b9b736f18d3d6e2ddcb7107abaf677284fb6566fa76fa4a56677f3643",
+      "fileSha256": "ccd0568ffe4b98a3cb5070667b19a11b38efc03713122922e6a5c30397049790",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/agents-runtime.test.cjs",
+      "rule": "literal-credential",
+      "line": 97,
+      "matchSha256": "3991b17529b746b7c2ff2bc43d48b3313893b4468073f953ca36bfb750632c05",
+      "fileSha256": "7c4c12a997796711231ae955f6acdd273faf925a72c0752d065bb7d57830d749",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/agents-runtime.test.cjs",
+      "rule": "literal-credential",
+      "line": 235,
+      "matchSha256": "0746f7019c4cd4815cd29f475da6ce2077c2c3233915def7ffd365d139a987b7",
+      "fileSha256": "7c4c12a997796711231ae955f6acdd273faf925a72c0752d065bb7d57830d749",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/coordination-graph.test.cjs",
+      "rule": "credential-in-url",
+      "line": 34,
+      "matchSha256": "fbddae166ead16d1dd67736b19403ab1ac0095e344f663573848af911a7ce273",
+      "fileSha256": "2ba8de0c644805ae1697dae06687428c4f8db41850a4591ed8c13f577ad0644c",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/coordination-graph.test.cjs",
+      "rule": "literal-credential",
+      "line": 28,
+      "matchSha256": "4b5bedbfe10bb7e69ca7a445cceba929d3d397a19ca20051c04aedb71f575f27",
+      "fileSha256": "2ba8de0c644805ae1697dae06687428c4f8db41850a4591ed8c13f577ad0644c",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/coordination-graph.test.cjs",
+      "rule": "literal-credential",
+      "line": 39,
+      "matchSha256": "7a5857c94665a9ce1c5dd642058e7a8c20adefde7bdbc89343c06d8508424c22",
+      "fileSha256": "2ba8de0c644805ae1697dae06687428c4f8db41850a4591ed8c13f577ad0644c",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/coordination-graph.test.cjs",
+      "rule": "literal-credential",
+      "line": 97,
+      "matchSha256": "9ac6aa3612d3fc956e27f81a916baa79c94c33e2af490810c21ec82830ee8c58",
+      "fileSha256": "2ba8de0c644805ae1697dae06687428c4f8db41850a4591ed8c13f577ad0644c",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/machina-data.test.cjs",
+      "rule": "literal-credential",
+      "line": 100,
+      "matchSha256": "ddabd0d46bd87d913284249db804873fcfc8df205123ea8a6a647aa53fad403a",
+      "fileSha256": "0ee19fca41df4e8e325dc21d900c65f37044b6dfcf698af57f623de4d3fb568d",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/machina-host.test.cjs",
+      "rule": "literal-credential",
+      "line": 22,
+      "matchSha256": "495ddec4b91f749e82a8fbdd55e6f8cfe35fdc17a02bb9ca8e52e73bda6bcca0",
+      "fileSha256": "bb3eccf2738c6f2d8b2f6ce4c9b787eef585c01263f90f5d1d0bc8df10242ebf",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/machina-host.test.cjs",
+      "rule": "literal-credential",
+      "line": 26,
+      "matchSha256": "6b514e1d8452e17805e8d5ed47c4a6ef5d4b8e5fd68a83dfb7ef6062e6eafe77",
+      "fileSha256": "bb3eccf2738c6f2d8b2f6ce4c9b787eef585c01263f90f5d1d0bc8df10242ebf",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/machina-host.test.cjs",
+      "rule": "literal-credential",
+      "line": 27,
+      "matchSha256": "212a7a0325c7c8c8eea880c44b35e9533f4556266b00316922536dc01f950cfe",
+      "fileSha256": "bb3eccf2738c6f2d8b2f6ce4c9b787eef585c01263f90f5d1d0bc8df10242ebf",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/machina-host.test.cjs",
+      "rule": "literal-credential",
+      "line": 27,
+      "matchSha256": "6f178a7bf8a1f0aeb9d250f7cc0866e00053674b8c7fe0155a730c1f7423638a",
+      "fileSha256": "bb3eccf2738c6f2d8b2f6ce4c9b787eef585c01263f90f5d1d0bc8df10242ebf",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/machina-host.test.cjs",
+      "rule": "literal-credential",
+      "line": 28,
+      "matchSha256": "58281088adb1028822cc45f83099af7f71d1b9f8f09d074e2c95575722f1cfa2",
+      "fileSha256": "bb3eccf2738c6f2d8b2f6ce4c9b787eef585c01263f90f5d1d0bc8df10242ebf",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/machina-host.test.cjs",
+      "rule": "literal-credential",
+      "line": 28,
+      "matchSha256": "1f48bb3ca004d7f133ada5d31a80370fed8f3dd03ed38f42627819ffb131fe41",
+      "fileSha256": "bb3eccf2738c6f2d8b2f6ce4c9b787eef585c01263f90f5d1d0bc8df10242ebf",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/machina-host.test.cjs",
+      "rule": "literal-credential",
+      "line": 28,
+      "matchSha256": "0fea3888daf3cc264eb67b733d8eb61cb20d2228793e3a34eedeca5d81360f48",
+      "fileSha256": "bb3eccf2738c6f2d8b2f6ce4c9b787eef585c01263f90f5d1d0bc8df10242ebf",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/machina-host.test.cjs",
+      "rule": "literal-credential",
+      "line": 66,
+      "matchSha256": "68af95358fc04d7e2eb595d75db9c46b3cb619ad8b82e6114cb49ffa1511fb82",
+      "fileSha256": "bb3eccf2738c6f2d8b2f6ce4c9b787eef585c01263f90f5d1d0bc8df10242ebf",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/machina-host.test.cjs",
+      "rule": "literal-credential",
+      "line": 66,
+      "matchSha256": "6b514e1d8452e17805e8d5ed47c4a6ef5d4b8e5fd68a83dfb7ef6062e6eafe77",
+      "fileSha256": "bb3eccf2738c6f2d8b2f6ce4c9b787eef585c01263f90f5d1d0bc8df10242ebf",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/machina-runtime.test.cjs",
+      "rule": "literal-credential",
+      "line": 15,
+      "matchSha256": "f2b6e70b182afe6a53836230387a56c35e89f7f01c2e33b7ccb6cf98b18f4cde",
+      "fileSha256": "cbb84abc6129cdab78fca0bbd32f26d8fe076a3ff0f99e0e37a05f0c4c6b7998",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/machina-runtime.test.cjs",
+      "rule": "literal-credential",
+      "line": 35,
+      "matchSha256": "7be1b9192e3ea42f38ec2ebd38121e8faf95338fa706b378e01017e8716eb60e",
+      "fileSha256": "cbb84abc6129cdab78fca0bbd32f26d8fe076a3ff0f99e0e37a05f0c4c6b7998",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-authoring.test.cjs",
+      "rule": "literal-credential",
+      "line": 26,
+      "matchSha256": "d35354211f95aefa901c3c924f529ee7c44dee65fc0b2b116dee7629f9825044",
+      "fileSha256": "c99a3530ef8041d29325b86b7f27d95e8e46df48d1fc727065a8ab20f8596034",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 26,
+      "matchSha256": "57ca4084129de9d8ff379e2f9054cc07cc624877d0c163fcf438f77bef6faa6c",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 27,
+      "matchSha256": "391306d8e07c0918d08b39e4c59b3b6d455af8b54c270266a0395d0f40834459",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 28,
+      "matchSha256": "efac89b7ee22d6407c21860e412dce9231335b1910a454b897100d9eb82da913",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 29,
+      "matchSha256": "e209634c970e8d1caf19a5fd213e174ece3050e61b88eb6bf9a05c7921e2378d",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 30,
+      "matchSha256": "d5177af417f5b6afd65b051d30183839f331dd310b8d54c19624d5aa741aadda",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 32,
+      "matchSha256": "287d6820fbf4667cea35991c7e0999467326d5c0de05478bdb9ce0add5e8f24b",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 37,
+      "matchSha256": "e5356776c2196de0a05739e3b22307635c1b306d6be2f3193fc74e1729ebecb2",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 43,
+      "matchSha256": "ecaa5ea89d1752406eb9608033631a722f5976ce17bf57c6404c3a4f8c465cbf",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 43,
+      "matchSha256": "b121ce592022d4bb86272a3a37ba559bcc9aa47acf4847803ecb57157a46006e",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 44,
+      "matchSha256": "0c973413c0f319a58e2e891e046e4532b94e4b1788e5d8b4cec140913e65bcd4",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 44,
+      "matchSha256": "755f856023d690573ec951a8fc8c10eadbc71b61c77bcee451cc0a61ae4f018f",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 45,
+      "matchSha256": "2c30900bbd3d34a45a277c5a80b80e2f4db7720a5a7de38b20a6a889d3163702",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 50,
+      "matchSha256": "52420c681d413c861b56aa8b049fd9175db431f3ef3564b1429294e08d36a809",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 58,
+      "matchSha256": "0ba23fd528193aa3e2f96cf1d07d9a23ed0b19578be68006fbd9a70ade66cabf",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 58,
+      "matchSha256": "719138bf2d1777c3533fb422bd47ef96ceb01528a40c18a1b1e1da2590d9bb0f",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 60,
+      "matchSha256": "bb7756c9dc7ca1bf8b9bc251f494d081b8a402e7fa7a367fd5c705f4d82b49c1",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 65,
+      "matchSha256": "0d066d059559e34695639f7b4f00729e0e616ac8f61e612d74b715a9a5b030d9",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 85,
+      "matchSha256": "7a35f67b03b66b2d96337abfe9e3764adb863a483cbe2b10c7eb93d47c2d4652",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 97,
+      "matchSha256": "2c35c99e2e667808fb4c4d97a8629eeffed3f2f6169bc0ea4b469bf29c785b09",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 100,
+      "matchSha256": "87ddd26381493d65e5a3c2c4c210f600b8f6b435f6a3d058b2f6fe5f62de9d58",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-credential-compat.test.cjs",
+      "rule": "literal-credential",
+      "line": 109,
+      "matchSha256": "41a4285cc7a34d5e411cdb5c119ee8691ecba45996b8836166fe3cb706dc57b6",
+      "fileSha256": "4768316ffec8a3d73946dd398fb095b47bb92af39e4830b488513e16915ecb3b",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-execution.test.cjs",
+      "rule": "literal-credential",
+      "line": 65,
+      "matchSha256": "1acf51ff1172ff47cfe936669401b22d6b577003ad00c2c71f8cd7cef6cc7f97",
+      "fileSha256": "91dcfd9374a496e92240fa83375c04bb5ef9714c8713dcc9907a2219cf2032c0",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-protection.test.cjs",
+      "rule": "literal-credential",
+      "line": 19,
+      "matchSha256": "7c2c3674b931e8970d694484702e97268cb9eb569c15d4c128397c88fa9607f2",
+      "fileSha256": "c435b5bacdd9a2618db84cbb1458336f86b351186ae33043f841c1fd38207ece",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-protection.test.cjs",
+      "rule": "literal-credential",
+      "line": 20,
+      "matchSha256": "e46b4cb8b586f1053235f4778a07c92c03a2bf854e9a502d0a44060af7650dfd",
+      "fileSha256": "c435b5bacdd9a2618db84cbb1458336f86b351186ae33043f841c1fd38207ece",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-protection.test.cjs",
+      "rule": "literal-credential",
+      "line": 24,
+      "matchSha256": "a14b5b90bb2abe92a712c77809aea7143932b07c95d3e239aafd919363ae7482",
+      "fileSha256": "c435b5bacdd9a2618db84cbb1458336f86b351186ae33043f841c1fd38207ece",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-protection.test.cjs",
+      "rule": "literal-credential",
+      "line": 34,
+      "matchSha256": "7317347e89561b64ec4011a2c4b28eaf863e0f89e2cf49fd6eb790911588815e",
+      "fileSha256": "c435b5bacdd9a2618db84cbb1458336f86b351186ae33043f841c1fd38207ece",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-recovery.test.cjs",
+      "rule": "literal-credential",
+      "line": 41,
+      "matchSha256": "c70a387ed70c8b83ebf3a153483fd564556f5b977ddbfaa8ba3c21c60189b4a7",
+      "fileSha256": "9eaa09a0383037f8c96c98aa6b4a7e14643a4825ddd9e8a250e88a6864a1de8c",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-security.test.cjs",
+      "rule": "credential-in-url",
+      "line": 13,
+      "matchSha256": "fbddae166ead16d1dd67736b19403ab1ac0095e344f663573848af911a7ce273",
+      "fileSha256": "486b56a0348ec5ed2532f847db00b0a480e2da760dc3d5e86a5659c79a661efc",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-security.test.cjs",
+      "rule": "credential-in-url",
+      "line": 22,
+      "matchSha256": "093866188144b0216fb125431572e8ac2df8980dfeeb6ebeb3d9f3987d1e4c1d",
+      "fileSha256": "486b56a0348ec5ed2532f847db00b0a480e2da760dc3d5e86a5659c79a661efc",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-security.test.cjs",
+      "rule": "literal-credential",
+      "line": 13,
+      "matchSha256": "7b88660c6453f8443473ae20d5645b771be1689526b7cad9bb2790a8cb3a54f8",
+      "fileSha256": "486b56a0348ec5ed2532f847db00b0a480e2da760dc3d5e86a5659c79a661efc",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-security.test.cjs",
+      "rule": "literal-credential",
+      "line": 14,
+      "matchSha256": "7b88660c6453f8443473ae20d5645b771be1689526b7cad9bb2790a8cb3a54f8",
+      "fileSha256": "486b56a0348ec5ed2532f847db00b0a480e2da760dc3d5e86a5659c79a661efc",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-security.test.cjs",
+      "rule": "literal-credential",
+      "line": 22,
+      "matchSha256": "3713ba0a57f6f1b62ddd3a707485bd23714319c276f17881c7e77b74211f2258",
+      "fileSha256": "486b56a0348ec5ed2532f847db00b0a480e2da760dc3d5e86a5659c79a661efc",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-security.test.cjs",
+      "rule": "literal-credential",
+      "line": 91,
+      "matchSha256": "79d8e41eb708b650b7e6f52493272d84d2690fa16911794ad821f900e5bf8932",
+      "fileSha256": "486b56a0348ec5ed2532f847db00b0a480e2da760dc3d5e86a5659c79a661efc",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-security.test.cjs",
+      "rule": "literal-credential",
+      "line": 91,
+      "matchSha256": "7dfbdb9bf0509a62942c41487ddf42785dd3553944f6dee555d4045e76001f5a",
+      "fileSha256": "486b56a0348ec5ed2532f847db00b0a480e2da760dc3d5e86a5659c79a661efc",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-storage-bridge.test.cjs",
+      "rule": "literal-credential",
+      "line": 89,
+      "matchSha256": "e562797ec55f020d7a411600d8eaad8dbaab49daf31855be96b99be14fe7301d",
+      "fileSha256": "a3dfc0890060fc6c69867be852073af7a01fcac5a222daa34f3c198e3e48c77c",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-storage-bridge.test.cjs",
+      "rule": "literal-credential",
+      "line": 99,
+      "matchSha256": "5a925aa827577b70a39940b42cd5beed61796f7456714a5919696db230fe7e4d",
+      "fileSha256": "a3dfc0890060fc6c69867be852073af7a01fcac5a222daa34f3c198e3e48c77c",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-storage-bridge.test.cjs",
+      "rule": "literal-credential",
+      "line": 100,
+      "matchSha256": "7f94190701091172049bfedd29e996c947c841ceda17f54cc1f796f051101e2d",
+      "fileSha256": "a3dfc0890060fc6c69867be852073af7a01fcac5a222daa34f3c198e3e48c77c",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-storage-bridge.test.cjs",
+      "rule": "literal-credential",
+      "line": 101,
+      "matchSha256": "e4295ff13da4ad9203a8a7a3198cae9ccdb9e1338983564b078d7027b217aa41",
+      "fileSha256": "a3dfc0890060fc6c69867be852073af7a01fcac5a222daa34f3c198e3e48c77c",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-workspace.test.cjs",
+      "rule": "literal-credential",
+      "line": 134,
+      "matchSha256": "9111af5d405ef34ffd2759f3db84e17ca01e3103e6728efb136afb667fe06f9d",
+      "fileSha256": "17ba934f747d61957df4beb05b8b002fdd8e7eb9e8223f08050a0057003f1944",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/roadmap-workspace.test.cjs",
+      "rule": "literal-credential",
+      "line": 134,
+      "matchSha256": "c88ae069089cf26155540527ebe286cf7e2290bcdf7a6a73aec5aca2e87af3ce",
+      "fileSha256": "17ba934f747d61957df4beb05b8b002fdd8e7eb9e8223f08050a0057003f1944",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/runtime-setup.test.cjs",
+      "rule": "credential-in-url",
+      "line": 10,
+      "matchSha256": "fbddae166ead16d1dd67736b19403ab1ac0095e344f663573848af911a7ce273",
+      "fileSha256": "fe0e6e192e1fbd4654f6b12aaaebe012966e6bad8c9488a2fb57f4f76f929924",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/visual-web-targets-ui.test.cjs",
+      "rule": "credential-in-url",
+      "line": 57,
+      "matchSha256": "ec25b8fa54a9d7a878a86e6f38233af24d5d27d184b396136d6d7f0251d33c19",
+      "fileSha256": "1a93b76af357246785dd08bfdc38e8b30542c17c13be63d8ec25efaced235574",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/web-target-policy.test.cjs",
+      "rule": "credential-in-url",
+      "line": 6,
+      "matchSha256": "fbddae166ead16d1dd67736b19403ab1ac0095e344f663573848af911a7ce273",
+      "fileSha256": "40937ada1c38531482232fda62a432619f1e276b10d39b68e0fed81c496b8a64",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "tests/web-targets.test.cjs",
+      "rule": "credential-in-url",
+      "line": 22,
+      "matchSha256": "093866188144b0216fb125431572e8ac2df8980dfeeb6ebeb3d9f3987d1e4c1d",
+      "fileSha256": "790cbe3473d097d27916728ae63e8acaa22471c55e8725e4c6f28fb4562c3d67",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    }
+  ],
+  "gitleaksExamples": [
+    {
+      "file": "apps/lvx-machina/security-testing.test.js",
+      "rule": "jwt",
+      "line": 229,
+      "outerSha256": "3c11f522ab13ead576e96e3577aaf3a8bec258a93754364ab25c248f9f40d3fe",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "apps/lvx-machina/GUIDES AND TUTORIALS/CICD-SETUP-GUIDE.md",
+      "rule": "stripe-access-token",
+      "line": 87,
+      "outerSha256": "ebdaba01b19df4ac64a3adeeb005b38388452bffbb6eb8e9445228fe66873619",
+      "reason": "Clearly labelled synthetic API-key example in the imported guide."
+    },
+    {
+      "file": "docs/verification/roadmap-credential-compat.json",
+      "rule": "generic-api-key",
+      "line": 132,
+      "outerSha256": "e2bc50b92477ca68fe5ea12ba9a7e41aa4463caec7c90850e279a692ac00e914",
+      "reason": "A source-manifest digest labelled secure-config.js, not an authentication key."
+    },
+    {
+      "file": "assets/vendor/pyodide/distutils-1.0.0.zip!distutils/msvccompiler.py",
+      "rule": "generic-api-key",
+      "line": 39,
+      "outerSha256": "9fb37736051f39d184c9887552689677735f81aa1c8402c36445aab889f5c5e4",
+      "reason": "Unmodified upstream virtual filesystem or runtime setting, not a local account path or personal credential."
+    },
+    {
+      "file": "security-testing.test.js",
+      "rule": "jwt",
+      "line": 196,
+      "outerSha256": "495cf05c39bcabae46b45252ebe7d0482bc9ce3f6a90a951ed293cbae185351d",
+      "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "file": "assets/vendor/monaco/vs/editor/editor.main.js",
+      "rule": "generic-api-key",
+      "line": 602,
+      "outerSha256": "610fbf15b039278df4c7f22182d21f53dfa1799908be54474ce625aa35413d34",
+      "reason": "Pinned upstream code identifier or registry key, not a user credential; vendor integrity remains checked."
+    }
+  ],
+  "historyExamples": []
+}

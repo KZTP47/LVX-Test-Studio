@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "sheetjs": {
+    "version": "0.20.3",
+    "path": "assets/vendor/xlsx.full.min.js",
+    "url": "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js",
+    "sha256": "cc015130aa8521e7f088f88898eba949ccdcbfb38df0bd129b44b7273c3a6f41"
+  },
+  "sheetjsLicense": {
+    "path": "assets/licenses/sheetjs-LICENSE.txt",
+    "url": "https://cdn.sheetjs.com/xlsx-0.20.3/package/LICENSE",
+    "sha256": "4d2a38ac35cda06a555c84074a819d413339cd3691b822cae50f8f322fe01f64"
+  }
+}
