@@ -836,3 +836,13 @@
 :is(#studio-task-surface,#studio-workbench,body) .agent-board .ab-node-preview {border:1px solid color-mix(in srgb,var(--bubble-color,#49cde5) 65%,#15343e);border-radius:10px 10px 10px 2px;background:color-mix(in srgb,var(--bubble-color,#49cde5) 20%,#0b2733);padding:7px;color:#effbff}
 :is(#studio-task-surface,#studio-workbench,body) .agent-board .ab-window-error {margin:4px 8px;padding:8px;border:1px solid #ff9b9b;background:#492f3b;color:#ffecec;white-space:pre-wrap;overflow:auto;max-height:25vh;flex-shrink:0}
 :is(#studio-task-surface,#studio-workbench,body) .agent-board dialog.ab-confirm[open] {display:block!important;max-width:min(560px,calc(100vw - 30px));background:#123541;color:#effaff;padding:22px;border:1px solid #83d9ec;border-radius:10px}
+
+:is(#studio-task-surface,#studio-workbench,body) .agent-board .ab-folder-connection {display:flex;align-items:center;gap:10px;justify-content:space-between;padding:8px 0;border-bottom:1px solid #466c78}
+:is(#studio-task-surface,#studio-workbench,body) .agent-board .ab-folder-connection span {min-width:0;overflow-wrap:anywhere}
+:is(#studio-task-surface,#studio-workbench,body) .agent-board .ab-folder-connection small {display:block;color:#bfe8f5}
+:is(#studio-task-surface,#studio-workbench,body) .agent-board .ab-folder-connection button {flex-shrink:0}
+:is(#studio-task-surface,#studio-workbench,body) .agent-board .ab-folder-connect-tools {display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+:is(#studio-task-surface,#studio-workbench,body) .agent-board .ab-folder-connect-tools label {width:100%;margin:0}
+.ab-transition-dialog footer {display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.ab-transition-dialog [data-transition-error] {color:#ffc4c4;white-space:pre-wrap}
+
+:is(#studio-task-surface,#studio-workbench,body) .agent-board .ab-folder-connect-tools .ab-field {text-align:left}

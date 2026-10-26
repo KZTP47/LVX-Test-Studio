@@ -10,8 +10,8 @@
     },
     {
       "file": "README.md",
-      "bytes": 553,
-      "sha256": "a4bda549e782cb8ee5d3d9cd65dd8b36d43f7b81abe985fc7ea34b34d191e413"
+      "bytes": 461,
+      "sha256": "021bed9727281ec83851ad10d96726e96ce469f3fb16a1dbb78d59b3b1652c75"
     },
     {
       "file": "advanced-assertions.js",
@@ -331,6 +331,13 @@
       "publishedSha256": "7c4d14e92fa20787bdb99911f11f3f0184667c5c526356b4b8af75616d1a936f",
       "change": "Replaced a personal Windows log-folder placeholder with a workspace-relative example; execution code unchanged.",
       "originalCommit": "a27b904edb2a138315065a86b8d82ad71dfe2727"
+    },
+    {
+      "file": "README.md",
+      "originalSha256": "a4bda549e782cb8ee5d3d9cd65dd8b36d43f7b81abe985fc7ea34b34d191e413",
+      "publishedSha256": "021bed9727281ec83851ad10d96726e96ce469f3fb16a1dbb78d59b3b1652c75",
+      "change": "Removed an unnecessary AI Studio drive app deep link from the historical getting-started guide; local run instructions unchanged.",
+      "originalCommit": "5b45e5ff12c9895750687c9f684ad133d748eb90"
     }
   ],
   "fixtureAmendments": [

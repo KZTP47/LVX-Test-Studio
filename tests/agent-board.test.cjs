@@ -1192,6 +1192,8 @@ test(
       await action("edit-goal").click();
       await action("add").click();
       await field("agent-name").fill("FIXTURE Writer");
+      await field('folder-to-connect').selectOption(projectId);
+      await action('agent-folder-add').click();
       await field('agent-project').selectOption(projectId);
       assert.match(await page.locator('[data-ab="agent-folder-hint"]').textContent(),/EXTERNAL/);
       await field("board-name").fill("FIXTURE board");
@@ -1244,12 +1246,14 @@ test(
       assert.equal(await page.evaluate(()=>fixture.records[0].value.projects[0].name),'Fixture repository folder');
       assert.equal(await page.evaluate(()=>fixture.records[0].value.nodes[0].projectId),projectId);
       assert.equal(await page.evaluate(()=>fixture.records[0].value.view.workspacePosition.x),90);
-      assert.equal(await page.locator('[data-ab="project-links"] g').count(),2);
+      assert.equal(await page.locator('[data-ab="project-links"] g').count(),3,'Adding a folder preserves the existing workspace connection');
       assert.match(await page.locator('[data-ab="project-links"]').textContent(),/works in/);
       await field('project-selection').selectOption(projectId);
       await action('project-disconnect').click();
       await field('agent-selection').selectOption(first);
       assert.equal(await field('agent-project').inputValue(),'','Disconnect returns assigned agents to current workspace');
+      await field('folder-to-connect').selectOption(projectId);
+      await action('agent-folder-add').click();
       await field('agent-project').selectOption(projectId);
       await page.evaluate(()=>{fixture.folderAllowed=false;});
       await action('refresh').click();

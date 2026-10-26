@@ -28,6 +28,31 @@ export function projectCards(board, workspaceRoot) {
   return [{id:WORKSPACE_FOLDER,name:'Current workspace',path:workspaceRoot,position:board.view?.workspacePosition||{x:80,y:360},isWorkspace:true},...(board.projects||[])];
 }
 
+/** Keep explicit assignments and an active chat folder in agreement. */
+export function changeFolderConnection(node, folderId, connect) {
+  const ids = [...new Set(node.projectIds || [node.activeProjectId || node.projectId || ''])];
+  if (connect) { if (!ids.includes(folderId)) ids.push(folderId); }
+  else {
+    if (!ids.includes(folderId)) return node;
+    ids.splice(ids.indexOf(folderId), 1);
+  }
+  const active = node.activeProjectId ?? node.projectId ?? '';
+  node.projectIds = ids;
+  node.activeProjectId = ids.includes(active) ? active : (ids[0] ?? '');
+  node.projectId = node.activeProjectId;
+  return node;
+}
+
+/** One decision resolves drafts before the intended board action resumes. */
+export async function continueBoardTransition({ pending, decide, prepare, proceed }) {
+  if (pending()) {
+    const choice = await decide();
+    if (choice === 'stay' || !await prepare(choice)) return false;
+  }
+  await proceed();
+  return true;
+}
+
 export function emptyBoard(id = uuid()) {
   return {
     schemaVersion: 1,
@@ -763,7 +788,7 @@ export function mountAgentBoard(
           <div class="ab-toolbar">${select("Selected agent", "agent-selection", [["", "No agents"]])}${button("select-agent", "Open agent", "comment")}</div>
           <div data-ab="agent-editor" hidden>
             <div class="ab-form-grid">${field("Agent name", "agent-name")}${select("Provider", "agent-provider", Object.entries(PROVIDERS))}</div>
-            <fieldset class="ab-folder-assignments"><legend>Folders this agent can work in</legend><div data-ab="agent-folders"></div></fieldset>${select('Active folder for this chat','agent-project',[['','Current workspace']])}<p class="ab-help" data-ab="agent-folder-hint"></p><p class="ab-help">Assign any number of folders below. Each chat has an active folder. Switching folders keeps that folder’s previous native conversation ready to resume.</p>
+            <fieldset class="ab-folder-assignments"><legend>Folders this agent can work in</legend><div data-ab="agent-folders"></div><div class="ab-folder-connect-tools">${select("Connect a workspace", "folder-to-connect", [["", "Current workspace"]])}${button("agent-folder-add", "Add workspace connection", "plus")}${button("agent-folder-browse", "Browse another folder", "folder")}</div></fieldset>${select('Active folder for this chat','agent-project',[['','Current workspace']])}<p class="ab-help" data-ab="agent-folder-hint"></p><p class="ab-help">Connections give this agent access to several folders. The active folder is where this chat works now. Changing it keeps each folder’s earlier native chat ready to resume. Remove disconnects only this agent; files and chat history stay saved.</p>
             <details class="ab-appearance" open><summary>How this agent looks</summary><div class="ab-form-grid">${field("Node color", "agent-color", "color")}${field("Chat bubble color", "agent-bubble-color", "color")}${select("Fallback icon", "agent-icon", [["robot","Robot"],["code","Code"],["shield","Shield"],["book","Book"],["target","Target"],["network","Network"]])}${field("Picture zoom", "agent-picture-zoom", "range", 'min="1" max="3" step="0.1"')}${field("Picture hue", "agent-picture-hue", "range", 'min="0" max="360" step="1"')}</div><label class="ab-field">Profile picture from this computer<input name="agent-picture" type="file" accept="image/png,image/jpeg,image/webp"></label>${button("clear-picture", "Use fallback icon", "robot")}<p class="ab-help">PNG, JPEG or WebP, up to 256 KB. Pictures are saved with this board.</p></details>
             <p class="ab-provider-hint" data-ab="provider-hint"></p>
             <details><summary>Model, instructions and permissions</summary><div class="ab-form-grid">${field("Model (blank = provider default)", "agent-model")}${field("Effort (blank = provider default)", "agent-effort")}${select("Native permissions", "agent-permission", [["native", "Provider native policy"]])}</div>${area("Optional instructions sent with this agent", "agent-instructions", 'placeholder="Leave blank to use the native agent without added instructions."')}<p class="ab-help">These are your explicit instructions. The board adds no hidden role or planning prompt. Native permission requests can block a turn; read the chat evidence to recover.</p></details>
@@ -1000,7 +1025,8 @@ export function mountAgentBoard(
             : state.notice);
       q("notice").classList.toggle("ab-error", !!state.error || state.conflict);
       q("notice").setAttribute("role", state.error ? "alert" : "status");
-      if (eventBoard !== state.record?.id) {
+      const changedBoard = eventBoard !== state.record?.id;
+      if (changedBoard) {
         eventBoard = state.record?.id;
         seenSequence = 0;
       }
@@ -1012,6 +1038,7 @@ export function mountAgentBoard(
         ],
         f("saved-board").value || state.record?.id,
       );
+      if(changedBoard)f('saved-board').value=state.record?.id||'';
       setValue("board-name", board.name);
       setValue("board-goal", board.goal);
       setValue("board-criteria", board.acceptanceCriteria);
@@ -1043,8 +1070,16 @@ export function mountAgentBoard(
       q('project-status').textContent=status.summary;
       for(const action of ['project-approve','project-remove','project-disconnect'])root.querySelector('.ab-project-editor [data-ab-action="'+action+'"]').disabled=!!project.isWorkspace||state.busy>0;
       root.querySelector('[data-ab-action="add-project"]').disabled=typeof chooseProjectFolder!=='function'||state.busy>0;
-      options('agent-project',[['','Current workspace'],...(board.projects||[]).map(p=>[p.id,p.name])],node?.activeProjectId||node?.projectId||'');
-      const assigned=node?.projectIds||[node?.projectId||''];q('agent-folders').innerHTML=folders.map(p=>'<label><input type="checkbox" data-folder-assignment="'+esc(p.id===WORKSPACE_FOLDER?'':p.id)+'" '+(assigned.includes(p.id===WORKSPACE_FOLDER?'':p.id)?'checked':'')+'>'+esc(p.name)+'</label>').join('');
+      const assigned=node?.projectIds||[node?.activeProjectId??node?.projectId??''];
+      const connected=folders.filter(p=>assigned.includes(p.isWorkspace?'':p.id));
+      const available=folders.filter(p=>!assigned.includes(p.isWorkspace?'':p.id));
+      options('agent-project',connected.length?connected.map(p=>[p.isWorkspace?'':p.id,p.name]):[['','Default chat location: Current workspace']],node?.activeProjectId??node?.projectId??'');
+      f('agent-project').disabled=!node||!connected.length;
+      options('folder-to-connect',available.map(p=>[p.isWorkspace?'':p.id,p.name]),f('folder-to-connect').value);
+      f('folder-to-connect').disabled=!node||!available.length;
+      root.querySelector('[data-ab-action="agent-folder-add"]').disabled=!node||!available.length||state.busy>0;
+      root.querySelector('[data-ab-action="agent-folder-browse"]').disabled=!node||typeof chooseProjectFolder!=='function'||state.busy>0;
+      q('agent-folders').innerHTML=connected.map(p=>'<div class="ab-folder-connection" data-folder-connection="'+esc(p.isWorkspace?'':p.id)+'"><span>'+esc(p.name)+(p.id===(node?.activeProjectId||node?.projectId||WORKSPACE_FOLDER)?' <small>Active for this chat</small>':'')+'</span>'+button('agent-folder-remove','Remove','close','data-folder-id="'+esc(p.isWorkspace?'':p.id)+'"')+'</div>').join('')||'<p class="ab-help">No workspace connections. Chat uses the current workspace as its default location. Add a connection to work on a specific project.</p>';
       options(
         "goal-starter",
         [["", "All agents"], ...agents],
@@ -1232,7 +1267,7 @@ export function mountAgentBoard(
       element.querySelector(".ab-node-provider").textContent =
         PROVIDERS[node.provider] + " · " + modelLabel;
       const assigned=projectCards(board,workspaceRoot).find(p=>p.id===(node.activeProjectId||node.projectId||WORKSPACE_FOLDER));
-      element.querySelector('.ab-node-folder').textContent=(node.provider==='api'?'Folder label: ':'Works in: ')+(assigned?.name||'Missing folder');
+      element.querySelector('.ab-node-folder').textContent=node.projectIds?.length===0?'Default chat location: Current workspace':(node.provider==='api'?'Folder label: ':'Works in: ')+(assigned?.name||'Missing folder');
       const session = sessionFor(node.id);
       element.querySelector(".ab-node-state").textContent =
         session?.status || "Ready for a new conversation";
@@ -1648,8 +1683,76 @@ export function mountAgentBoard(
       }),
     );
   }
+  function transitionPending(){return state.dirty||taskToolsPending()||workRunning();}
+  function workRunning(){return !!state.activity?.length||state.messages.some(m=>['running','queued'].includes(m.state))||!!tasksMount?.isBusy?.();}
+  async function prepareTransition(choice){
+    if(!['save','discard','stop-save','stop-discard'].includes(choice))return false;
+    if(choice.startsWith('stop-')){
+      if(state.record)await controller.action('cancel');
+      if(tasksMount?.controller?.state?.checkRunId)await tasksMount.controller.cancelChecks?.();
+      const deadline=Date.now()+15000;
+      do {await controller.refresh({all:true});if(!workRunning())break;await new Promise(resolve=>setTimeout(resolve,150));}while(Date.now()<deadline&&!destroyed);
+    }
+    if(workRunning())throw Error('Work is still stopping. Your draft is kept. Try again in a moment.');
+    if(choice.endsWith('save')){
+      const c=tasksMount?.controller;
+      if(c?.state.missionDirty)await c.saveMission();
+      if(c?.state.taskDirty)await c.saveTask();
+      if(state.dirty){
+        if(state.record&&!state.conflict)await controller.save();
+        else if(!await openSaveDialog())return false;
+      }
+    }else {tasksMount?.controller?.discard();await controller.discard();}
+    return !state.dirty&&!tasksMount?.hasUnsavedChanges?.();
+  }
+  let transitionDialog=null,closeTransitionDialog=null;
+  async function requestBoardTransition(proceed, destination){
+    if(transitionDialog)return false;
+    return continueBoardTransition({pending:transitionPending,proceed,decide:()=>new Promise(resolve=>{
+      const previous=document.activeElement,dialog=document.createElement('dialog');transitionDialog=dialog;
+      dialog.className='ab-save-dialog ab-transition-dialog';dialog.setAttribute('aria-label','Unsaved board changes');
+      const running=workRunning();
+      dialog.innerHTML='<h2>Before opening '+esc(destination)+'</h2><p>You have '+(running?'running work and possibly unsaved changes':'unsaved board or work-plan changes')+'. Save them or discard them to continue. Your saved chats and project files stay on this computer.</p><p data-transition-error role="alert"></p><footer>'+['save','discard','stay'].map(choice=>'<button type="button" data-transition="'+choice+'">'+(choice==='stay'?'Stay here':(running?'Stop work, ':'')+(choice==='save'?'Save and continue':'Discard and continue'))+'</button>').join('')+'</footer>';
+      const close=choice=>{dialog.close();dialog.remove();transitionDialog=null;closeTransitionDialog=null;if(previous?.isConnected)previous.focus({preventScroll:true});resolve(choice);};
+      closeTransitionDialog=()=>close('stay');
+      // Resolve preparation inside this dialog so naming cancellation returns here.
+      for(const button of dialog.querySelectorAll('[data-transition]'))button.onclick=async()=>{
+        const choice=button.dataset.transition;if(choice==='stay'){close('stay');return;}
+        const buttons=[...dialog.querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);
+        const error=dialog.querySelector('[data-transition-error]');error.textContent='';
+        try {if(await prepareTransition((running?'stop-':'')+choice))close('resolved');}
+        catch(failure){error.textContent=failure.message;}
+        finally{buttons.forEach(b=>b.disabled=false);}
+      };
+      dialog.oncancel=event=>{event.preventDefault();if(!dialog.querySelector('button:disabled'))close('stay');};
+      document.body.append(dialog);dialog.showModal();dialog.querySelector('[data-transition="stay"]').focus();
+    }),prepare:choice=>choice==='resolved'});
+  }
   async function handleAction(action, target) {
     switch (action) {
+      case 'agent-folder-add': {
+        const node=selected();if(!node)throw Error('Select an agent first.');
+        const folderId=f('folder-to-connect').value;
+        if(f('folder-to-connect').disabled)return;
+        updateNode(agent=>changeFolderConnection(agent,folderId,true));
+        tell('Workspace connection added. This chat keeps its active folder. Save the board to apply the new connection.');break;
+      }
+      case 'agent-folder-browse': {
+        const agentId=selected()?.id;if(!agentId)throw Error('Select an agent first.');
+        const chosen=await chooseProjectFolder?.();if(chosen?.cancelled||!chosen?.path)return;
+        let folder=projectCards(state.draft,workspaceRoot).find(p=>workspaceKey(p.path)===workspaceKey(chosen.path));
+        controller.edit(board=>{
+          if(!folder){folder={id:uuid(),name:String(chosen.path).split(/[\\/]/).filter(Boolean).at(-1)||'Project folder',path:chosen.path,position:{x:80+(board.projects?.length||0)*300,y:580}};(board.projects||=[]).push(folder);}
+          const node=board.nodes.find(n=>n.id===agentId);if(node)changeFolderConnection(node,folder.isWorkspace?'':folder.id,true);
+        });
+        folderStatuses.delete(workspaceKey(chosen.path));tell('Folder connected to this agent. Choose its active folder when you want this chat to work there.');break;
+      }
+      case 'agent-folder-remove': {
+        const node=selected();if(!node)return;const old=node.activeProjectId??node.projectId??'';
+        updateNode(agent=>changeFolderConnection(agent,target.dataset.folderId,false));
+        const changed=(node.activeProjectId??'')!==old;
+        tell(!node.projectIds.length?'All workspace connections removed. This chat uses the current workspace as its default location; previous project chats stay saved.':changed?'Connection removed. This chat now uses the remaining active folder shown below. Its previous folder chat stays saved.':'Connection removed from this agent. Other agents, files and saved chats are unchanged.');break;
+      }
       case 'open-tasks':await openTasks();break;
       case 'add-project':{
         if(typeof chooseProjectFolder!=='function')throw Error('Open the desktop app to choose a project folder.');
@@ -1744,14 +1847,14 @@ export function mountAgentBoard(
       case "save":
         await openSaveDialog();
         break;
-      case "load":
-        assertTaskToolsSettled();
-        if (!f("saved-board").value) throw Error("Choose a saved board first.");
-        await controller.load(f("saved-board").value);
+      case "load": {
+        const boardId=f("saved-board").value;
+        if (!boardId) throw Error("Choose a saved board first.");
+        await requestBoardTransition(()=>controller.load(boardId),'the selected board');
         break;
+      }
       case "new":
-        assertTaskToolsSettled();
-        controller.newBoard();
+        await requestBoardTransition(()=>controller.newBoard(),'a new board');
         break;
       case "discard":
         requestConfirm(
@@ -2302,23 +2405,17 @@ export function mountAgentBoard(
   const ready=run(async () => { await controller.initialize(); if (initialBoardId) await controller.load(initialBoardId);if(initialToolsOpen)await openTasks(); });
   return {
     ready,
-    loadBoard:id=>controller.task(()=>{assertTaskToolsSettled();return controller.load(id);}),
+    loadBoard:id=>controller.task(()=>requestBoardTransition(()=>controller.load(id),'the selected board')),
     openTasks,
     hasUnsavedChanges:()=>state.dirty||taskToolsPending(),
     navigationState:()=>({boardDirty:state.dirty,taskDirty:!!tasksMount?.hasUnsavedChanges?.(),running:!!state.activity?.length||state.messages.some(m=>['running','queued'].includes(m.state))||!!tasksMount?.isBusy?.(),busy:state.busy>0}),
-    async prepareLeave(choice){
-      if(!['save','discard','stop-save','stop-discard'].includes(choice))return false;
-      if(choice.startsWith('stop-')){if(state.record)await controller.action('cancel');if(tasksMount?.controller?.state?.checkRunId)await tasksMount.controller.cancelChecks?.();await controller.refresh({all:true});}
-      if(state.messages.some(m=>['running','queued'].includes(m.state))||tasksMount?.isBusy?.())throw Error('Work is still stopping. Wait a moment, then choose Continue again.');
-      if(choice.endsWith('save')){if(tasksMount?.controller){const c=tasksMount.controller;if(c.state.missionDirty)await c.saveMission();if(c.state.taskDirty)await c.saveTask();}if(state.dirty&&!await openSaveDialog())return false;}
-      else {tasksMount?.controller?.discard();if(state.record)await controller.load(state.record.id,{discard:true});else {state.dirty=false;controller.newBoard();}}
-      return !state.dirty&&!tasksMount?.hasUnsavedChanges?.();
-    },
+    prepareLeave:prepareTransition,
     destroy() {
       destroyed = true;
       chatEnteredFullscreen = false;
       root.classList.remove('ab-chat-focus');
       tasksEpoch++;tasksMount?.destroy?.();if(!tasksMount?.destroy)tasksMount?.unmount?.();
+      closeTransitionDialog?.();
       closeSaveDialog?.();
       closeImportDialog?.();clearInterval(activityClock);
       toggleFullscreen(true);

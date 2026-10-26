@@ -19,6 +19,20 @@ async function refreshWorkspacePipelines() {
     }catch(error){if(generation===workspacePipelineRefresh){window.LVXPipelineLibraryError=error.message;workspacePipelines=[];renderPipelinesList();}}
 }
 window.refreshWorkspacePipelines=refreshWorkspacePipelines;
+// The common graph view edits a copy. Original legacy records remain addressable
+// so opening a graph never erases the user's previous configuration.
+window.LVXLegacyGraphs={
+    list:()=>JSON.parse(JSON.stringify(pipelines.filter(p=>p.type==='graph'))),
+    read:id=>{const record=pipelines.find(p=>p.id===id&&p.type==='graph');return record?JSON.parse(JSON.stringify(record)):null;},
+    save:async(graph,{id=graph.id,name=graph.name,copy=false}={})=>{
+        const validation=window.GraphEngine.validate(graph);if(!validation.valid)throw Error(validation.errors.join(' '));
+        const current=!copy&&pipelines.find(p=>p.id===id&&p.type==='graph');
+        const next={...current,...validation.workflow,id:current?.id||'pipe_graph_'+(globalThis.crypto?.randomUUID?.()||Date.now()),name:name||current?.name||'Graph pipeline',type:'graph'};
+        const previous=JSON.parse(JSON.stringify(pipelines));
+        if(current)pipelines[pipelines.indexOf(current)]=next;else pipelines.push(next);
+        try{await savePipelines();renderPipelinesList();return JSON.parse(JSON.stringify(next));}catch(error){pipelines=previous;throw error;}
+    }
+};
 window.electronAPI?.studioOps?.onEvent?.(event=>{if((event.domain==='workspace'&&event.type==='changed')||(event.domain==='host'&&event.type==='workspace'))void refreshWorkspacePipelines();});
 let currentEditingPipeline = null;
 let pipelineStages = []; // Renamed from 'steps' to 'stages' for internal clarity
@@ -92,7 +106,7 @@ function renderPipelinesList() {
         container.parentNode.insertBefore(headerMsg, container);
     }
 
-    pipelines.forEach(pipeline => {
+    pipelines.filter(pipeline=>!workspacePipelines.some(record=>record.value?.legacyPipelineId===pipeline.id)).forEach(pipeline => {
         const div = document.createElement('div');
         div.className = 'aero-button p-2 rounded text-sm flex justify-between items-center mb-1 hover:shadow';
         div.innerHTML = `
@@ -169,7 +183,8 @@ function populateAvailableSuites() {
     const container = document.getElementById('pipeline-available-suites');
     container.innerHTML = '';
 
-    if (!window.testSuites || window.testSuites.length === 0) {
+    const suites=window.LVXApp?.getSuites?.()||window.testSuites||[];
+    if (suites.length === 0) {
         container.innerHTML = `
             <div class="text-center p-4 bg-yellow-50 rounded border border-yellow-200">
                 <p class="text-xs text-yellow-700 mb-2">No Test Suites found.</p>
@@ -181,7 +196,7 @@ function populateAvailableSuites() {
         return;
     }
 
-    window.testSuites.forEach(suite => {
+    suites.filter(suite=>suite.hiddenFromLibrary!==true).forEach(suite => {
         const div = document.createElement('div');
         div.className = 'aero-card p-2 cursor-pointer hover:bg-blue-50 transition flex items-center gap-2 draggable-suite';
         div.setAttribute('draggable', 'true');
@@ -403,8 +418,7 @@ async function runPipeline(id) {
     if (!pipeline) return;
 
     if (pipeline.type === 'graph') {
-        runGraphPipeline(pipeline);
-        return;
+        return runGraphPipeline(pipeline);
     }
 
     const modal = document.getElementById('pipeline-run-modal');
@@ -575,6 +589,7 @@ function closePipelineRunModal() {
 // --- GRAPH PIPELINE LOGIC ---
 
 function openVisualPipelineEditor(pipelineId = null) {
+    if (window.LVXStudio?.openLegacyGraph) return window.LVXStudio.openLegacyGraph(pipelineId);
     const root = document.getElementById('visual-editor-root');
     root.classList.remove('hidden');
 
@@ -585,9 +600,8 @@ function openVisualPipelineEditor(pipelineId = null) {
     window.visualEditor.init();
 
     // Populate Available Suites
-    if (window.testSuites) {
-        window.visualEditor.setAvailableSuites(window.LVXApp?.getSuites?.() || window.testSuites);
-    }
+    window.visualEditor.setAvailableSuites(window.LVXApp?.getSuites?.() || window.testSuites || []);
+    window.LVXMachinaGraph?.setContext({editor:window.visualEditor,suites:window.visualEditor.availableSuites,resolveSuite:null,workspaceRoot:null,invoke:null});
 
     if (pipelineId) {
         const pipeline = pipelines.find(p => p.id === pipelineId);
@@ -803,6 +817,7 @@ function securityResultStatus(result) {
 }
 
 async function runGraphPipeline(pipeline, options = {}) {
+    if (pipeline.id && window.LVXStudio?.openLegacyGraph) return window.LVXStudio.openLegacyGraph(pipeline.id,{...options,run:true});
     if(window.LVXMachinaGraph){
         const result=await window.LVXMachinaGraph.runWorkflow(pipeline,{waitForCompletion:true,...options});
         if(['SUCCESS','FAILURE','ERROR','CANCELLED'].includes(result.status)){

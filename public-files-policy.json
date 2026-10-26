@@ -190,7 +190,7 @@
       "rule": "literal-credential",
       "line": 1983,
       "matchSha256": "e6baa35b09f581acf02d3f15a693766ed5d44d5cfb0c675d97c42359b2154bea",
-      "fileSha256": "c9cf1369f69670e75f2b297904892ac81360fef0431ff4e6520dd766fa872f54",
+      "fileSha256": "8ee2b01b61c19da0f424a81e7742dc7f821e06d95c00e4182d41a7387fb48a38",
       "reason": "Reviewed UI field/schema/error-map text, not a stored user credential or literal authentication value."
     },
     {
@@ -382,7 +382,7 @@
       "rule": "literal-credential",
       "line": 449,
       "matchSha256": "a95b6eb0a91a013ff230bdda524f412043041e31ec1513fa36dffd6ec9f990c5",
-      "fileSha256": "0e7ba7b966433fe26bd141f1378b66e978e84aff19e97045c35afeeb722e4c14",
+      "fileSha256": "0674b841f414c594f6b767c1db8375160ae726b5a9b676715d733d33fe958a1a",
       "reason": "Reviewed UI field/schema/error-map text, not a stored user credential or literal authentication value."
     },
     {
@@ -542,7 +542,7 @@
       "rule": "credential-in-url",
       "line": 766,
       "matchSha256": "ac3ab59f737e1609941596374087782d7efd6e2f44828de17a86323f424d8f2c",
-      "fileSha256": "ccd0568ffe4b98a3cb5070667b19a11b38efc03713122922e6a5c30397049790",
+      "fileSha256": "47dedeb5e56f6f59a03024c6018796b1a4e64e0f9b21febe44d76919469713a9",
       "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
     },
     {
@@ -550,7 +550,7 @@
       "rule": "literal-credential",
       "line": 764,
       "matchSha256": "bcad394b9b736f18d3d6e2ddcb7107abaf677284fb6566fa76fa4a56677f3643",
-      "fileSha256": "ccd0568ffe4b98a3cb5070667b19a11b38efc03713122922e6a5c30397049790",
+      "fileSha256": "47dedeb5e56f6f59a03024c6018796b1a4e64e0f9b21febe44d76919469713a9",
       "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
     },
     {

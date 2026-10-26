@@ -5,3 +5,5 @@ Imported from the user-supplied a3/Frontend/dist/win-unpacked/resources/app.asar
 Environment files, caches, dependencies, generated binaries and user data are excluded. Historical test/demo source is retained here for comparison; Test Studio never seeds these examples automatically. This historical snapshot is not a newly certified standalone release. Feature parity is implemented and verified in the root product.
 
 The public source also constructs a synthetic Slack token inside its archived security test. `fixtureAmendments` records the original and published test-file digests. The scanner receives exactly the same test input; the literal is assembled at runtime to avoid a GitHub push-protection false positive.
+
+The historical README also omits its AI Studio drive app deep link. It is unnecessary for local development and its sharing status is unknown. The original and amended digests are recorded as a privacy amendment.

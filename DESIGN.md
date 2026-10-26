@@ -1,5 +1,7 @@
 # LVX interface
 
+Every visual graph opens in a full working view. Saved graph selection, naming, Save As and agent review stay in that view. Opening an older local graph creates one canonical project copy while retaining its original local record as a backup. Missing test references have a direct repair action; absent tests never count as passed.
+
 Extend the existing light blue Windows desktop identity. Use Segoe UI, dark blue text, white working surfaces, blue primary actions and the existing LVX mark. SVG icons use the shared 24-unit geometry and 1.8 stroke; labels carry the action.
 
 The original Machina home is the single app frame. Its title, colorful Aero buttons, suite groups and pipeline sidebar remain. A single task navigation opens tests, workflows, results, agents, data and project tools inside the same main column. There is no separate workbench launch screen or replacement dashboard. Advanced forms use the same Aero surfaces and retain all functionality. The AI board is a distinct working canvas, explicitly matching the owner's dark teal Nexus reference: compact avatar nodes, visible connection rules, multiple independent movable/resizable/minimizable chats, a settings inspector and full-screen mode.

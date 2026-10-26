@@ -53,11 +53,11 @@
   @media(max-width:850px){.visual-editor-container{min-height:720px}.visual-editor-container .ve-toolbar{width:200px}.ve-top-action-bar{left:225px!important}.mg-dialog{padding:12px}.mg-dialog>.aero-modal{padding:16px!important}.mg-dialog .grid,.mg-review .mg-review-columns{grid-template-columns:1fr}.mg-dialog .col-span-2{grid-column:auto}.mg-run,.mg-review{inset:2vh 2vw}.ve-zoom-controls{left:auto;right:8px;max-width:calc(100% - 225px)}}
   `;document.head.appendChild(style);
  }
- function setContext(options={}){context={...context,...options};if(!unsubscribe&&window.electronAPI?.studioOps?.onEvent)unsubscribe=window.electronAPI.studioOps.onEvent(handleEvent);}
- async function invoke(action,payload={}){
-  const full=context.invoke||window.electronAPI?.studioOps?.invoke;
+ function setContext(options={},bindEditor=true){context={...context,...options};if(bindEditor&&Object.keys(options).length&&context.editor)context.editor._machinaContext={...context};if(!unsubscribe&&window.electronAPI?.studioOps?.onEvent)unsubscribe=window.electronAPI.studioOps.onEvent(handleEvent);}
+ async function invoke(action,payload={},binding=context){
+  const full=binding.invoke||window.electronAPI?.studioOps?.invoke;
   if(!full)throw Error('Open the Windows desktop app and choose a trusted workspace for graph execution.');
-  const bound=context.workspaceRoot?{...payload,workspaceRoot:context.workspaceRoot}:payload;
+  const bound=binding.workspaceRoot?{...payload,workspaceRoot:binding.workspaceRoot}:payload;
   const result=await full('execution',action,clone(bound));
   if(result?.__lvxError)throw Object.assign(Error(result.__lvxError.message),result.__lvxError);
   return result;
@@ -89,7 +89,8 @@
   const {element,run,workflow}=session;if(!element)return;
   element.querySelector('[data-run-status]').textContent=run.status;
   element.querySelector('[data-run-stop]').disabled=terminal.has(run.status);
-  const results=run.results||{};element.querySelector('tbody').innerHTML=(workflow.nodes||[]).map(node=>{const result=results[node.id]||{};return `<tr><td>${esc(node.data?.name||node.id)}</td><td>${esc(result.status||'PENDING')}</td><td>${esc(result.message||result.error||'')}${terminal.has(result.status)?` <button data-node-output="${esc(node.id)}">${icon('file')} View output</button>`:''}</td><td>${esc(Array.isArray(result.attempts)?result.attempts.length:result.attempt??'')}</td></tr>`;}).join('');
+  const results=run.results||{};element.querySelector('tbody').innerHTML=(workflow.nodes||[]).map(node=>{const result=results[node.id]||{};return `<tr><td>${esc(node.data?.name||node.id)}</td><td>${esc(result.status||'PENDING')}</td><td>${esc(result.message||result.error||'')}${node.data?.missingSuiteReference?` <span>Saved test ${esc(node.data.suiteId)} could not be found.</span>${session.editor?` <button data-relink-suite="${esc(node.id)}">${icon('folder')} Choose saved test</button>`:''}`:''}${terminal.has(result.status)?` <button data-node-output="${esc(node.id)}">${icon('file')} View output</button>`:''}</td><td>${esc(Array.isArray(result.attempts)?result.attempts.length:result.attempt??'')}</td></tr>`;}).join('');
+  for(const button of element.querySelectorAll('[data-relink-suite]'))button.onclick=()=>relinkSuite(session.editor,button.dataset.relinkSuite);
   for(const button of element.querySelectorAll('[data-node-output]'))button.onclick=()=>showOutput(workflow.nodes.find(node=>node.id===button.dataset.nodeOutput),results[button.dataset.nodeOutput]);
   const log=[run.stdout,run.stderr,run.error,...Object.entries(results).flatMap(([id,r])=>[r.stdout&&`${id}: ${r.stdout}`,r.stderr&&`${id}: ${r.stderr}`,r.output,r.error])].filter(Boolean).join('\n');
   element.querySelector('[data-run-log]').textContent=log||'Waiting for execution evidence.';
@@ -97,15 +98,15 @@
   syncAuthoringResults(session);
   if(terminal.has(run.status)){window.LVXCodeReview?.settleRun(run.id,run.status);for(const waiter of session.waiters.splice(0))waiter.resolve(clone(run));}else for(const pending of run.pendingReviews||[])showReview({...pending,id:run.id});
  }
- function mountRun(run,workflow,editor){
+ function mountRun(run,workflow,editor,binding=context){
   installStyles();const element=document.createElement('section');element.className='mg-run';element.setAttribute('role','dialog');element.setAttribute('aria-label','Pipeline execution');
   element.innerHTML=`<header><h2>${esc(workflow.name||'Workflow run')}</h2><strong data-run-status>${esc(run.status)}</strong><button data-run-minimize title="Minimize run">${icon('minus')} Minimize</button><button data-run-export>${icon('download')} Export log</button><button data-run-stop>${icon('stop')} Stop</button><button data-run-close>${icon('close')} Close</button></header><div class="mg-run-body"><table><thead><tr><th>Node</th><th>Status</th><th>Evidence</th><th>Attempts</th></tr></thead><tbody></tbody></table><h3>Execution log</h3><pre data-run-log></pre><details><summary>Full persisted evidence</summary><pre data-run-evidence></pre></details></div><p data-run-error role="alert"></p>`;
-  document.body.appendChild(element);const session={run,workflow:clone(workflow),element,waiters:[],editor,applied:new Map()};sessions.set(run.id,session);
+  document.body.appendChild(element);const session={run,workflow:clone(workflow),element,waiters:[],editor,applied:new Map(),binding};sessions.set(run.id,session);
   const minimize=()=>{element.classList.add('hidden');dockItem('run:'+run.id,`${workflow.name||'Workflow'} · ${session.run.status}`,()=>element.classList.remove('hidden'));};
   element.querySelector('[data-run-minimize]').onclick=minimize;
   element.querySelector('[data-run-export]').onclick=()=>download('workflow-'+run.id+'.json',JSON.stringify(session.run,null,2),'application/json');
   element.querySelector('[data-run-close]').onclick=()=>{if(!terminal.has(session.run.status))minimize();else{element.remove();sessions.delete(run.id);clearDock('run:'+run.id);}};
-  element.querySelector('[data-run-stop]').onclick=async()=>{const target=element.querySelector('[data-run-error]');try{await invoke('cancel',{id:run.id});session.run=await invoke('getRun',{id:run.id});displayRun(session);}catch(error){target.textContent=error.message;}};
+  element.querySelector('[data-run-stop]').onclick=async()=>{const target=element.querySelector('[data-run-error]');try{await invoke('cancel',{id:run.id},binding);session.run=await invoke('getRun',{id:run.id},binding);displayRun(session);}catch(error){target.textContent=error.message;}};
   displayRun(session);return session;
  }
  function handleEvent(event){if(event.domain!=='execution')return;if(event.type==='review-request')showReview(event);const session=sessions.get(event.id);if(session&&event.type==='run'){session.run=event;displayRun(session);}}
@@ -115,17 +116,30 @@
   window.LVXCodeReview.open(request,{nodeConfig:node?.data||{},invoke,onComplete:result=>{if(node&&result.decision==='approve'){node.data.lastGeneratedCode=result.finalCode;node.data.history=[...(node.data.history||[]),result];}context.onReview?.(request,result);}});
  }
  async function restorePendingReviews(){const requests=await invoke('pendingReviews');if(!Array.isArray(requests))throw Error('Pending review evidence is unavailable.');for(const request of requests)showReview(request);return requests.length;}
+ function relinkSuite(editor,nodeId){
+  const node=editor?.nodes.find(n=>n.id===nodeId);if(!node)return;
+  const available=[...(editor.availableSuites||[]),...(window.LVXApp?.getSuites?.()||[])],suites=[...new Map(available.filter(s=>s?.id).map(s=>[s.id,s])).values()];
+  const modal=document.createElement('div');modal.className='mg-dialog';modal.style.setProperty('z-index','50060','important');modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','Choose saved test');
+  modal.innerHTML=`<section class="aero-modal" style="max-width:620px;background:#09303d"><h3>Choose a saved test for this node</h3><p>The graph refers to ${esc(node.data.suiteId)}, which is no longer in the test library. Choose its replacement. Existing test code will not be changed.</p><label>Saved test<select data-relink-choice><option value="">Choose a saved test</option>${suites.map(s=>`<option value="${esc(s.id)}">${esc(s.name||s.id)}</option>`).join('')}</select></label>${suites.length?'':'<p>No saved tests are available. Add or import a test, then return here.</p>'}<p data-relink-error role="alert"></p><footer class="flex justify-end"><button data-relink-cancel>Cancel</button><button data-relink-apply>Use this test</button></footer></section>`;
+  document.body.append(modal);modal.querySelector('[data-relink-cancel]').onclick=()=>modal.remove();modal.querySelector('[data-relink-apply]').onclick=()=>{const suite=suites.find(s=>s.id===modal.querySelector('[data-relink-choice]').value);if(!suite){modal.querySelector('[data-relink-error]').textContent='Choose a test from the list.';return;}node.data={...node.data,suiteId:suite.id,name:suite.name||node.data.name};delete node.data.suite;delete node.data.missingSuiteReference;editor.render();editor._commitHistoryState?.();editor._machinaContext?.onChange?.(editor.getGraph());modal.remove();editor._showEditorMessage('Test connection updated. Save the graph to keep it, then run Start again.','success');};modal.querySelector('select').focus();
+ }
  async function runWorkflow(workflow,options={},authoringEditor=null){
   setContext();const validation=window.GraphEngine?.validate(workflow);
   if(validation&&!validation.valid)throw Error(validation.errors.join(' '));
-  const snapshot=clone(validation?.workflow||workflow);
-  const suites=context.suites||window.LVXApp?.getSuites?.()||window.testSuites||[];
-  for(const node of snapshot.nodes||[])if(node.data?.suiteId){const suite=node.data.suite||await context.resolveSuite?.(node.data.suiteId)||suites.find(s=>s.id===node.data.suiteId);if(!suite)throw Error(`Suite ${node.data.suiteId} is unavailable. Reload available suites.`);node.data={...node.data,suite:clone(suite)};}
+  const binding=authoringEditor?._machinaContext||context;
+  const snapshot=clone(window.GraphEngine?.executionPlan?window.GraphEngine.executionPlan(validation?.workflow||workflow,options).workflow:validation?.workflow||workflow);
+  const suites=authoringEditor?.availableSuites||binding.suites||window.LVXApp?.getSuites?.()||window.testSuites||[];
+  let retained=[];try{retained=JSON.parse(localStorage.getItem('pipeline_test_suites')||'[]');if(!Array.isArray(retained))retained=[];}catch{}
+  for(const node of snapshot.nodes||[])if(node.data?.suiteId){
+   const id=node.data.suiteId,suite=node.data.suite||await binding.resolveSuite?.(id)||suites.find(s=>s.id===id)||(window.LVXApp?.getSuites?.()||[]).find(s=>s.id===id)||retained.find(s=>s.id===id);
+   if(suite){node.data={...node.data,suite:clone(suite)};delete node.data.missingSuiteReference;}
+   else{node.data={...node.data,missingSuiteReference:true};if(node.onFailure==null&&node.data.onFailure==null)node.onFailure='continue';}
+  }
   const protectedWorkflow=await protect(snapshot,'Visual workflow');
   if(window.LVXReviewImported&&!await window.LVXReviewImported(protectedWorkflow))return {status:'CANCELLED',cancelled:true};
   const {waitForCompletion=false,...executionOptions}=options;
-  const run=await invoke('runWorkflow',{workflow:protectedWorkflow,...executionOptions});
-  const editor=authoringEditor||context.editor;const session=mountRun(run,protectedWorkflow,editor&&snapshot.nodes.every(node=>editor.nodes.some(candidate=>candidate.id===node.id))?editor:null);context.onRun?.(run,protectedWorkflow);
+  const run=await invoke('runWorkflow',{workflow:protectedWorkflow,...executionOptions},binding);
+  const editor=authoringEditor||binding.editor;const session=mountRun(run,protectedWorkflow,editor&&snapshot.nodes.every(node=>editor.nodes.some(candidate=>candidate.id===node.id))?editor:null,binding);binding.onRun?.(run,protectedWorkflow);
   if(!terminal.has(run.status))void poll(session);
   return waitForCompletion?waitForRun(run.id):run;
  }
@@ -133,7 +147,7 @@
  async function poll(session){
   while(sessions.has(session.run.id)&&!terminal.has(session.run.status)){
    await new Promise(resolve=>setTimeout(resolve,300));
-   try{session.run=await invoke('getRun',{id:session.run.id});displayRun(session);context.onRun?.(session.run,session.workflow);}catch(error){session.element.querySelector('[data-run-error]').textContent=error.message;for(const waiter of session.waiters.splice(0))waiter.reject(error);break;}
+   try{session.run=await invoke('getRun',{id:session.run.id},session.binding);displayRun(session);session.binding.onRun?.(session.run,session.workflow);}catch(error){session.element.querySelector('[data-run-error]').textContent=error.message;for(const waiter of session.waiters.splice(0))waiter.reject(error);break;}
   }
  }
  async function generatePreview(node,options={}){const safe=await protect(node,'AI generation');const result=await invoke('generatePreview',{node:safe,...options});if(!result?.code)throw Error('AI generation returned no code.');return {...result,success:true,generatedText:result.code};}
@@ -190,17 +204,17 @@
   for(const name of ['showSecurityNodeConfig','showGitNodeConfig','showUnitTestConfig','showAIUnitTestConfig','showStartRunnerConfig','showAILogSummaryConfig','showLogCollectorConfig','showAPIPerformanceConfig','showAPIContractConfig','showCodeReviewConfig','showWebsiteUXAutoTesterConfig','showPushDeployConfig','showWaitDelayConfig']){
    const original=proto[name];proto[name]=async function(id){installStyles();document.querySelectorAll('.mg-dialog[data-node-type]').forEach(dialog=>dialog.remove());const node=this.nodes.find(n=>n.id===id);if(!node)return;await original.call(this,id);enhanceModal(this,node,Array.from(document.querySelectorAll('.mg-dialog')).at(-1));};
   }
-  const suiteConfig=proto.showSuiteNodeConfig;proto.showSuiteNodeConfig=function(id){const node=this.nodes.find(n=>n.id===id);if(context.onEditSuite&&node?.data?.suiteId)return context.onEditSuite(node.data.suiteId);return suiteConfig.call(this,id);};
+  const suiteConfig=proto.showSuiteNodeConfig;proto.showSuiteNodeConfig=function(id){const node=this.nodes.find(n=>n.id===id),binding=this._machinaContext||context;if(node?.data?.suiteId&&!node.data.suite&&!(this.availableSuites||[]).some(s=>s.id===node.data.suiteId)&&!(window.LVXApp?.getSuites?.()||[]).some(s=>s.id===node.data.suiteId))return relinkSuite(this,id);if(binding.onEditSuite&&node?.data?.suiteId)return binding.onEditSuite(node.data.suiteId);return suiteConfig.call(this,id);};
   const toolbar=proto._renderToolbar;proto._renderToolbar=function(){toolbar.call(this);const controls=this.container.querySelector('#ve-viewport-controls');const make=(name,label,action)=>{const button=document.createElement('button');button.type='button';button.title=label;button.innerHTML=icon(name)+' '+label;button.onclick=action;controls?.appendChild(button);};make('undo','Undo',()=>this.undo());make('redo','Redo',()=>this.redo());make('check','Validate',()=>{const result=window.GraphEngine.validate(this.getGraph());this._showEditorMessage(result.valid?'Graph structure is valid. Runtime checks run before each action.':result.errors.join(' '),result.valid?'success':'error');});
    for(const [id,callback]of [['ve-save-btn','onSave'],['ve-saveas-btn','onSaveAs'],['ve-run-btn','onRun']]){const button=this.container.querySelector('#'+id);if(button)button.onclick=async event=>{event.preventDefault();try{await this[callback]?.(this.getGraph());}catch(error){this._showEditorMessage(error.message,'error');}};}
    for(const item of this.container.querySelectorAll('.ve-palette-item')){item.tabIndex=0;item.setAttribute('role','button');item.title='Add '+item.textContent.trim();const add=()=>{const position=this._calculateNewNodePosition(),rect=this.canvas.getBoundingClientRect();this._handleDrop({preventDefault(){},clientX:rect.left+this.panning.x+(position.x+this.graphOrigin.x)*this.scale,clientY:rect.top+this.panning.y+(position.y+this.graphOrigin.y)*this.scale,dataTransfer:{getData:()=>JSON.stringify({type:item.dataset.type})}});const node=this.nodes.at(-1);if(node){const point=this._graphToViewportPoint(node.position);this.panning.x=Math.min(0,this.canvas.clientWidth-340-point.x*this.scale);this.panning.y=Math.min(0,this.canvas.clientHeight-150-point.y*this.scale);this._applyViewportTransform();}};item.onclick=add;item.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();add();}};}
   };
  }
  function mount(container,options={}){
-  installStyles();installEditor();setContext(options);if(typeof container==='string')container=document.getElementById(container);if(!container)throw Error('Graph container is required.');
+  installStyles();installEditor();setContext({suites:[],resolveSuite:null,workspaceRoot:null,invoke:null,onEditSuite:null,onChange:null,onRun:null,...options},false);if(typeof container==='string')container=document.getElementById(container);if(!container)throw Error('Graph container is required.');
   if(!container.id)container.id='machina-graph-'+Math.random().toString(36).slice(2);container.classList.remove('hidden');
   const editor=new window.VisualEditor(container.id);editor.init();editor.setAvailableSuites(options.suites||[]);editor.loadGraph(options.workflow||{schemaVersion:1,nodes:[],edges:[]});
-  context.editor=editor;
+  context.editor=editor;editor._machinaContext={...context};
   editor.onSave=async workflow=>{const intent=options.captureSaveContext?.();const safe=await protect(workflow,'Visual workflow');return options.onSave?.(safe,intent);};editor.onSaveAs=async workflow=>{const intent=options.captureSaveContext?.();return options.onSaveAs?.(await protect(workflow,'Visual workflow copy'),intent);};editor.onRun=workflow=>runWorkflow(workflow,{},editor).catch(error=>editor._showEditorMessage(error.message,'error'));editor.onCreateVisualTest=()=>options.onCreateVisualTest?.();editor.onAddTestSuite=()=>options.onAddTestSuite?.();
   container.querySelector('#ve-close-btn').onclick=()=>options.onClose?options.onClose(editor.getGraph()):container.classList.add('hidden');
   const listener=event=>{if(!container.isConnected||container.classList.contains('hidden')||event.target.closest('input,textarea,select,[contenteditable=true]'))return;if(event.ctrlKey||event.metaKey){if(event.key.toLowerCase()==='z'){event.preventDefault();event.shiftKey?editor.redo():editor.undo();}if(event.key.toLowerCase()==='y'){event.preventDefault();editor.redo();}if(event.key.toLowerCase()==='s'){event.preventDefault();Promise.resolve(editor.onSave(editor.getGraph())).catch(error=>editor._showEditorMessage(error.message,'error'));}}else if(event.key==='Delete'){event.preventDefault();editor.deleteSelectedNode();}};document.addEventListener('keydown',listener);

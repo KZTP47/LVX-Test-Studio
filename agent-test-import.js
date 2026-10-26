@@ -22,7 +22,7 @@ export async function mountAgentTestImport({root,controller,invoke,workspaceRoot
   const mode=()=>q('[name=ati-mode]:checked').value;
   const update=()=>{dialog.setAttribute('aria-busy',String(busy));for(const input of dialog.querySelectorAll('input,select,[data-import-close]'))input.disabled=busy;commit.disabled=busy||!reviewed.checked||!previews.length||(mode()==='graph'&&!q('[data-import-name]').value.trim());commit.textContent=busy?'Please wait…':mode()==='graph'?'Import as one graph':'Import individual tests';q('[data-graph-name]').hidden=q('[data-graph-help]').hidden=mode()!=='graph';};
   const close=()=>{if(busy||closed)return;closed=true;dialog.close();dialog.remove();onClose();};
-  q('[data-import-close]').onclick=close;dialog.addEventListener('cancel',event=>{event.preventDefault();close();});
+  q('[data-import-close]').onclick=close;dialog.addEventListener('cancel',event=>{if(event.target!==dialog)return;event.preventDefault();close();});
   const checkResult=result=>{if(result?.__lvxError)throw Error(result.__lvxError.message);return result;};
   async function load(files){if(busy)return;previews=[];preview.replaceChildren();reviewed.checked=false;busy=true;update();notice.textContent='Reading test exports…';
     try{if(!files.length||files.length>25)throw Error('Choose 1–25 exported JSON files.');await controller.ensureSaved();

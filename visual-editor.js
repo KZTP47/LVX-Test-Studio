@@ -217,7 +217,12 @@ class VisualEditor {
         this.graphMetadata={...copy};delete this.graphMetadata.nodes;delete this.graphMetadata.edges;
         this.nodes=(copy.nodes||[]).map((node,index)=>({...node,type:String(node.type||node.data?.type||'test-suite').replace(/_/g,'-'),data:node.data||{},position:node.position||{x:node.x||100+index*350,y:node.y||100}}));
         this.edges=(copy.edges||[]).map((edge,index)=>({...edge,id:edge.id||'imported-edge-'+index}));
-        this.selectedNodeId=null;this.graphOriginInitialized=false;this.render();this._resetHistory();
+        this.selectedNodeId=null;this.graphOriginInitialized=false;this.render();
+        const view=copy.viewport;
+        if(view&&Number.isFinite(view.scale)&&view.scale>=0.1&&view.scale<=3&&Number.isFinite(view.panning?.x)&&Number.isFinite(view.panning?.y)){
+            this.scale=view.scale;this.panning={...view.panning};this._applyViewportTransform();
+        }else this._keepGraphInWorkingArea();
+        this._resetHistory();
     }
 
     getGraph() { return JSON.parse(JSON.stringify({...this.graphMetadata,nodes:this.nodes,edges:this.edges})); }
@@ -1007,6 +1012,18 @@ ${summaryText || 'No summary generated.'}
     _resetView() {
         this.scale = 1;
         this.panning = { x: 0, y: 0 };
+        this._applyViewportTransform();
+        this._keepGraphInWorkingArea();
+    }
+
+    _keepGraphInWorkingArea() {
+        if (!this.nodes.length || !this.canvas) return;
+        const canvas=this.canvas.getBoundingClientRect(),toolbar=this.container.querySelector('.ve-toolbar')?.getBoundingClientRect(),actions=this.container.querySelector('.ve-top-action-bar')?.getBoundingClientRect();
+        const left=Math.max(16,(toolbar?.right??canvas.left)-canvas.left+16),top=Math.max(16,(actions?.bottom??canvas.top)-canvas.top+16);
+        const minX=Math.min(...this.nodes.map(node=>this._graphToViewportPoint(node.position).x))*this.scale+this.panning.x;
+        const minY=Math.min(...this.nodes.map(node=>this._graphToViewportPoint(node.position).y))*this.scale+this.panning.y;
+        if(minX<left)this.panning.x+=left-minX;
+        if(minY<top)this.panning.y+=top-minY;
         this._applyViewportTransform();
     }
 

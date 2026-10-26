@@ -1145,8 +1145,23 @@ input::placeholder, textarea::placeholder { color:#415668; opacity:1; }
 .aero-button-purple:hover { color:#fff; background:#7e22ce; text-shadow:none; }
 .aero-button-danger:hover { color:#fff; background:#b91c1c; text-shadow:none; }
 .aero-button-success:hover { color:#fff; background:#047857; text-shadow:none; }
-/* The graph remains a usable workspace inside the visual-first shell. */
-.machina-graph-host { min-height:620px; height:calc(100vh - 280px); position:relative; margin-top:20px; border:1px solid #aac3d7; border-radius:8px; overflow:hidden; }
+/* All saved graphs use one full working surface, independent of their source. */
+.studio-graph-screen { position:fixed; inset:0; z-index:1000; display:flex; flex-direction:column; background:#eef4fa; color:#16334b; overflow:hidden; }
+.studio-graph-header { display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding:8px 12px; background:linear-gradient(#f8fcff,#d7ebfc); border-bottom:1px solid #aac3d7; flex:none; }
+.studio-graph-header > strong { font-size:16px; white-space:nowrap; }
+.studio-graph-header .machina-workflow-picker { display:flex; flex:1; flex-wrap:wrap; align-items:end; gap:8px; min-width:0; }
+#studio-task-surface .studio-graph-header .studio-field { flex:1 1 180px; min-width:160px; max-width:360px; margin:0; font-size:12px; }
+.studio-graph-header :is(input,select) { min-height:34px; margin:2px 0 0; }
+.studio-graph-header button { min-height:34px; white-space:nowrap; }
+.studio-graph-header #machina-workflow-agents { max-width:220px; white-space:normal; line-height:1.25; }
+.studio-graph-notice { flex:none; margin:0; padding:0 12px; overflow-wrap:anywhere; }
+.studio-graph-notice:not(:empty) { padding:7px 12px; border-bottom:1px solid #aac3d7; background:#f8fcff; }
+.studio-graph-notice[role=alert] { color:#a51c25; }
+.machina-graph-host { min-height:0; height:auto; flex:1; position:relative; margin:0; border:0; border-radius:0; overflow:hidden; }
+body[data-theme=dark] .studio-graph-screen { background:#152331; color:#edf7ff; }
+body[data-theme=dark] .studio-graph-header { background:linear-gradient(#283f52,#1d3040); border-color:#65859d; }
+body[data-theme=dark] .studio-graph-notice:not(:empty) { background:#1d3040; }
+body[data-theme=dark] .studio-graph-notice[role=alert] { color:#ffb5b9; }
 #studio-content:has(.machina-graph-host) { max-width:none; }
 #studio-content:has(.machina-graph-host) .studio-page-title { margin:0 0 20px; }
 .machina-workflow-picker { display:grid; grid-template-columns:minmax(180px,1fr) auto minmax(180px,1fr); align-items:end; gap:12px; }

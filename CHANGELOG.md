@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0
+
+- Run only the selected Start node's downstream tests and offer direct repair for missing saved tests.
+- Open all saved graphs in one full working view, retaining naming, Save As and agent review.
+- Resolve unsaved board changes with Save, Discard or Stay and continue the requested action.
+- Add and remove each agent's workspace connections with explicit buttons.
+- Keep the import review open when a file or folder picker is cancelled.
+
 ## 0.11.0
 
 - Repaired old graph runners and made Select/Pan selection visible.
