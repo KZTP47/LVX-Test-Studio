@@ -190,7 +190,7 @@
       "rule": "literal-credential",
       "line": 1983,
       "matchSha256": "e6baa35b09f581acf02d3f15a693766ed5d44d5cfb0c675d97c42359b2154bea",
-      "fileSha256": "8ee2b01b61c19da0f424a81e7742dc7f821e06d95c00e4182d41a7387fb48a38",
+      "fileSha256": "460f61c4cc723db25a8c956ec51b08e162e695aba915cedf1e0dcaaa12ce2e03",
       "reason": "Reviewed UI field/schema/error-map text, not a stored user credential or literal authentication value."
     },
     {
@@ -382,7 +382,7 @@
       "rule": "literal-credential",
       "line": 449,
       "matchSha256": "a95b6eb0a91a013ff230bdda524f412043041e31ec1513fa36dffd6ec9f990c5",
-      "fileSha256": "0674b841f414c594f6b767c1db8375160ae726b5a9b676715d733d33fe958a1a",
+      "fileSha256": "59b180b47f74efbfc05492ccff6a2ac8e4235be3f4fdb438473dece48d193365",
       "reason": "Reviewed UI field/schema/error-map text, not a stored user credential or literal authentication value."
     },
     {
@@ -542,7 +542,7 @@
       "rule": "credential-in-url",
       "line": 766,
       "matchSha256": "ac3ab59f737e1609941596374087782d7efd6e2f44828de17a86323f424d8f2c",
-      "fileSha256": "47dedeb5e56f6f59a03024c6018796b1a4e64e0f9b21febe44d76919469713a9",
+      "fileSha256": "5eb0538a45353599c9c85b16095d689f858ae1eecfcc1fd5f14a88c168b4fa43",
       "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
     },
     {
@@ -550,7 +550,7 @@
       "rule": "literal-credential",
       "line": 764,
       "matchSha256": "bcad394b9b736f18d3d6e2ddcb7107abaf677284fb6566fa76fa4a56677f3643",
-      "fileSha256": "47dedeb5e56f6f59a03024c6018796b1a4e64e0f9b21febe44d76919469713a9",
+      "fileSha256": "5eb0538a45353599c9c85b16095d689f858ae1eecfcc1fd5f14a88c168b4fa43",
       "reason": "Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
     },
     {
@@ -1126,5 +1126,46 @@
       "reason": "Pinned upstream code identifier or registry key, not a user credential; vendor integrity remains checked."
     }
   ],
-  "historyExamples": []
+  "historyExamples": [
+    {
+      "fingerprint": "d6cef7e035eb8e1b66d8cc69fbc9d1a7c62e2b5f:apps/lvx-machina/GUIDES AND TUTORIALS/CICD-SETUP-GUIDE.md:stripe-access-token:87",
+      "file": "apps/lvx-machina/GUIDES AND TUTORIALS/CICD-SETUP-GUIDE.md",
+      "rule": "stripe-access-token",
+      "line": 87,
+      "outerSha256": "ebdaba01b19df4ac64a3adeeb005b38388452bffbb6eb8e9445228fe66873619",
+      "reason": "Exact original-commit copy of the already reviewed current example or pinned upstream code; same complete file hash and same rule/line. Clearly labelled synthetic API-key example in the imported guide."
+    },
+    {
+      "fingerprint": "d6cef7e035eb8e1b66d8cc69fbc9d1a7c62e2b5f:apps/lvx-machina/security-testing.test.js:jwt:229",
+      "file": "apps/lvx-machina/security-testing.test.js",
+      "rule": "jwt",
+      "line": 229,
+      "outerSha256": "3c11f522ab13ead576e96e3577aaf3a8bec258a93754364ab25c248f9f40d3fe",
+      "reason": "Exact original-commit copy of the already reviewed current example or pinned upstream code; same complete file hash and same rule/line. Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "fingerprint": "d6cef7e035eb8e1b66d8cc69fbc9d1a7c62e2b5f:assets/vendor/pyodide/distutils-1.0.0.zip!distutils/msvccompiler.py:generic-api-key:39",
+      "file": "assets/vendor/pyodide/distutils-1.0.0.zip!distutils/msvccompiler.py",
+      "rule": "generic-api-key",
+      "line": 39,
+      "outerSha256": "9fb37736051f39d184c9887552689677735f81aa1c8402c36445aab889f5c5e4",
+      "reason": "Exact original-commit copy of the already reviewed current example or pinned upstream code; same complete file hash and same rule/line. Unmodified upstream virtual filesystem or runtime setting, not a local account path or personal credential."
+    },
+    {
+      "fingerprint": "d6cef7e035eb8e1b66d8cc69fbc9d1a7c62e2b5f:security-testing.test.js:jwt:196",
+      "file": "security-testing.test.js",
+      "rule": "jwt",
+      "line": 196,
+      "outerSha256": "495cf05c39bcabae46b45252ebe7d0482bc9ce3f6a90a951ed293cbae185351d",
+      "reason": "Exact original-commit copy of the already reviewed current example or pinned upstream code; same complete file hash and same rule/line. Explicit synthetic security/transport test input or assertion; no personal account or authenticated live service."
+    },
+    {
+      "fingerprint": "d6cef7e035eb8e1b66d8cc69fbc9d1a7c62e2b5f:assets/vendor/monaco/vs/editor/editor.main.js:generic-api-key:602",
+      "file": "assets/vendor/monaco/vs/editor/editor.main.js",
+      "rule": "generic-api-key",
+      "line": 602,
+      "outerSha256": "610fbf15b039278df4c7f22182d21f53dfa1799908be54474ce625aa35413d34",
+      "reason": "Exact original-commit copy of the already reviewed current example or pinned upstream code; same complete file hash and same rule/line. Pinned upstream code identifier or registry key, not a user credential; vendor integrity remains checked."
+    }
+  ]
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.13.0
+
+- Highlight failed/error graph nodes in red, passed nodes in green, and running nodes in blue, with text labels and matching run-table states.
+- Save a graph's headed/headless E2E browser choice and apply it to native browser tests and saved-suite iterations.
+- Keep live graph results through canvas redraws, reset them on reruns, and reject stale result updates from older runs.
+- Draw straight Nexus-style connections on AI boards, preserving dashed workspace links, directed communication and assignment controls.
+
 ## 0.12.0
 
 - Run only the selected Start node's downstream tests and offer direct repair for missing saved tests.

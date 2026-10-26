@@ -13,6 +13,8 @@ The board is a workspace view for people who want to arrange agents visually, gi
 
 The graph stays prominent. **Edit goal** and **Agent settings** reveal detailed configuration when needed. Drag nodes, pan and zoom, or use the keyboard list to select agents and create directed connections. Colour identifies providers while names and text statuses remain available without relying on colour alone.
 
+AI board connections use straight lines like Nexus Harness: dashed links show workspace assignments, and directed links show agent communication. Selecting an agent emphasizes its workspace links. Add or remove assignments from that agent's settings; moving a card keeps its lines attached. Workflow graphs keep their curved connections.
+
 ## Native subscriptions and API accounts
 
 Install the official provider CLI and complete its normal authentication outside LVX. **Check connection** checks the executable/version and reports the adapter's declared capabilities without sending a model prompt. Finding an installed program does not prove the account is signed in, entitled to a particular model or within quota. Native authentication, permission policy, account billing and provider terms remain those of that CLI.

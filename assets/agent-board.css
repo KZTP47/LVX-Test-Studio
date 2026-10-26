@@ -767,6 +767,7 @@
 :is(#studio-task-surface, #studio-workbench, body) .agent-board .ab-start-guide { margin:3px 0 6px;font-size:12px;max-width:100ch; }
 :is(#studio-task-surface, #studio-workbench, body) .agent-board .ab-project-links { position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none; }
 :is(#studio-task-surface, #studio-workbench, body) .agent-board .ab-project-links path { stroke:#a9c4cf;stroke-width:1.6;fill:none;stroke-dasharray:7 5; }
+:is(#studio-task-surface, #studio-workbench, body) .agent-board .ab-project-links g[data-selected=true] path { stroke:#e2f8ff;stroke-width:2.5; }
 :is(#studio-task-surface, #studio-workbench, body) .agent-board .ab-project-links text { fill:#d1e6ee;font:600 11px 'Segoe UI',sans-serif;stroke:#071c25;stroke-width:6px;paint-order:stroke; }
 :is(#studio-task-surface, #studio-workbench, body) .agent-board .ab-project-node { position:absolute;pointer-events:auto;touch-action:none;cursor:grab;width:230px;min-height:144px;border:1px solid #a5d591;border-radius:8px;background:#102d32;color:#ecf9e8;padding:10px;box-shadow:0 3px 10px #0005; }
 :is(#studio-task-surface, #studio-workbench, body) .agent-board .ab-project-node.ab-project-selected { outline:2px solid #c9f7c1;outline-offset:3px; }

@@ -25,6 +25,8 @@ class VisualEditor {
         this.historyStack = [];
         this.redoStack = [];
         this.historyLimit = 100;
+        this.runResults = {};
+        this._executionOwner = null;
 
         // DOM Elements
         this.container = null;
@@ -43,6 +45,8 @@ class VisualEditor {
      * Call this before loading a new pipeline to ensure isolation.
      */
     clear() {
+        this.runResults = {};
+        this._executionOwner = null;
         this.nodes = [];
         this.edges = [];
         this.graphMetadata = {};
@@ -212,6 +216,8 @@ class VisualEditor {
     }
 
     loadGraph(graphData = {}) {
+        this.runResults = {};
+        this._executionOwner = null;
         const copy=JSON.parse(JSON.stringify(graphData));
         this.runnerMigrationWarnings=window.GraphEngine?.normalizeRunnerReferences(copy)||[];
         this.graphMetadata={...copy};delete this.graphMetadata.nodes;delete this.graphMetadata.edges;
@@ -226,6 +232,22 @@ class VisualEditor {
     }
 
     getGraph() { return JSON.parse(JSON.stringify({...this.graphMetadata,nodes:this.nodes,edges:this.edges})); }
+
+    setRunResults(results = {}) {
+        this.runResults = results;
+        this._paintRunResults();
+    }
+
+    _paintRunResults() {
+        const labels={SUCCESS:'Passed',FAILURE:'Failed',ERROR:'Error',RUNNING:'Running',PENDING:'Not run',CANCELLED:'Cancelled',SKIPPED:'Skipped'};
+        for(const el of this.nodeLayer?.children||[]){
+            const result=this.runResults?.[el.dataset.id],status=labels[result?.status]?result.status:'';
+            if(status)el.dataset.executionStatus=status;else delete el.dataset.executionStatus;
+            const badge=el.querySelector('.ve-node-run-status');if(!badge)continue;
+            badge.hidden=!status;badge.textContent=labels[status]||'';
+            badge.title=status?['Last run: '+labels[status],result.error||result.message||result.reason].filter(Boolean).join('\n'):'';
+        }
+    }
 
     _cloneGraphState() {
         return JSON.parse(JSON.stringify({
@@ -1781,7 +1803,7 @@ ${summaryText || 'No summary generated.'}
             const point=this._graphToViewportPoint(node.position),el=document.createElement('div');
             el.className='ve-node aero-card'+(node.id===this.selectedNodeId?' ve-node-selected':'');el.dataset.id=node.id;el.dataset.nodeType=node.type;
             Object.assign(el.style,{left:point.x+'px',top:point.y+'px',pointerEvents:'auto',cursor:this.activeTool==='pan'?'grab':'move'});
-            el.innerHTML=`<div class="ve-node-header"><span class="node-icon">${window.LVXIcons?.svg(icons[node.type]||'test')||''}</span><strong title="${this._escapeHTML(this._getNodeDisplayName(node))}">${this._escapeHTML(this._getNodeDisplayName(node))}</strong><button type="button" class="ve-node-config-btn" title="Configure node">${window.LVXIcons?.svg('settings')||''}</button><button type="button" class="ve-node-run-btn" title="Run this node with dependencies">${window.LVXIcons?.svg('play')||''}</button><button type="button" class="ve-delete-node" title="Delete node">${window.LVXIcons?.svg('trash')||''}</button></div><div class="ve-node-description">${this._escapeHTML(node.type)}</div><div class="ve-ports"><button type="button" aria-label="Input connection" class="ve-port ve-input-port"></button><button type="button" aria-label="Output connection" class="ve-port ve-output-port"></button></div>`;
+            el.innerHTML=`<div class="ve-node-header"><span class="node-icon">${window.LVXIcons?.svg(icons[node.type]||'test')||''}</span><strong title="${this._escapeHTML(this._getNodeDisplayName(node))}">${this._escapeHTML(this._getNodeDisplayName(node))}</strong><button type="button" class="ve-node-config-btn" title="Configure node">${window.LVXIcons?.svg('settings')||''}</button><button type="button" class="ve-node-run-btn" title="Run this node with dependencies">${window.LVXIcons?.svg('play')||''}</button><button type="button" class="ve-delete-node" title="Delete node">${window.LVXIcons?.svg('trash')||''}</button></div><div class="ve-node-description">${this._escapeHTML(node.type)}<span class="ve-node-run-status" hidden></span></div><div class="ve-ports"><button type="button" aria-label="Input connection" class="ve-port ve-input-port"></button><button type="button" aria-label="Output connection" class="ve-port ve-output-port"></button></div>`;
             el.querySelector('.ve-node-config-btn').onclick=e=>{e.stopPropagation();this[this._getNodeConfigHandlerName(node)](node.id);};
             el.querySelector('.ve-node-run-btn').onclick=e=>{e.stopPropagation();Promise.resolve(this.runNode(node.id)).catch(error=>this._showEditorMessage(error.message,'error'));};
             el.querySelector('.ve-delete-node').onclick=e=>{e.stopPropagation();this.deleteNode(node.id);};
@@ -1800,6 +1822,7 @@ ${summaryText || 'No summary generated.'}
             this.nodeLayer.appendChild(el);
         }
         for(const edge of this.edges)this._drawEdge(edge);
+        this._paintRunResults();
     }
 
     _drawEdge(edge) {

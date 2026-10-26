@@ -20,7 +20,9 @@ process.once('message', async config => {
     try {
         if (config.engine === 'playwright') {
             const playwright = require(config.playwrightPath);
-            browser = await playwright.chromium.launch({ headless: true });
+            const mode=require('./browser-mode.cjs').browserMode(config.browserMode);
+            browser = await playwright.chromium.launch({ headless: mode==='headless' });
+            result.artifacts.browser={mode,headless:mode==='headless'};
             context.browser = browser; context.page = await browser.newPage();
         }
         const prelude = `with(context) { let cleanup = async()=>{}; try { cleanup=async()=>{${config.cleanup || ''}\n}; ${config.setup || ''}\n await(async()=>{\n${config.debug ? "process.send?.({type:'authoredReady'});\n" : ''}`;

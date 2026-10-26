@@ -152,23 +152,9 @@ export function acceptsAgentEvent(
 }
 
 export function connectionPath(source, target) {
-  const sx = source.position.x + 230,
-    sy = source.position.y + 64,
-    tx = target.position.x,
-    ty = target.position.y + 64;
-  const bend = Math.max(65, Math.abs(tx - sx) * 0.45);
-  if (tx >= sx)
-    return {
-      d: `M ${sx} ${sy} C ${sx + bend} ${sy}, ${tx - bend} ${ty}, ${tx} ${ty}`,
-      x: (sx + tx) / 2,
-      y: (sy + ty) / 2 - 9,
-    };
-  const routeY = Math.min(sy, ty) - 90;
-  return {
-    d: `M ${sx} ${sy} C ${sx + 90} ${routeY}, ${tx - 90} ${routeY}, ${tx} ${ty}`,
-    x: (sx + tx) / 2,
-    y: routeY + 15,
-  };
+  const rectangle=card=>({left:card.position.x,top:card.position.y,width:card.width||230,height:card.height||160});
+  const line=chatOwnershipLine(rectangle(source),rectangle(target),{left:0,top:0});
+  return {...line,d:`M ${line.x1} ${line.y1} L ${line.x2} ${line.y2}`,x:(line.x1+line.x2)/2,y:(line.y1+line.y2)/2-9};
 }
 
 // Canvas-local endpoints on the facing rectangle edges. Measure rendered bounds
@@ -186,12 +172,10 @@ export function chatOwnershipLine(node, chat, canvas) {
   return {x1:start.x-canvas.left,y1:start.y-canvas.top,x2:end.x-canvas.left,y2:end.y-canvas.top};
 }
 
-export function edgeLabelPosition(source, target, nodes) {
-  const x = (source.position.x + 230 + target.position.x) / 2;
-  const gap = target.position.x - source.position.x - 230;
+export function edgeLabelPosition(source, target, nodes, halfWidth=48) {
+  const line=connectionPath(source,target),x=line.x;
   const candidates = [];
-  if (gap >= 72)
-    candidates.push({ x, y: (source.position.y + target.position.y) / 2 + 54 });
+  for(const t of [0.5,0.4,0.6,0.3,0.7,0.2,0.8,0.1,0.9])candidates.push({x:line.x1+(line.x2-line.x1)*t,y:line.y1+(line.y2-line.y1)*t-9});
   const top = Math.min(source.position.y, target.position.y);
   for (let offset = 18; offset <= 2418; offset += 24)
     candidates.push({ x, y: top - offset });
@@ -202,8 +186,8 @@ export function edgeLabelPosition(source, target, nodes) {
           const left = node.position.x,
             top = node.position.y;
           return (
-            label.x - 32 < left + 230 &&
-            label.x + 32 > left &&
+            label.x - halfWidth < left + (node.width||230) &&
+            label.x + halfWidth > left &&
             label.y - 14 < top + (node.height || 160) &&
             label.y + 4 > top
           );
@@ -1285,14 +1269,15 @@ export function mountAgentBoard(
       );
     }
     for (const element of existing.values()) element.remove();
-    const nodes = new Map(board.nodes.map((n) => [n.id, n]));
     const rectangles = board.nodes.map((node) => ({
       ...node,
+      width:[...holder.children].find(element=>element.dataset.agentId===node.id)?.offsetWidth||230,
       height:
         [...holder.children].find(
           (element) => element.dataset.agentId === node.id,
         )?.offsetHeight || 160,
     }));
+    const nodes=new Map(rectangles.map(node=>[node.id,node]));
     q("edges").innerHTML =
       `<defs><marker id="ab-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#26658c"/></marker></defs>` +
       board.edges
@@ -1325,11 +1310,13 @@ export function mountAgentBoard(
       const approve=el.querySelector('[data-ab-action="project-approve"]');if(approve)approve.hidden=status.allowed===true;
     }
     for(const el of existing.values())el.remove();
-    const map=new Map(folders.map(p=>[p.id,p]));
-    q('project-links').innerHTML=board.nodes.map(node=>{
+    const boxes=folders.map(project=>{const el=[...holder.children].find(el=>el.dataset.projectId===project.id);return {...project,width:el?.offsetWidth||230,height:el?.offsetHeight||144};});
+    const agents=board.nodes.map(node=>{const el=[...q('nodes').children].find(el=>el.dataset.agentId===node.id);return {...node,width:el?.offsetWidth||230,height:el?.offsetHeight||160};});
+    const map=new Map(boxes.map(project=>[project.id,project]));
+    q('project-links').innerHTML=agents.map(node=>{
       return (node.projectIds||[node.projectId||'']).map(id=>{const project=map.get(id||WORKSPACE_FOLDER);if(!project)return '';
-      const path=connectionPath(node,project),label=node.provider==='api'?'folder label · chat only':'works in';
-      return `<g data-project-link="${esc(node.id)}"><title>${esc(node.name)} ${label} ${esc(project.name)}</title><path d="${path.d}"/><text x="${path.x}" y="${path.y}" text-anchor="middle">${label}</text></g>`;
+      const path=connectionPath(node,project),position=edgeLabelPosition(node,project,[...agents,...boxes],node.provider==='api'?64:32),label=node.provider==='api'?'folder label · chat only':'works in';
+      return `<g data-project-link="${esc(node.id)}" data-folder-id="${esc(project.id)}" data-selected="${node.id===state.selectedAgentId}"><title>${esc(node.name)} ${label} ${esc(project.name)}</title><path d="${path.d}"/><text x="${position.x}" y="${position.y}" text-anchor="middle">${label}</text></g>`;
       }).join('');
     }).join('');
   }

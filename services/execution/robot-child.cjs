@@ -33,7 +33,7 @@ async function createDriver(config) {
         if (page) return page;
         if (!opening) opening = (async () => {
             const playwright = require('playwright');
-            browser = await playwright.chromium.launch({ headless: true, executablePath: executable(config) });
+            browser = await playwright.chromium.launch({ headless: require('./browser-mode.cjs').browserMode(config.browserMode)==='headless', executablePath: executable(config) });
             context = await browser.newContext({ serviceWorkers: 'block' });
             await context.route('**/*', route => {
                 try { const url = new URL(route.request().url()); if (['about:', 'data:', 'blob:'].includes(url.protocol) || origins.has(url.origin)) return route.continue(); } catch {}

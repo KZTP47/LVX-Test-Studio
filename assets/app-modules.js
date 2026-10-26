@@ -5940,7 +5940,7 @@ window.refreshSecurityDashboard = refreshSecurityDashboard;
 
 ;
 
-;/* module: visual-editor; source: visual-editor.js; sha256: 66800f0c341df78a3551215a6feba2434bb31cbc8e4444f768648ed7e22ec96a */
+;/* module: visual-editor; source: visual-editor.js; sha256: 3608029d1853290f9983f20d05a362568ebd6dcbcbc1a99475584b43f2a12174 */
 /** Complete Machina visual authoring; executable actions are delegated to native Studio services. */
 function renderNodeIcon(key, size = 16) {
  const names={'git':'branch','terminal':'code','zap':'bolt','clipboard-check':'check','code-review':'eye','message-circle':'file','rocket':'upload','web-audit':'globe','minimize':'minus'};
@@ -5968,6 +5968,8 @@ class VisualEditor {
         this.historyStack = [];
         this.redoStack = [];
         this.historyLimit = 100;
+        this.runResults = {};
+        this._executionOwner = null;
 
         // DOM Elements
         this.container = null;
@@ -5986,6 +5988,8 @@ class VisualEditor {
      * Call this before loading a new pipeline to ensure isolation.
      */
     clear() {
+        this.runResults = {};
+        this._executionOwner = null;
         this.nodes = [];
         this.edges = [];
         this.graphMetadata = {};
@@ -6155,6 +6159,8 @@ class VisualEditor {
     }
 
     loadGraph(graphData = {}) {
+        this.runResults = {};
+        this._executionOwner = null;
         const copy=JSON.parse(JSON.stringify(graphData));
         this.runnerMigrationWarnings=window.GraphEngine?.normalizeRunnerReferences(copy)||[];
         this.graphMetadata={...copy};delete this.graphMetadata.nodes;delete this.graphMetadata.edges;
@@ -6169,6 +6175,22 @@ class VisualEditor {
     }
 
     getGraph() { return JSON.parse(JSON.stringify({...this.graphMetadata,nodes:this.nodes,edges:this.edges})); }
+
+    setRunResults(results = {}) {
+        this.runResults = results;
+        this._paintRunResults();
+    }
+
+    _paintRunResults() {
+        const labels={SUCCESS:'Passed',FAILURE:'Failed',ERROR:'Error',RUNNING:'Running',PENDING:'Not run',CANCELLED:'Cancelled',SKIPPED:'Skipped'};
+        for(const el of this.nodeLayer?.children||[]){
+            const result=this.runResults?.[el.dataset.id],status=labels[result?.status]?result.status:'';
+            if(status)el.dataset.executionStatus=status;else delete el.dataset.executionStatus;
+            const badge=el.querySelector('.ve-node-run-status');if(!badge)continue;
+            badge.hidden=!status;badge.textContent=labels[status]||'';
+            badge.title=status?['Last run: '+labels[status],result.error||result.message||result.reason].filter(Boolean).join('\n'):'';
+        }
+    }
 
     _cloneGraphState() {
         return JSON.parse(JSON.stringify({
@@ -7724,7 +7746,7 @@ ${summaryText || 'No summary generated.'}
             const point=this._graphToViewportPoint(node.position),el=document.createElement('div');
             el.className='ve-node aero-card'+(node.id===this.selectedNodeId?' ve-node-selected':'');el.dataset.id=node.id;el.dataset.nodeType=node.type;
             Object.assign(el.style,{left:point.x+'px',top:point.y+'px',pointerEvents:'auto',cursor:this.activeTool==='pan'?'grab':'move'});
-            el.innerHTML=`<div class="ve-node-header"><span class="node-icon">${window.LVXIcons?.svg(icons[node.type]||'test')||''}</span><strong title="${this._escapeHTML(this._getNodeDisplayName(node))}">${this._escapeHTML(this._getNodeDisplayName(node))}</strong><button type="button" class="ve-node-config-btn" title="Configure node">${window.LVXIcons?.svg('settings')||''}</button><button type="button" class="ve-node-run-btn" title="Run this node with dependencies">${window.LVXIcons?.svg('play')||''}</button><button type="button" class="ve-delete-node" title="Delete node">${window.LVXIcons?.svg('trash')||''}</button></div><div class="ve-node-description">${this._escapeHTML(node.type)}</div><div class="ve-ports"><button type="button" aria-label="Input connection" class="ve-port ve-input-port"></button><button type="button" aria-label="Output connection" class="ve-port ve-output-port"></button></div>`;
+            el.innerHTML=`<div class="ve-node-header"><span class="node-icon">${window.LVXIcons?.svg(icons[node.type]||'test')||''}</span><strong title="${this._escapeHTML(this._getNodeDisplayName(node))}">${this._escapeHTML(this._getNodeDisplayName(node))}</strong><button type="button" class="ve-node-config-btn" title="Configure node">${window.LVXIcons?.svg('settings')||''}</button><button type="button" class="ve-node-run-btn" title="Run this node with dependencies">${window.LVXIcons?.svg('play')||''}</button><button type="button" class="ve-delete-node" title="Delete node">${window.LVXIcons?.svg('trash')||''}</button></div><div class="ve-node-description">${this._escapeHTML(node.type)}<span class="ve-node-run-status" hidden></span></div><div class="ve-ports"><button type="button" aria-label="Input connection" class="ve-port ve-input-port"></button><button type="button" aria-label="Output connection" class="ve-port ve-output-port"></button></div>`;
             el.querySelector('.ve-node-config-btn').onclick=e=>{e.stopPropagation();this[this._getNodeConfigHandlerName(node)](node.id);};
             el.querySelector('.ve-node-run-btn').onclick=e=>{e.stopPropagation();Promise.resolve(this.runNode(node.id)).catch(error=>this._showEditorMessage(error.message,'error'));};
             el.querySelector('.ve-delete-node').onclick=e=>{e.stopPropagation();this.deleteNode(node.id);};
@@ -7743,6 +7765,7 @@ ${summaryText || 'No summary generated.'}
             this.nodeLayer.appendChild(el);
         }
         for(const edge of this.edges)this._drawEdge(edge);
+        this._paintRunResults();
     }
 
     _drawEdge(edge) {
@@ -21558,7 +21581,7 @@ console.log('Collaboration UI functions (Part 1) loaded');
 
 ;
 
-;/* module: machina-graph-bridge; source: machina-graph-bridge.js; sha256: e001055b51eeffe4360ebe2cf3dac9a9c356aec18af3bf9428efa4124c28fbdc */
+;/* module: machina-graph-bridge; source: machina-graph-bridge.js; sha256: 0708c198dfd3b2e155811d22ff66f75469018db1fe3f1d8e63ea8336a2afcef1 */
 /* Native execution boundary and progressive visual authoring for the Machina graph. */
 (() => {
  'use strict';
@@ -21582,6 +21605,19 @@ console.log('Collaboration UI functions (Part 1) loaded');
   .ve-node{position:absolute;width:300px;min-height:80px;background:var(--mg-surface)!important;color:var(--mg-text);border:1px solid var(--mg-line);border-radius:9px;box-shadow:0 4px 12px #18324a18;user-select:none}
   .ve-node.ve-node-selected{outline:3px solid #2873c2;outline-offset:3px}.ve-node-header{display:flex;align-items:center;gap:5px;padding:10px 12px;background:var(--ve-task-gradient,linear-gradient(180deg,#e3f2fd,#bbdefb))!important;color:var(--ve-task-ink,#003366);border-bottom:1px solid var(--mg-line);border-radius:8px 8px 0 0}
   .ve-node-header strong{color:inherit!important;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ve-node-header button{padding:3px!important;position:static!important;opacity:1!important;background:transparent!important;border:0!important;color:inherit!important;flex-shrink:0}.ve-node-description{padding:8px 14px;color:var(--mg-muted);font-size:12px}
+  .ve-node-run-status{display:inline-block;margin-left:8px;font-weight:700}.ve-node-run-status[hidden]{display:none}
+  .visual-editor-container .ve-node:is([data-execution-status="ERROR"],[data-execution-status="FAILURE"]){border:3px solid #b42332}
+  .visual-editor-container .ve-node:is([data-execution-status="ERROR"],[data-execution-status="FAILURE"]) .ve-node-header{background:linear-gradient(#ffd9de,#ffb5bf)!important;color:#651322!important}
+  .visual-editor-container .ve-node:is([data-execution-status="ERROR"],[data-execution-status="FAILURE"]) .ve-node-run-status{background:#b42332;color:#fff;border-radius:4px;padding:1px 7px}
+  .mg-run tr:is([data-run-status="ERROR"],[data-run-status="FAILURE"]){background:#ffe4e8;color:#651322}.mg-run tr:is([data-run-status="ERROR"],[data-run-status="FAILURE"]) td:nth-child(2){font-weight:750}
+  .visual-editor-container .ve-node[data-execution-status="SUCCESS"]{border:3px solid #178047}
+  .visual-editor-container .ve-node[data-execution-status="SUCCESS"] .ve-node-header{background:linear-gradient(#c7f4da,#93e1b3)!important;color:#064a2c!important}
+  .visual-editor-container .ve-node[data-execution-status="SUCCESS"] .ve-node-run-status{background:#126b3c;color:#fff;border-radius:4px;padding:1px 7px}
+  .visual-editor-container .ve-node[data-execution-status="RUNNING"]{border:3px solid #1d5eb3}
+  .visual-editor-container .ve-node[data-execution-status="RUNNING"] .ve-node-header{background:linear-gradient(#d8ecff,#bddcff)!important;color:#0a3d6c!important}
+  .visual-editor-container .ve-node[data-execution-status="RUNNING"] .ve-node-run-status{background:#1d5eb3;color:#fff;border-radius:4px;padding:1px 7px}
+  .ve-node:is([data-execution-status="PENDING"],[data-execution-status="SKIPPED"],[data-execution-status="CANCELLED"]) .ve-node-run-status{background:#e6edf5;color:#384c63;border-radius:4px;padding:1px 7px}
+  .mg-run tr[data-run-status="SUCCESS"]{background:#e0f5e9;color:#125232}.mg-run tr[data-run-status="RUNNING"]{background:#e3f1ff;color:#173f64}.mg-run tr:is([data-run-status="SUCCESS"],[data-run-status="RUNNING"]) td:nth-child(2){font-weight:750}
   .ve-ports{position:absolute;left:-7px;right:-7px;top:33px;height:14px;align-items:center;display:flex;justify-content:space-between;pointer-events:none}.ve-port{position:static!important;top:auto!important;transform:none!important;margin:0!important;width:14px!important;height:14px!important;border:2px solid var(--mg-surface)!important;border-radius:50%;background:#276cb6!important;padding:0!important;pointer-events:auto}
   .ve-zoom-controls{position:absolute;right:12px;bottom:12px;max-width:calc(100% - 280px);display:flex;flex-direction:column;flex-wrap:nowrap;align-items:stretch;gap:5px;max-height:calc(100% - 24px);overflow:auto;z-index:35}.ve-top-action-bar{left:270px!important;right:12px;top:12px!important;background:rgba(255,255,255,.9)!important;box-shadow:0 4px 16px #0000001a!important;border:1px solid #fff!important;flex-wrap:wrap}.visual-editor-container .ve-zoom-controls button{width:auto;height:auto;white-space:nowrap;flex:none}.ve-zoom-level{min-width:45px;text-align:center}
   .visual-editor-container button,.mg-dialog button,.mg-run button,.mg-review button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:32px;padding:5px 10px;border:1px solid var(--mg-line);border-radius:6px;cursor:pointer;font:inherit}.visual-editor-container button:hover,.mg-dialog button:hover,.mg-run button:hover,.mg-review button:hover{filter:brightness(.97)}
@@ -21648,9 +21684,11 @@ console.log('Collaboration UI functions (Part 1) loaded');
  }
  function displayRun(session){
   const {element,run,workflow}=session;if(!element)return;
+  if(session.editor?._executionOwner===session.token)session.editor.setRunResults?.(run.results||{});
   element.querySelector('[data-run-status]').textContent=run.status;
+  const dockButton=[...document.querySelectorAll('#mg-session-dock button')].find(button=>button.dataset.key==='run:'+run.id);if(dockButton)dockButton.textContent=`${workflow.name||'Workflow'} · ${run.status}`;
   element.querySelector('[data-run-stop]').disabled=terminal.has(run.status);
-  const results=run.results||{};element.querySelector('tbody').innerHTML=(workflow.nodes||[]).map(node=>{const result=results[node.id]||{};return `<tr><td>${esc(node.data?.name||node.id)}</td><td>${esc(result.status||'PENDING')}</td><td>${esc(result.message||result.error||'')}${node.data?.missingSuiteReference?` <span>Saved test ${esc(node.data.suiteId)} could not be found.</span>${session.editor?` <button data-relink-suite="${esc(node.id)}">${icon('folder')} Choose saved test</button>`:''}`:''}${terminal.has(result.status)?` <button data-node-output="${esc(node.id)}">${icon('file')} View output</button>`:''}</td><td>${esc(Array.isArray(result.attempts)?result.attempts.length:result.attempt??'')}</td></tr>`;}).join('');
+  const results=run.results||{};element.querySelector('tbody').innerHTML=(workflow.nodes||[]).map(node=>{const result=results[node.id]||{};return `<tr data-node-id="${esc(node.id)}" data-run-status="${esc(result.status||'PENDING')}"><td>${esc(node.data?.name||node.id)}</td><td>${esc(result.status||'PENDING')}</td><td>${esc(result.message||result.error||'')}${node.data?.missingSuiteReference?` <span>Saved test ${esc(node.data.suiteId)} could not be found.</span>${session.editor?` <button data-relink-suite="${esc(node.id)}">${icon('folder')} Choose saved test</button>`:''}`:''}${terminal.has(result.status)?` <button data-node-output="${esc(node.id)}">${icon('file')} View output</button>`:''}</td><td>${esc(Array.isArray(result.attempts)?result.attempts.length:result.attempt??'')}</td></tr>`;}).join('');
   for(const button of element.querySelectorAll('[data-relink-suite]'))button.onclick=()=>relinkSuite(session.editor,button.dataset.relinkSuite);
   for(const button of element.querySelectorAll('[data-node-output]'))button.onclick=()=>showOutput(workflow.nodes.find(node=>node.id===button.dataset.nodeOutput),results[button.dataset.nodeOutput]);
   const log=[run.stdout,run.stderr,run.error,...Object.entries(results).flatMap(([id,r])=>[r.stdout&&`${id}: ${r.stdout}`,r.stderr&&`${id}: ${r.stderr}`,r.output,r.error])].filter(Boolean).join('\n');
@@ -21659,10 +21697,10 @@ console.log('Collaboration UI functions (Part 1) loaded');
   syncAuthoringResults(session);
   if(terminal.has(run.status)){window.LVXCodeReview?.settleRun(run.id,run.status);for(const waiter of session.waiters.splice(0))waiter.resolve(clone(run));}else for(const pending of run.pendingReviews||[])showReview({...pending,id:run.id});
  }
- function mountRun(run,workflow,editor,binding=context){
+ function mountRun(run,workflow,editor,binding=context,token=null){
   installStyles();const element=document.createElement('section');element.className='mg-run';element.setAttribute('role','dialog');element.setAttribute('aria-label','Pipeline execution');
   element.innerHTML=`<header><h2>${esc(workflow.name||'Workflow run')}</h2><strong data-run-status>${esc(run.status)}</strong><button data-run-minimize title="Minimize run">${icon('minus')} Minimize</button><button data-run-export>${icon('download')} Export log</button><button data-run-stop>${icon('stop')} Stop</button><button data-run-close>${icon('close')} Close</button></header><div class="mg-run-body"><table><thead><tr><th>Node</th><th>Status</th><th>Evidence</th><th>Attempts</th></tr></thead><tbody></tbody></table><h3>Execution log</h3><pre data-run-log></pre><details><summary>Full persisted evidence</summary><pre data-run-evidence></pre></details></div><p data-run-error role="alert"></p>`;
-  document.body.appendChild(element);const session={run,workflow:clone(workflow),element,waiters:[],editor,applied:new Map(),binding};sessions.set(run.id,session);
+  document.body.appendChild(element);const session={run,workflow:clone(workflow),element,waiters:[],editor,applied:new Map(),binding,token};sessions.set(run.id,session);
   const minimize=()=>{element.classList.add('hidden');dockItem('run:'+run.id,`${workflow.name||'Workflow'} · ${session.run.status}`,()=>element.classList.remove('hidden'));};
   element.querySelector('[data-run-minimize]').onclick=minimize;
   element.querySelector('[data-run-export]').onclick=()=>download('workflow-'+run.id+'.json',JSON.stringify(session.run,null,2),'application/json');
@@ -21699,8 +21737,9 @@ console.log('Collaboration UI functions (Part 1) loaded');
   const protectedWorkflow=await protect(snapshot,'Visual workflow');
   if(window.LVXReviewImported&&!await window.LVXReviewImported(protectedWorkflow))return {status:'CANCELLED',cancelled:true};
   const {waitForCompletion=false,...executionOptions}=options;
+  const editor=authoringEditor||binding.editor,token={};if(editor){editor._executionOwner=token;editor.setRunResults?.({});}
   const run=await invoke('runWorkflow',{workflow:protectedWorkflow,...executionOptions},binding);
-  const editor=authoringEditor||binding.editor;const session=mountRun(run,protectedWorkflow,editor&&snapshot.nodes.every(node=>editor.nodes.some(candidate=>candidate.id===node.id))?editor:null,binding);binding.onRun?.(run,protectedWorkflow);
+  const session=mountRun(run,protectedWorkflow,editor&&snapshot.nodes.every(node=>editor.nodes.some(candidate=>candidate.id===node.id))?editor:null,binding,token);binding.onRun?.(run,protectedWorkflow);
   if(!terminal.has(run.status))void poll(session);
   return waitForCompletion?waitForRun(run.id):run;
  }

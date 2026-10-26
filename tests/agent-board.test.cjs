@@ -941,7 +941,8 @@ test("forward and backward connection geometry remain visible and finite", async
   b.position = { x: 400, y: 200 };
   for (const route of [connectionPath(a, b), connectionPath(b, a)]) {
     assert.match(route.d, /^M /);
-    assert.match(route.d, / C /);
+    assert.match(route.d, / L /);
+    assert.doesNotMatch(route.d, /[CQ]/);
     assert.ok(Number.isFinite(route.x));
     assert.ok(Number.isFinite(route.y));
     assert.doesNotMatch(route.d, /NaN|Infinity/);

@@ -8,6 +8,7 @@ const { Worker } = require('node:worker_threads');
 const { StringDecoder } = require('node:string_decoder');
 const GraphEngine = require('../../graph-engine.js');
 const adapters = require('./adapters.cjs');
+const { browserMode } = require('./browser-mode.cjs');
 const { pythonEnvironment } = require('./python-environment.cjs');
 const { createProtocol } = require('./python-protocol.cjs');
 const { createRedactor } = require('./redaction.cjs');
@@ -207,10 +208,11 @@ function createService(options = {}) {
     async function start(payload = {}) {
         if(payload.mock_builder||payload.mockBuilder){
             requireWorkspace();const plan=require('../../mock-runtime.js').buildSuiteExecutionPlan(payload,payload.inputs||{});
-            if(plan.setupSteps.length||plan.teardownSteps.length||plan.hasFileIterations)return runWorkflow({workflow:{name:payload.name||'Check with data',nodes:[{id:'check',type:'test-suite',data:{suite:{...payload,engine:payload.engine||'javascript'}}}],edges:[]},parameters:payload.parameters||{}});
+            if(plan.setupSteps.length||plan.teardownSteps.length||plan.hasFileIterations)return runWorkflow({workflow:{name:payload.name||'Check with data',browserMode:payload.browserMode,nodes:[{id:'check',type:'test-suite',data:{suite:{...payload,engine:payload.engine||'javascript'}}}],edges:[]},parameters:payload.parameters||{}});
         }
         const generation=workspaceGeneration;
         const target=project(payload.projectPath),engine=payload.engine||'javascript';
+        payload={...payload,browserMode:browserMode(payload.browserMode)};
         let cwd=target;
         if(fs.statSync(target).isFile()){if(engine!=='nunit'||! /\.(csproj|sln|slnx)$/i.test(target))throw new Error('Choose a project directory, or a .csproj/.sln file for NUnit.');cwd=path.dirname(target);payload={...payload,nativeProject:target};}
         if(payload.debug&&engine!=='javascript')throw new Error('Interactive debugging is currently available for JavaScript. Other engines support cancellation and native runner output.');
@@ -232,6 +234,7 @@ function createService(options = {}) {
         if (!Number.isInteger(timeout) || timeout < 10 || timeout > 86400000) throw new Error('Run timeout must be 10–86400000 milliseconds.');
         if(closed||generation!==workspaceGeneration)throw new Error('Workspace changed while preparing this run. Start again in the selected workspace.');
         const run = {id:crypto.randomUUID(),engine,status:'RUNNING',startedAt:new Date().toISOString(),stdout:'',stderr:'',total:0,passed:0,failed:0,errors:0,pending:0,artifacts:{},workspaceRoot,fixture:fixture?{id:fixture.id,version:fixture.version}:null};
+        if(['playwright','robot'].includes(engine))run.browserMode=payload.browserMode;
         if(typeof payload.name==='string'&&payload.name.trim())run.name=Array.from(payload.name.trim()).slice(0,200).join('');
         write(run);
         // Never serialize code or resolved credentials into the run record.
@@ -337,8 +340,9 @@ function createService(options = {}) {
     }
     async function runWorkflow(payload, internal = {}) {
         requireWorkspace();const validation=GraphEngine.validate(payload.workflow,{strict:true});if(!validation.valid) throw new Error(validation.errors.join(' '));
+        const selectedBrowserMode=browserMode(payload.workflow.browserMode);
         const plan=GraphEngine.executionPlan(validation.workflow,payload),workflow=plan.workflow, id=crypto.randomUUID(), controller=new AbortController();
-        const run={id,engine:'workflow',workspaceRoot,status:'RUNNING',startedAt:new Date().toISOString(),results:{},total:0,passed:0,failed:0,errors:0,pending:0,reviewDecisions:[],pendingReviews:[],runnerAssignments:plan.runnerAssignments,originalRunId:internal.originalRunId||null,workflowHash:crypto.createHash('sha256').update(JSON.stringify(validation.workflow)).digest('hex'),parametersHash:crypto.createHash('sha256').update(JSON.stringify(payload.parameters||{})).digest('hex')};
+        const run={id,engine:'workflow',workspaceRoot,browserMode:selectedBrowserMode,status:'RUNNING',startedAt:new Date().toISOString(),results:{},total:0,passed:0,failed:0,errors:0,pending:0,reviewDecisions:[],pendingReviews:[],runnerAssignments:plan.runnerAssignments,originalRunId:internal.originalRunId||null,workflowHash:crypto.createHash('sha256').update(JSON.stringify(validation.workflow)).digest('hex'),parametersHash:crypto.createHash('sha256').update(JSON.stringify(payload.parameters||{})).digest('hex')};
         run.name=typeof workflow.name==='string'&&workflow.name.trim()?Array.from(workflow.name.trim()).slice(0,200).join(''):'Workflow';
         let complete;const completion=new Promise(resolve=>{complete=resolve;});
         write(run);active.set(id,{controller,run,completion});
@@ -347,7 +351,7 @@ function createService(options = {}) {
                 const result=await new GraphEngine().execute(workflow,async(node,inputs,context)=>{
                     if(context.signal?.aborted) return {status:'CANCELLED'};
                     const started=Date.now();output(run,'stdout',`[${node.id}] ${node.type} attempt ${context.attempt}\n`);
-                    try{const result=await machina.execute(node,inputs,{...context,workflow,parameters:payload.parameters||{},runnerAssignments:plan.runnerAssignments,log:(stream,text)=>output(run,stream,text),review:(node,kind,proposal)=>requestReview(run,node,kind,proposal,controller.signal),isReviewApproved:evidence=>run.reviewDecisions.some(decision=>decision.decisionId===evidence.decisionId&&decision.decision==='approve'&&decision.deployRequested===true&&decision.proposalHash===evidence.proposalHash&&decision.finalCodeHash===evidence.finalCodeHash)});output(run,'stdout',`[${node.id}] ${result.status}\n`);const safe=safeResult(result);if(['code-review','ai-unit-test'].includes(GraphEngine.normalizeNodeType(node.type))&&result.artifacts?.reviewEvidence){safe.artifacts||={};safe.artifacts.reviewEvidence=safeReview(result.artifacts.reviewEvidence);}return {...safe,duration:Date.now()-started};}catch(error){if(controller.signal.aborted)return {status:'CANCELLED',total:0,passed:0,failed:0,errors:0};output(run,'stderr',`[${node.id}] ${error.message}\n`);throw error;}
+                    try{const result=await machina.execute(node,inputs,{...context,workflow,browserMode:selectedBrowserMode,parameters:payload.parameters||{},runnerAssignments:plan.runnerAssignments,log:(stream,text)=>output(run,stream,text),review:(node,kind,proposal)=>requestReview(run,node,kind,proposal,controller.signal),isReviewApproved:evidence=>run.reviewDecisions.some(decision=>decision.decisionId===evidence.decisionId&&decision.decision==='approve'&&decision.deployRequested===true&&decision.proposalHash===evidence.proposalHash&&decision.finalCodeHash===evidence.finalCodeHash)});output(run,'stdout',`[${node.id}] ${result.status}\n`);const safe=safeResult(result);if(['code-review','ai-unit-test'].includes(GraphEngine.normalizeNodeType(node.type))&&result.artifacts?.reviewEvidence){safe.artifacts||={};safe.artifacts.reviewEvidence=safeReview(result.artifacts.reviewEvidence);}return {...safe,duration:Date.now()-started};}catch(error){if(controller.signal.aborted)return {status:'CANCELLED',total:0,passed:0,failed:0,errors:0};output(run,'stderr',`[${node.id}] ${error.message}\n`);throw error;}
                 },{signal:controller.signal,initialResults:internal.initialResults,onState:state=>{run.results=clone(state.results);write(run);}});
                 const counters=Object.values(result.results).reduce((r,n)=>{for(const k of ['total','passed','failed','errors','pending'])r[k]+=n[k]||0;if(n.status==='PENDING')r.pending++;return r;},{total:0,passed:0,failed:0,errors:0,pending:0});
                 Object.assign(run,result,counters,{finishedAt:new Date().toISOString()});if(!run.total&&run.status==='SUCCESS'){run.status='ERROR';run.errors++;}

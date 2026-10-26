@@ -42,6 +42,8 @@ Load the preview, add test steps, then choose **Run Live Test**. **Open interact
 
 Open **Workflows** to connect tasks. Place task boxes on the graph and draw connections to show what happens first. Select a box to configure it, then save and run.
 
+Choose **E2E browser → Headed (visible)** to watch LVX-managed browser tests, or **Headless (background)** to run without browser windows. The choice is saved with the graph. While tests run, nodes show **Running** in blue, **Passed** in green, and **Failed/Error** in red. Unrun and cancelled work never receives a passing state. The run monitor uses matching status rows; minimize it to watch the graph update.
+
 For example, fetch a Git repository, run its tests and collect the results. Each box shows its own outcome.
 
 ## Work with AI agents
