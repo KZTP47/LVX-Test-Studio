@@ -4,7 +4,7 @@
   "description": "A visual desktop workspace for AI-assisted test automation, pipelines and evidence.",
   "private": true,
   "main": "main.js",
-  "author": "Karokh Kappen Araf",
+  "author": "KZTP47",
   "scripts": {
     "start": "npm run build:assets && electron .",
     "dev": "node scripts/dev-server.cjs",
