@@ -192,6 +192,16 @@
       "file": "docs/images/api-service-connections.png",
       "sha256": "30e08ee937f94ce802fd8fcb4685c86f4979fa35e1e8830c5ec5001276e393f4",
       "review": "Current README-linked API atlas illustration explicitly accepted by the user; visually inspected demo public repository connections; no private text metadata."
+    },
+    {
+      "file": "docs/media/LVX-Test-Studio-demo.mp4",
+      "sha256": "91563d6e8957de5d73ae3c0a8f10773ea9597a98b02c870ff9b5a0e0d81a7e66",
+      "review": "English-captioned product walkthrough of the packaged desktop app. Genuine local browser tests and an intentional negative control; agent-board configuration only. Visually reviewed, with local installation paths masked. No credentials, personal conversations or customer data."
+    },
+    {
+      "file": "docs/images/demo-thumbnail.jpg",
+      "sha256": "f158caf7c0ced9bee7fb215cc70abe0dd7ee971824e5d1cbf5c81dfa611096b2",
+      "review": "Clickable video thumbnail derived from a frame of the reviewed public walkthrough, with a play icon and duration badge. Visually reviewed; shows only the demonstration workflow, no personal paths, credentials, conversations or customer data. JPEG contains no EXIF metadata."
     }
   ],
   "syntheticMatches": [
