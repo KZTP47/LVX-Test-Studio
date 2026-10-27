@@ -4,9 +4,9 @@
 
 LVX Test Studio is a Windows app for testing websites and software. Choose test steps, connect tasks into a workflow, and see what passed or failed. AI agents can help with your project while you follow their conversations on a shared board.
 
-[![Play the 48-second LVX Test Studio demo](docs/images/demo-thumbnail.jpg)](docs/media/LVX-Test-Studio-demo.mp4)
+https://github.com/user-attachments/assets/053f73a8-dabe-49f0-be7d-1c369638b223
 
-**[Watch the 48-second demo](docs/media/LVX-Test-Studio-demo.mp4)** — 1080p with English captions.
+**[Watch the 48-second demo](https://github.com/user-attachments/assets/053f73a8-dabe-49f0-be7d-1c369638b223)** — 1080p with English captions.
 
 See real browser tests, passing and deliberately failing checks, and the agent board.
 
