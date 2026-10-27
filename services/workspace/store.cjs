@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
 
 const SCHEMA_VERSION = 2;
-const KEY = /^[a-zA-Z0-9][a-zA-Z0-9_.:@-]{0,199}$/;
+const KEY = /^[a-zA-Z0-9][a-zA-Z0-9_.:@-]*$/;
 class WorkspaceError extends Error {
   constructor(code, message, details) { super(message); this.code = code; this.details = details; }
 }
@@ -23,17 +23,20 @@ function json(value) {
 function rowRecord(row) {
   return row && { collection: row.collection, id: row.id, value: JSON.parse(row.value), revision: row.revision, modified: row.modified };
 }
-function decodeBase64(value, maxBytes = 96 * 1024 * 1024) {
-  if (typeof value !== 'string' || value.length > Math.ceil(maxBytes / 3) * 4) throw new WorkspaceError('VALIDATION', 'Artifact exceeds the size limit or is not base64.');
+function decodeBase64(value, maxBytes = 0) {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) throw new WorkspaceError('VALIDATION', 'Artifact byte budget must be a nonnegative integer; zero disables it.');
+  if (typeof value !== 'string') throw new WorkspaceError('VALIDATION', 'Artifact must be base64 text.');
+  if (maxBytes > 0 && value.length > Math.ceil(maxBytes / 3) * 4) throw new WorkspaceError('VALIDATION', 'Artifact exceeds the selected byte budget.');
   const bytes = Buffer.from(value, 'base64');
   // Round-trip validation is linear and rejects whitespace, missing padding and
   // nonalphabet bytes without the pathological cost of a repeated-group regex.
-  if (bytes.length > maxBytes || bytes.toString('base64') !== value) throw new WorkspaceError('VALIDATION', 'Artifact must be canonical base64.');
+  if ((maxBytes > 0 && bytes.length > maxBytes) || bytes.toString('base64') !== value) throw new WorkspaceError('VALIDATION', 'Artifact must be canonical base64 and fit the selected byte budget.');
   return bytes;
 }
 
 class Store {
-  constructor(filename, { quotaBytes = 512 * 1024 * 1024, beforeMigration } = {}) {
+  constructor(filename, { quotaBytes = 0, beforeMigration } = {}) {
+    if (!Number.isSafeInteger(quotaBytes) || quotaBytes < 0) throw new WorkspaceError('VALIDATION', 'Workspace byte budget must be a nonnegative integer; zero disables it.');
     this.filename = filename;
     this.quotaBytes = quotaBytes;
     fs.mkdirSync(path.dirname(filename), { recursive: true });
@@ -73,9 +76,10 @@ class Store {
   revision() { return Number(this.db.prepare("SELECT value FROM metadata WHERE key='revision'").get().value); }
   bump() { this.db.prepare("UPDATE metadata SET value=CAST(value AS INTEGER)+1 WHERE key='revision'").run(); return this.revision(); }
   read(collection, id) { return rowRecord(this.db.prepare('SELECT * FROM records WHERE collection=? AND id=?').get(key(collection, 'Collection'), key(id, 'Record id'))) || null; }
-  list(collection) {
+  list(collection, {boardId} = {}) {
     return this.snapshot(() => {
-      const rows = collection ? this.db.prepare('SELECT * FROM records WHERE collection=? ORDER BY id').all(key(collection, 'Collection')) : this.db.prepare('SELECT * FROM records ORDER BY collection,id').all();
+      if(boardId!==undefined&&!['agent-messages','agent-events','agent-runs','agent-sessions'].includes(collection))throw new WorkspaceError('VALIDATION','Board filtering is only supported for agent history collections.');
+      const rows = boardId!==undefined ? this.db.prepare("SELECT * FROM records WHERE collection=? AND json_extract(value,'$.boardId')=? ORDER BY id").all(key(collection,'Collection'),key(boardId,'Board ID')) : collection ? this.db.prepare('SELECT * FROM records WHERE collection=? ORDER BY id').all(key(collection, 'Collection')) : this.db.prepare('SELECT * FROM records ORDER BY collection,id').all();
       return { records: rows.map(rowRecord), revision: this.revision(), schemaVersion: SCHEMA_VERSION };
     });
   }
@@ -86,7 +90,7 @@ class Store {
   }
   checkQuota() {
     const usage = this.usage();
-    if (usage.totalBytes > this.quotaBytes) throw new WorkspaceError('QUOTA', 'Workspace size limit reached. Remove unneeded artifacts or increase the local limit.', usage);
+    if (this.quotaBytes > 0 && usage.totalBytes > this.quotaBytes) throw new WorkspaceError('QUOTA', 'The selected workspace byte budget was reached. Remove unneeded artifacts or change this optional budget.', usage);
   }
   snapshot(callback) {
     if (this.db.isTransaction) return callback();
@@ -100,11 +104,11 @@ class Store {
     catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
   transact(records, { expectedWorkspaceRevision, failBeforeCommit = false, deleteArtifactsForRuns = [], protectedArtifactIds = [], retentionCleanup = false } = {}) {
-    const maximum=retentionCleanup===true?100000:10000;
-    if (!Array.isArray(records) || !records.length || records.length > maximum) throw new WorkspaceError('VALIDATION', `A transaction needs 1–${maximum.toLocaleString('en-US')} records.`);
-    for(const values of [deleteArtifactsForRuns,protectedArtifactIds]){if(!Array.isArray(values)||values.length>100000)throw new WorkspaceError('VALIDATION','Invalid retained artifact selection.');for(const id of values)key(id,'Artifact cleanup identifier');}
+    if (!Array.isArray(records) || !records.length) throw new WorkspaceError('VALIDATION', 'A transaction needs a nonempty list of records.');
+    for(const values of [deleteArtifactsForRuns,protectedArtifactIds]){if(!Array.isArray(values))throw new WorkspaceError('VALIDATION','Invalid retained artifact selection.');for(const id of values)key(id,'Artifact cleanup identifier');}
     if(retentionCleanup&&records.some(r=>!r?.delete&&!(r?.collection==='storage-settings'&&['retention','retention-effects'].includes(r?.id))&&!(r?.collection==='baselines'&&r?.value?.type==='lvx-native-baselines'&&Array.isArray(r.value.items))))throw new WorkspaceError('VALIDATION','Internal retention transactions may only remove records, trim baseline archives or update their cleanup receipt.');
-    if(deleteArtifactsForRuns.some(id=>!records.some(r=>r.collection==='runs'&&r.id===id&&r.delete)))throw new WorkspaceError('VALIDATION','Artifact cleanup must accompany removal of its run record.');
+    const deletedRunIds = new Set(records.filter(r=>r?.collection==='runs'&&r.delete).map(r=>r.id));
+    if(deleteArtifactsForRuns.some(id=>!deletedRunIds.has(id)))throw new WorkspaceError('VALIDATION','Artifact cleanup must accompany removal of its run record.');
     const identifiers = new Set();
     for (const record of records) {
       if (!record || typeof record !== 'object') throw new WorkspaceError('VALIDATION', 'Invalid record.');

@@ -1,0 +1,92 @@
+.gw-workspace { color: #173954; min-width: 0; }
+.gw-agent-preview { width:min(1000px,94vw); max-height:88vh; overflow:auto; border:1px solid #8bacbf; border-radius:12px; padding:22px; background:#fff; color:#173954; }
+.gw-agent-preview::backdrop { background:#102b4666; }
+.gw-agent-diff { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+.gw-agent-diff section { min-width:0; }
+.gw-agent-diff pre { max-height:50vh; overflow:auto; padding:12px; background:#e9f3fb; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
+.theme-dark .gw-agent-preview { background:#142b38; color:#edf7fd; }
+.theme-dark .gw-agent-diff pre { background:#203e50; }
+[data-theme="dark"] .gw-agent-preview { background:#142b38; color:#edf7fd; }
+[data-theme="dark"] .gw-agent-diff pre { background:#203e50; }
+@media(max-width:700px) { .gw-agent-diff { grid-template-columns:1fr; } }
+.gw-workspace button, .gw-workspace input, .gw-workspace select { font: inherit; }
+.gw-import { display: grid; grid-template-columns: minmax(190px, 1.5fr) minmax(140px, .8fr) minmax(200px, 1fr) auto; gap: 12px; align-items: end; padding: 18px; background: #e9f3fb; border: 1px solid #adcadf; border-radius: 12px; }
+.gw-import label, .gw-workflow-picker label { display: grid; gap: 6px; font-weight: 600; font-size: 14px; }
+.gw-import small { font-size: 11px; font-weight: 400; }
+.gw-workspace input, .gw-workspace select { min-width: 0; width: 100%; padding: 9px 10px; border: 1px solid #8bacbf; border-radius: 6px; background: #fff; color: #183954; caret-color: #006fba; }
+.gw-workspace input::placeholder { color: #586d7d; opacity: 1; }
+.gw-workspace button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 7px 11px; border: 1px solid #9cbad0; border-radius: 7px; background: linear-gradient(#fff, #e0edf7); color: #173954; cursor: pointer; }
+.gw-workspace button:hover { background: #d3eafa; }
+.gw-workspace button:disabled { opacity: .6; cursor: default; }
+.gw-workspace button[aria-pressed="true"] { background: #c5e3f8; border-color: #2579ae; color: #123958; }
+.gw-workspace :focus-visible { outline: 3px solid #0074bd; outline-offset: 3px; }
+.gw-workspace ::selection { background: #b5ddf7; color: #112f49; }
+.gw-workspace svg[data-icon] { width: 18px; height: 18px; flex-shrink: 0; }
+.gw-toolbar, .gw-view, .gw-zoom { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gw-toolbar { margin: 16px 0 8px; gap: 18px; }
+.gw-zoom output { min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; }
+.gw-storage, .gw-hint { color: #4c6478; font-size: 13px; line-height: 1.6; }
+.gw-notice { min-height: 24px; margin: 8px 0; }
+.gw-lanes { display: grid; gap: 24px; }
+.gw-lane { min-width: 0; overflow: hidden; background: #fff; border: 1px solid #9fbfd6; border-radius: 14px; }
+.gw-lane > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; background: linear-gradient(#f9fcff, #e7f2fa); }
+.gw-repo-heading { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.gw-repo-heading > div { min-width: 0; }
+.gw-repo-heading h3 { margin: 0; font-size: 18px; font-weight: 650; overflow-wrap: anywhere; }
+.gw-repo-heading p { margin: 4px 0 0; font-size: 12px; color: #4c6478; overflow-wrap: anywhere; }
+.gw-lane-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.gw-example { color: #735000; }
+.gw-workflow-picker { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 12px 20px; border-top: 1px solid #c4d9e8; border-bottom: 1px solid #c4d9e8; font-size: 12px; }
+.gw-workflow-picker label { min-width: 180px; max-width: 100%; }
+.gw-workflow-name { font-weight: 600; font-size: 14px; }
+.gw-triggers { color: #475e72; overflow-wrap: anywhere; }
+.gw-canvas { width: 100%; overflow: auto; background-color: #f6faff; background-image: radial-gradient(#c2d7e7 .8px, transparent .8px); background-size: 20px 20px; scrollbar-color: #8baec8 #edf5fc; scrollbar-width: thin; }
+.gw-diagram { display: block; max-width: none; }
+.gw-edge, .gw-arrow { stroke: #537e9f; stroke-width: 2; fill: none; }
+.gw-node { cursor: pointer; outline: none; }
+.gw-node rect { fill: #e4f1fc; stroke: #6094bb; stroke-width: 1.5; }
+.gw-node:hover rect { fill: #cfe7fa; stroke: #246d9f; }
+.gw-node[aria-pressed="true"] rect, .gw-node:focus-visible rect { fill: #c4e2f8; stroke: #006cab; stroke-width: 3; }
+.gw-node.gw-blocked rect { fill: #fff2d7; stroke: #987025; }
+.gw-node text { fill: #173954; font-family: 'Segoe UI', sans-serif; pointer-events: none; }
+.gw-node-name { font-size: 14px; font-weight: 600; }
+.gw-node-id { font-family: Consolas, monospace !important; font-size: 11px; }
+.gw-node-kind { font-size: 11px; }
+.gw-hint { padding: 10px 20px; margin: 0; border-top: 1px solid #c4d9e8; }
+.gw-source { padding: 13px 20px; border-top: 1px solid #c4d9e8; }
+.gw-source summary, .gw-inspector summary { cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }
+.gw-source a { display: inline-flex; gap: 5px; align-items: center; margin-top: 12px; color: #075f9b; text-underline-offset: 3px; }
+.gw-workspace pre { background: #f2f7fb; color: #183954; padding: 12px; border-radius: 6px; overflow: auto; max-height: 440px; font: 12px/1.6 Consolas, monospace; tab-size: 2; }
+.gw-inspector { padding: 16px 20px; border-top: 1px solid #b4cedf; }
+.gw-inspector-heading { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.gw-inspector-heading h4 { font-weight: 650; font-size: 17px; margin: 0; overflow-wrap: anywhere; }
+.gw-inspector-heading button { margin-left: auto; }
+.gw-inspector dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 16px 0; }
+.gw-inspector dt { font-weight: 600; font-size: 12px; color: #4c6478; }
+.gw-inspector dd { margin: 5px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+.gw-steps { list-style: decimal; margin-left: 22px; }
+.gw-steps li { padding: 6px 0; }
+.gw-job-list { display: grid; gap: 8px; padding: 16px 20px; }
+.gw-job-list button { display: flex; align-items: start; flex-direction: column; width: 100%; text-align: left; overflow-wrap: anywhere; }
+.gw-job-list span { font-size: 12px; }
+.gw-error, .gw-diagnostics { color: #842b13; background: #fff1e9; padding: 12px 20px; overflow-wrap: anywhere; }
+.gw-notice.gw-error { border-radius: 6px; }
+.gw-diagnostics { list-style: disc inside; }
+.gw-empty { padding: 32px 24px; line-height: 1.7; }
+.gw-empty h3, .gw-empty h4 { font-size: 18px; font-weight: 600; margin: 0 0 8px; }
+.theme-dark .gw-workspace { color: #e6eff7; }
+.theme-dark .gw-import, .theme-dark .gw-lane { background: #1f3042; border-color: #7897af; }
+.theme-dark .gw-lane > header { background: linear-gradient(#293e53, #213448); }
+.theme-dark .gw-workspace input, .theme-dark .gw-workspace select { background: #132436; color: #e6eff7; border-color: #7897af; }
+.theme-dark .gw-storage, .theme-dark .gw-hint, .theme-dark .gw-repo-heading p, .theme-dark .gw-triggers, .theme-dark .gw-inspector dt { color: #c0d2e0; }
+.theme-dark .gw-example { color: #ffe19a; }
+.theme-dark .gw-canvas { background-color: #152331; background-image: radial-gradient(#36516a .8px, transparent .8px); }
+.theme-dark .gw-node rect { fill: #273d52; stroke: #89b9db; }
+.theme-dark .gw-node text { fill: #e6eff7; }
+.theme-dark .gw-node:hover rect, .theme-dark .gw-node[aria-pressed="true"] rect, .theme-dark .gw-node:focus-visible rect { fill: #365775; stroke: #a6e2ff; }
+.theme-dark .gw-node.gw-blocked rect { fill: #564223; stroke: #d8ad60; }
+.theme-dark .gw-edge, .theme-dark .gw-arrow { stroke: #89b9db; }
+.theme-dark .gw-workspace pre { background: #101d2a; color: #e6eff7; }
+.theme-dark .gw-error, .theme-dark .gw-diagnostics { background: #4b2b24; color: #ffcebd; }
+@media (max-width: 1200px) { .gw-import { grid-template-columns: 1fr 1fr; } .gw-inspector dl { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 650px) { .gw-import { grid-template-columns: minmax(0, 1fr); } .gw-lane > header { flex-direction: column; align-items: stretch; } .gw-lane-actions { flex-wrap: wrap; } .gw-inspector dl { grid-template-columns: minmax(0, 1fr); } .gw-workflow-picker { gap: 10px; } .gw-workflow-picker label { width: 100%; } }

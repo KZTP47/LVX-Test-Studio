@@ -39,11 +39,11 @@ function validateParameters(schema = {}, parameters = {}) {
 function createService(options = {}) {
     if (!options.dataDir) throw new Error('Execution dataDir is required.');
     const dataDir = path.resolve(options.dataDir), runsDir = path.join(dataDir,'runs'); fs.mkdirSync(runsDir,{recursive:true});
-    const active = new Map(), records = new Map(), debugClients = new Map(), timers = new Map(), knownSecrets = new Set(), capabilityCache = new Map(), outputBuffers = new Map(), completedDebugRuns=new Set(),capabilityWorkers=new Set(),reviews=new Map();
+    const active = new Map(), records = new Map(), debugClients = new Map(), timers = new Map(), knownSecrets = new Set(), capabilityCache = new Map(), outputBuffers = new Map(), completedDebugRuns=new Set(),capabilityWorkers=new Set(),sourceControllers=new Set(),reviews=new Map();
     let workspaceRoot = options.workspaceRoot ? fs.realpathSync(options.workspaceRoot) : null,workspaceGeneration=0,closed=false;
     const redaction = createRedactor(), redact = redaction.redact, outputDecoders = new Map();
     const uuid = value => typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-    function safeReview(value){const safe=redact(value);for(const key of ['decisionId'])if(uuid(value?.[key]))safe[key]=value[key];if(typeof value?.nodeId==='string'&&value.nodeId.length<=128)safe.nodeId=value.nodeId;if(['code-review','ai-unit-test'].includes(value?.kind))safe.kind=value.kind;if(['approve','reject'].includes(value?.decision))safe.decision=value.decision;if(value?.state==='pending')safe.state='pending';for(const key of ['proposalHash','finalCodeHash'])if(/^[a-f0-9]{64}$/.test(value?.[key]||''))safe[key]=value[key];for(const key of ['automated','deployRequested'])if(typeof value?.[key]==='boolean')safe[key]=value[key];return safe;}
+    function safeReview(value){const safe=redact(value);for(const key of ['decisionId'])if(uuid(value?.[key]))safe[key]=value[key];if(typeof value?.nodeId==='string'&&value.nodeId.length>0)safe.nodeId=value.nodeId;if(['code-review','ai-unit-test'].includes(value?.kind))safe.kind=value.kind;if(['approve','reject'].includes(value?.decision))safe.decision=value.decision;if(value?.state==='pending')safe.state='pending';for(const key of ['proposalHash','finalCodeHash'])if(/^[a-f0-9]{64}$/.test(value?.[key]||''))safe[key]=value[key];for(const key of ['automated','deployRequested'])if(typeof value?.[key]==='boolean')safe[key]=value[key];return safe;}
     function safeResult(value) {const safe=redact(value);if(value&&TERMINAL.has(value.status))safe.status=value.status;if(Array.isArray(value?.cases))safe.cases=value.cases.map(item=>{const result=redact(item);if(['PENDING',...TERMINAL].includes(item.status))result.status=item.status;return result;});return safe;}
     function safeRun(value) {
         const safe=redact(value);
@@ -53,17 +53,20 @@ function createService(options = {}) {
             for(const field of ['startedAt','finishedAt'])if(typeof value[field]==='string'&&Number.isFinite(Date.parse(value[field]))&&new Date(value[field]).toISOString()===value[field])safe[field]=value[field];
             for(const field of ['originalRunId','runId'])if(uuid(value[field]))safe[field]=value[field];
             for(const field of ['workflowHash','parametersHash'])if(typeof value[field]==='string'&&/^[a-f0-9]{64}$/.test(value[field]))safe[field]=value[field];
-            if(value.fixture&&typeof value.fixture.id==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_.:@-]{0,199}$/.test(value.fixture.id)&&Number.isSafeInteger(value.fixture.version)&&value.fixture.version>0)safe.fixture={id:value.fixture.id,version:value.fixture.version};
+            if(value.fixture&&typeof value.fixture.id==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_.:@-]*$/.test(value.fixture.id)&&Number.isSafeInteger(value.fixture.version)&&value.fixture.version>0)safe.fixture={id:value.fixture.id,version:value.fixture.version};
             if(Array.isArray(value.cases))safe.cases=safeResult(value).cases;
             if(value.engine==='workflow'&&value.results&&typeof value.results==='object')safe.results=Object.fromEntries(Object.entries(value.results).map(([key,result])=>{const sanitized=uuid(result?.id)?safeRun(result):redact(result);if(['RUNNING','PENDING',...TERMINAL].includes(result?.status))sanitized.status=result.status;return[key,sanitized];}));
             if(value.engine==='workflow'){safe.pendingReviews=(value.pendingReviews||[]).map(safeReview);safe.reviewDecisions=(value.reviewDecisions||[]).map(safeReview);}
         }
         return safe;
     }
-    const emit = (type, data) => {const safe=type==='run'?safeRun(data):type==='review-request'?safeReview(data):redact(data);if(['output','debug','review-request'].includes(type)&&uuid(data?.id)&&(records.has(data.id)||active.has(data.id)))safe.id=data.id;options.emit?.({domain:'execution',type,...clone(safe)});};
+    const emit = (type, data) => {const safe=type==='run'?safeRun(TERMINAL.has(data.status)?data:{...data,stdout:undefined,stderr:undefined}):type==='review-request'?safeReview(data):redact(data);if(['output','debug','review-request'].includes(type)&&uuid(data?.id)&&(records.has(data.id)||active.has(data.id)))safe.id=data.id;options.emit?.({domain:'execution',type,...clone(safe)});};
+    function logPath(id,stream){if(!uuid(id)||!['stdout','stderr'].includes(stream))throw Error('Invalid execution log identity.');return path.join(runsDir,`${id}.${stream}.log`);}
+    function checkedLog(filename){const stat=fs.lstatSync(filename);if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||path.dirname(fs.realpathSync(filename))!==fs.realpathSync(runsDir))throw Error('Execution log refuses linked or invalid persistence files.');return filename;}
+    function appendLog(run,stream,text){const filename=logPath(run.id,stream);if(fs.existsSync(filename))checkedLog(filename);const fd=fs.openSync(filename,fs.constants.O_WRONLY|fs.constants.O_APPEND|fs.constants.O_CREAT|(fs.constants.O_NOFOLLOW||0),0o600);try{if(fs.fstatSync(fd).nlink!==1)throw Error('Execution log refuses a linked file.');fs.writeSync(fd,text);}finally{fs.closeSync(fd);}}
     const write = run => { const safe = safeRun(run); records.set(run.id,safe); atomic(path.join(runsDir,`${run.id}.json`),safe); emit('run',safe); };
     for (const name of fs.readdirSync(runsDir)) if (/^[\w-]+\.json$/.test(name)) {
-            try { const r = JSON.parse(fs.readFileSync(path.join(runsDir,name),'utf8')); if(!r.workspaceRoot&&workspaceRoot){const relative=path.relative(workspaceRoot,dataDir);if(relative!== '..'&&!relative.startsWith(`..${path.sep}`)&&!path.isAbsolute(relative))r.workspaceRoot=workspaceRoot;} if (!TERMINAL.has(r.status)) { r.status='ERROR'; r.errors=(r.errors||0)+1; r.error='Execution service stopped before this run completed.'; r.finishedAt=new Date().toISOString();if(r.pendingReviews?.length){r.interruptedReviews=r.pendingReviews.map(review=>({...review,state:'interrupted'}));r.pendingReviews=[];r.reviewState=null;} } records.set(r.id,r); atomic(path.join(runsDir,name),r); } catch (error) { emit('recovery-error',{file:name,message:error.message}); }
+            try { const r = JSON.parse(fs.readFileSync(path.join(runsDir,name),'utf8')); if(uuid(r.id))for(const stream of ['stdout','stderr']){const log=logPath(r.id,stream);if(fs.existsSync(log))r[stream]=fs.readFileSync(checkedLog(log),'utf8');} if(!r.workspaceRoot&&workspaceRoot){const relative=path.relative(workspaceRoot,dataDir);if(relative!== '..'&&!relative.startsWith(`..${path.sep}`)&&!path.isAbsolute(relative))r.workspaceRoot=workspaceRoot;} if (!TERMINAL.has(r.status)) { r.status='ERROR'; r.errors=(r.errors||0)+1; r.error='Execution service stopped before this run completed.'; r.finishedAt=new Date().toISOString();if(r.pendingReviews?.length){r.interruptedReviews=r.pendingReviews.map(review=>({...review,state:'interrupted'}));r.pendingReviews=[];r.reviewState=null;} } records.set(r.id,r); atomic(path.join(runsDir,name),r); } catch (error) { emit('recovery-error',{file:name,message:error.message}); }
     }
     const stateFile = path.join(dataDir,'configuration.json');
     let config = { fixtures:[],schedules:[] };
@@ -96,8 +99,8 @@ function createService(options = {}) {
         requireWorkspace();
         const errors=[], fixtureIds=new Set(), scheduleIds=new Set();
         if(!configuration||configuration.format!=='lvx-execution-configuration'||configuration.schemaVersion!==1||!Array.isArray(configuration.fixtures)||!Array.isArray(configuration.schedules))return {valid:false,errors:['Unsupported execution configuration format/schema.'],fixtureCount:0,scheduleCount:0,schedulesWillBeDisabled:true};
-        if(configuration.fixtures.length>1000||configuration.schedules.length>1000)errors.push('Execution configuration exceeds 1,000 fixtures or schedules.');
-        const id=value=>typeof value==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_.:@-]{0,199}$/.test(value);
+        
+        const id=value=>typeof value==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_.:@-]*$/.test(value);
         for(const fixture of configuration.fixtures){
             if(!fixture||!id(fixture.id)||!Number.isSafeInteger(fixture.version)||fixture.version<1||typeof fixture.name!=='string'||!fixture.name.trim()||!['javascript','playwright','python'].includes(fixture.engine)||typeof fixture.setup!=='string'||typeof fixture.cleanup!=='string'){errors.push('A fixture has an invalid identity, version, engine or script.');continue;}
             if(Object.keys(fixture).some(key=>!['id','version','name','engine','setup','cleanup'].includes(key)))errors.push('Portable fixtures contain unsupported fields.');
@@ -107,7 +110,7 @@ function createService(options = {}) {
             if(!replace&&previous&&JSON.stringify(portableFixture(previous))!==JSON.stringify(portableFixture(fixture)))errors.push(`Fixture version conflict: ${fixture.id} v${fixture.version}.`);
         }
         for(const schedule of configuration.schedules){
-            if(!schedule||!id(schedule.id)||typeof schedule.name!=='string'||!schedule.name.trim()||!Number.isInteger(schedule.intervalMs)||schedule.intervalMs<1000||schedule.intervalMs>31536000000||!['skip','run-once'].includes(schedule.missedRun)||!Number.isFinite(Date.parse(schedule.nextRun))||typeof schedule.enabled!=='boolean'){errors.push('A schedule has an invalid identity, interval, date or missed-run policy.');continue;}
+            if(!schedule||!id(schedule.id)||typeof schedule.name!=='string'||!schedule.name.trim()||!Number.isSafeInteger(schedule.intervalMs)||schedule.intervalMs<1||!['skip','run-once'].includes(schedule.missedRun)||!Number.isFinite(Date.parse(schedule.nextRun))||typeof schedule.enabled!=='boolean'){errors.push('A schedule has an invalid identity, interval, date or missed-run policy.');continue;}
             if(Object.keys(schedule).some(key=>!['id','name','workflow','intervalMs','missedRun','nextRun','enabled'].includes(key)))errors.push('Portable schedules contain unsupported fields.');
             if(scheduleIds.has(schedule.id))errors.push('Duplicate schedule identity.');scheduleIds.add(schedule.id);
             const validation=GraphEngine.validate(schedule.workflow,{strict:true});
@@ -119,7 +122,7 @@ function createService(options = {}) {
             }
         }
         if(configurationHasCredential(configuration))errors.push('Configuration contains a resolved credential value. Replace it with an opaque secret reference.');
-        return {valid:!errors.length,errors:errors.slice(0,100),fixtureCount:configuration.fixtures.length,scheduleCount:configuration.schedules.length,schedulesWillBeDisabled:true};
+        return {valid:!errors.length,errors,fixtureCount:configuration.fixtures.length,scheduleCount:configuration.schedules.length,schedulesWillBeDisabled:true};
     }
     function importConfiguration(configuration, { fixtureOnly = false, replace = false } = {}) {
         const validation=validateConfiguration(configuration,{replace});
@@ -138,12 +141,9 @@ function createService(options = {}) {
     async function capability(cwd,refresh=false){
         let cached=capabilityCache.get(cwd||'');
         if(!cached||refresh||Date.now()-cached.at>30000){
-            const promise=new Promise((resolve,reject)=>{
-                const worker=new Worker(path.join(__dirname,'capabilities-worker.cjs'),{workerData:{workspaceRoot:cwd,runtimePaths:options.runtimePaths,nodeExecutable:options.nodeExecutable,browserResourcePath:process.resourcesPath}});
-                capabilityWorkers.add(worker);
-                const timer=setTimeout(()=>{void worker.terminate();reject(new Error('Runtime detection timed out. Check installed runtime executables.'));},45000);
-                worker.once('message',message=>{clearTimeout(timer);void worker.terminate();message.error?reject(new Error(message.error)):resolve(message.value);});worker.once('error',error=>{clearTimeout(timer);reject(error);});worker.once('exit',code=>{capabilityWorkers.delete(worker);if(code!==0){clearTimeout(timer);reject(new Error('Runtime detection worker stopped.'));}});
-            });cached={at:Date.now(),promise};capabilityCache.set(cwd||'',cached);promise.catch(()=>capabilityCache.delete(cwd||''));
+            const controller=new AbortController();capabilityWorkers.add(controller);
+            const promise=adapters.capabilities({workspaceRoot:cwd,runtimePaths:options.runtimePaths,nodeExecutable:options.nodeExecutable,browserResourcePath:process.resourcesPath,signal:controller.signal}).finally(()=>capabilityWorkers.delete(controller));
+            cached={at:Date.now(),promise};capabilityCache.set(cwd||'',cached);promise.catch(()=>{if(capabilityCache.get(cwd||'')===cached)capabilityCache.delete(cwd||'');});
         }
         return {...await cached.promise,nodeTypes:GraphEngine.nodeTypes(),machina:{schemaVersion:1,reviewDecisions:true,sourceSelection:true,generatePreview:true}};
     }
@@ -181,8 +181,8 @@ function createService(options = {}) {
         const record=get(payload.id),key=payload.id+':'+payload.decisionId,pending=reviews.get(key);
         if(!pending||pending.run.id!==record.id||!pending.run.pendingReviews?.some(r=>r.decisionId===payload.decisionId))throw Error('Pending review decision was not found.');
         if(!['approve','reject'].includes(payload.decision))throw Error('Choose explicit approve or reject.');
-        if(payload.finalCode!=null&&(typeof payload.finalCode!=='string'||Buffer.byteLength(payload.finalCode)>8*1024*1024))throw Error('Reviewed code must be text smaller than 8 MB.');
-        if(payload.history!=null&&(!Array.isArray(payload.history)||payload.history.length>100||Buffer.byteLength(JSON.stringify(payload.history))>2*1024*1024))throw Error('Review history supports up to 100 entries and 2 MB.');
+        if(payload.finalCode!=null&&(typeof payload.finalCode!=='string'))throw Error('Reviewed code must be text.');
+        if(payload.history!=null&&(!Array.isArray(payload.history)))throw Error('Review history must be an array.');
         const finalCode=payload.finalCode??pending.entry.proposal.finalCode;if(payload.decision==='approve'&&(!finalCode||!finalCode.trim()))throw Error('Approval requires nonempty reviewed code.');
         const evidence={decisionId:payload.decisionId,nodeId:pending.entry.nodeId,kind:pending.entry.kind,decision:payload.decision,decidedAt:new Date().toISOString(),proposalHash:pending.entry.proposalHash,finalCode:payload.decision==='approve'?redact(finalCode):null,finalCodeHash:payload.decision==='approve'?machinaFiles.hash(redact(finalCode)):null,deployRequested:payload.decision==='approve'&&payload.deployRequested===true,automated:false,history:redact((payload.history||[]).map(item=>({prompt:String(item.prompt||''),originalCode:String(item.originalCode||''),suggestedCode:String(item.suggestedCode||''),status:String(item.status||''),timestamp:String(item.timestamp||'')})))};
         pending.run.reviewDecisions||=[];pending.run.reviewDecisions.push(evidence);pending.run.pendingReviews=pending.run.pendingReviews.filter(r=>r.decisionId!==payload.decisionId);pending.run.reviewState=pending.run.pendingReviews.length?'WAITING':null;
@@ -201,8 +201,10 @@ function createService(options = {}) {
         if(retained)text=text.slice(0,-retained.length);
         if(flush){if(retained)text+='[REDACTED]';outputBuffers.delete(key);}else outputBuffers.set(key,retained);
         if(!text)return;
-        run[stream] = ((run[stream] || '') + text).slice(-1024*1024);
-        emit('output',{id:run.id,stream,text}); write(run);
+        run[stream] = ((run[stream] || '') + text);
+        appendLog(run,stream,text);
+        records.set(run.id,run);
+        emit('output',{id:run.id,stream,text});
     }
     function wait(id) { return new Promise(resolve => { const poll = () => { const r=get(id); if (TERMINAL.has(r.status)) resolve(clone(r)); else setTimeout(poll,20); }; poll(); }); }
     async function start(payload = {}) {
@@ -230,12 +232,12 @@ function createService(options = {}) {
         if (payload.fixtureId && !fixture) throw new Error('Fixture version not found.');
         if (fixture && fixture.engine !== engine) throw new Error('Fixture engine must match the run engine.');
         if(!['javascript','playwright','python'].includes(engine)&&(fixture||payload.setup||payload.cleanup))throw new Error('This native adapter uses its project framework setup/teardown hooks. Shared script fixtures support JavaScript, Playwright and Python.');
-        const timeout = Number(payload.timeoutMs ?? 120000);
-        if (!Number.isInteger(timeout) || timeout < 10 || timeout > 86400000) throw new Error('Run timeout must be 10–86400000 milliseconds.');
+        const timeout = Number(payload.timeoutMs ?? 0);
+        require('../capacity.cjs').nonnegative(timeout,'Run timeout');
         if(closed||generation!==workspaceGeneration)throw new Error('Workspace changed while preparing this run. Start again in the selected workspace.');
         const run = {id:crypto.randomUUID(),engine,status:'RUNNING',startedAt:new Date().toISOString(),stdout:'',stderr:'',total:0,passed:0,failed:0,errors:0,pending:0,artifacts:{},workspaceRoot,fixture:fixture?{id:fixture.id,version:fixture.version}:null};
         if(['playwright','robot'].includes(engine))run.browserMode=payload.browserMode;
-        if(typeof payload.name==='string'&&payload.name.trim())run.name=Array.from(payload.name.trim()).slice(0,200).join('');
+        if(typeof payload.name==='string'&&payload.name.trim())run.name=payload.name.trim();
         write(run);
         // Never serialize code or resolved credentials into the run record.
         void execute(run,{...payload,parameters,setup:[fixture?.setup,payload.setup].filter(Boolean).join('\n'),cleanup:[payload.cleanup,fixture?.cleanup].filter(Boolean).join('\n')},cwd,timeout).catch(error => { if (!TERMINAL.has(run.status)) { run.status='ERROR';run.errors++;run.error=redact(error.message);run.finishedAt=new Date().toISOString();write(run); } });
@@ -245,7 +247,10 @@ function createService(options = {}) {
         const tempRoot=options.tempRoot||os.tmpdir();fs.mkdirSync(tempRoot,{recursive:true});
         const temp = fs.mkdtempSync(path.join(tempRoot,'lvx-run-')), p=options.runtimePaths||{}, node=p.node||options.nodeExecutable||process.execPath;
         let child, timer, result = null, report = null, protocol = null, protocolError = null, timedOut = false, resolveCompletion;
-        const completion=new Promise(resolve=>{resolveCompletion=resolve;});
+        const completion=new Promise(resolve=>{resolveCompletion=resolve;}),controller=new AbortController();
+        active.set(run.id,{run,temp,completion,controller});
+        const stop=()=>{if(child)void killTree(child);};controller.signal.addEventListener('abort',stop);
+        timer=timeout?require('../capacity.cjs').longTimeout(()=>{timedOut=true;controller.abort();},timeout):()=>{};
         try {
             const environment=payload.environment||{};if(!environment||Array.isArray(environment)||typeof environment!=='object'||Object.entries(environment).some(([key,value])=>!/^\w+$/.test(key)||typeof value!=='string'||/[\0]/.test(value)))throw Error('Suite environment requires named text values.');
             let command,args,env={...process.env,...environment,ELECTRON_RUN_AS_NODE:'1',LVX_PARAMETERS:JSON.stringify(payload.parameters||{})};delete env.NODE_TEST_CONTEXT;
@@ -274,18 +279,18 @@ function createService(options = {}) {
             } else if (run.engine==='java') {
                 const file=path.join(temp,'LvxTest.java');fs.writeFileSync(file,payload.code||'');command=p.java||'java';args=[file];
             } else if (run.engine==='csharp') {
-                const sdk=require('node:child_process').spawnSync(p.dotnet||'dotnet',['--version'],{cwd,env,windowsHide:true,encoding:'utf8',timeout:10000});const major=Number(sdk.stdout?.trim().match(/^(\d+)\./)?.[1]);if(sdk.status!==0||major<8||major>30)throw Error('A working .NET SDK version 8 or newer is required.');fs.writeFileSync(path.join(temp,'LvxTest.csproj'),'<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net'+major+'.0</TargetFramework></PropertyGroup></Project>');fs.writeFileSync(path.join(temp,'Program.cs'),payload.code||'');command=p.dotnet||'dotnet';args=['run','--project',path.join(temp,'LvxTest.csproj'),'--nologo'];
+                const sdk=await require('../machina/process.cjs').runProcess(p.dotnet||'dotnet',['--version'],{cwd,env,signal:controller.signal,killTree});const major=Number(sdk.stdout?.trim().match(/^(\d+)\./)?.[1]);if(sdk.exitCode!==0||major<8)throw Error('A working .NET SDK version 8 or newer is required.');fs.writeFileSync(path.join(temp,'LvxTest.csproj'),'<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net'+major+'.0</TargetFramework></PropertyGroup></Project>');fs.writeFileSync(path.join(temp,'Program.cs'),payload.code||'');command=p.dotnet||'dotnet';args=['run','--project',path.join(temp,'LvxTest.csproj'),'--nologo'];
             }
             if (!child) child=spawn(command,args,{cwd,env,windowsHide:true,detached:process.platform!=='win32',stdio:[run.engine==='python'?'pipe':'ignore','pipe','pipe']});
-            active.set(run.id,{child,run,temp,completion});
+            active.set(run.id,{child,run,temp,completion,controller});if(controller.signal.aborted)stop();
             if(run.engine==='python'){
                 protocol=createProtocol({onOutput:(stream,text)=>output(run,stream,Buffer.from(text)),onResult:value=>{result=safeResult(value);},onError:error=>{protocolError=error;}});
                 child.stdout.on('data',chunk=>protocol.push(chunk));
                 child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(payload));
             }else child.stdout.on('data',chunk=>output(run,'stdout',chunk));
             child.stderr.on('data',chunk=>{output(run,'stderr',chunk);if(payload.debug) { const endpoint=chunk.toString().match(/ws:\/\/127\.0\.0\.1:\d+\/[^\s]+/);if(endpoint) void attachDebugger(run,endpoint[0]).catch(error=>emit('debug',{id:run.id,state:'unavailable',error:error.message})); }});
-            timer=setTimeout(()=>{timedOut=true;void killTree(child);},timeout);
-            const exit=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',(code,signal)=>resolve({code,signal}));});clearTimeout(timer);protocol?.end();output(run,'stdout','',true);output(run,'stderr','',true);
+            
+            const exit=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',(code,signal)=>resolve({code,signal}));});timer?.();protocol?.end();output(run,'stdout','',true);output(run,'stderr','',true);
             if (run.status==='CANCELLED') return;
             if (timedOut) { result={status:'ERROR',total:0,passed:0,failed:0,errors:1,error:`Run exceeded ${timeout}ms and its process tree was stopped.`}; }
             else if(['python','robot'].includes(run.engine)){
@@ -305,7 +310,7 @@ function createService(options = {}) {
             if(payload.expectedOutput!=null&&!['javascript','playwright'].includes(run.engine)){const normalize=value=>{const text=String(value||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');return payload.expectedOutputNormalize==='trim-end'?text.trimEnd():text.replace(/\n$/,'');};result.total=(result.total||0)+1;if(normalize((run.stdout||'')+(payload.expectedOutputCombineStderr?run.stderr||'':''))===normalize(payload.expectedOutput))result.passed=(result.passed||0)+1;else{result.failed=(result.failed||0)+1;if(result.status==='SUCCESS')result.status='FAILURE';}}
             Object.assign(run,safeResult(result),{finishedAt:new Date().toISOString(),exitCode:exit.code});write(run);
         } finally {
-            clearTimeout(timer);const client=debugClients.get(run.id);client?.socket.close();debugClients.delete(run.id);completedDebugRuns.delete(run.id);
+            timer?.();controller.signal.removeEventListener('abort',stop);const client=debugClients.get(run.id);client?.socket.close();debugClients.delete(run.id);completedDebugRuns.delete(run.id);
             try {
                 if(path.dirname(path.resolve(temp))!==path.resolve(tempRoot)||!path.basename(temp).startsWith('lvx-run-'))throw Error('Unsafe temporary run cleanup target');
                 fs.rmSync(temp,{recursive:true,force:true,maxRetries:5,retryDelay:25});
@@ -343,7 +348,7 @@ function createService(options = {}) {
         const selectedBrowserMode=browserMode(payload.workflow.browserMode);
         const plan=GraphEngine.executionPlan(validation.workflow,payload),workflow=plan.workflow, id=crypto.randomUUID(), controller=new AbortController();
         const run={id,engine:'workflow',workspaceRoot,browserMode:selectedBrowserMode,status:'RUNNING',startedAt:new Date().toISOString(),results:{},total:0,passed:0,failed:0,errors:0,pending:0,reviewDecisions:[],pendingReviews:[],runnerAssignments:plan.runnerAssignments,originalRunId:internal.originalRunId||null,workflowHash:crypto.createHash('sha256').update(JSON.stringify(validation.workflow)).digest('hex'),parametersHash:crypto.createHash('sha256').update(JSON.stringify(payload.parameters||{})).digest('hex')};
-        run.name=typeof workflow.name==='string'&&workflow.name.trim()?Array.from(workflow.name.trim()).slice(0,200).join(''):'Workflow';
+        run.name=typeof workflow.name==='string'&&workflow.name.trim()?workflow.name.trim():'Workflow';
         let complete;const completion=new Promise(resolve=>{complete=resolve;});
         write(run);active.set(id,{controller,run,completion});
         void (async()=>{
@@ -372,22 +377,22 @@ function createService(options = {}) {
     }
     for(const schedule of config.schedules) arm(schedule);
     return {
-        setWorkspace(root){if(closed)throw new Error('Execution service is closed.');if(active.size)throw new Error('Stop active runs before switching workspace.');workspaceRoot=root?fs.realpathSync(root):null;workspaceGeneration++;capabilityCache.clear();for(const schedule of config.schedules)arm(schedule);},
+        setWorkspace(root){if(closed)throw new Error('Execution service is closed.');if(active.size)throw new Error('Stop active runs before switching workspace.');workspaceRoot=root?fs.realpathSync(root):null;workspaceGeneration++;for(const c of sourceControllers)c.abort();for(const c of capabilityWorkers)c.abort();capabilityCache.clear();for(const schedule of config.schedules)arm(schedule);},
         async handle(action,payload={}) {
             if(closed)throw new Error('Execution service is closed.');
             switch(action){
                 case 'capabilities':return capability(workspaceRoot,payload.refresh===true);
                 case 'runtimeConfiguration':return {...options.runtimePaths};
-                case 'configureRuntimes':{if(payload.expectedPathsHash&&require('node:crypto').createHash('sha256').update(JSON.stringify(options.runtimePaths||{})).digest('hex')!==payload.expectedPathsHash)throw new Error('Runtime settings changed during setup. Your newer choice was preserved. Review setup again.');const allowed=new Set(['node','python','java','javac','dotnet','junitJar','browserRoot']);const next={};for(const [key,value]of Object.entries(payload.paths||{})){if(!allowed.has(key)||typeof value!=='string'||!path.isAbsolute(value)||!(key==='browserRoot'?fs.statSync(value).isDirectory():fs.statSync(value).isFile()))throw new Error('Choose an existing runtime executable, browser folder or JUnit JAR.');next[key]=fs.realpathSync(value);}options.runtimePaths={...(options.runtimePaths||{}),...next};config.runtimePaths=options.runtimePaths;save();capabilityCache.clear();return payload.commitOnly?{configured:true}:capability(workspaceRoot);}
+                case 'configureRuntimes':{if(payload.expectedPathsHash&&require('node:crypto').createHash('sha256').update(JSON.stringify(options.runtimePaths||{})).digest('hex')!==payload.expectedPathsHash)throw new Error('Runtime settings changed during setup. Your newer choice was preserved. Review setup again.');const allowed=new Set(['node','python','java','javac','dotnet','junitJar','browserRoot']);const next={};for(const [key,value]of Object.entries(payload.paths||{})){if(!allowed.has(key)||typeof value!=='string'||!path.isAbsolute(value)||!(key==='browserRoot'?fs.statSync(value).isDirectory():fs.statSync(value).isFile()))throw new Error('Choose an existing runtime executable, browser folder or JUnit JAR.');next[key]=fs.realpathSync(value);}options.runtimePaths={...(options.runtimePaths||{}),...next};config.runtimePaths=options.runtimePaths;save();for(const c of capabilityWorkers)c.abort();capabilityCache.clear();return payload.commitOnly?{configured:true}:capability(workspaceRoot);}
                 case 'start':return start(payload);
                 case 'cancel':return cancel(payload.id);
-                case 'runs':return [...records.values()].filter(run=>workspaceRoot&&run.workspaceRoot===workspaceRoot).sort((a,b)=>b.startedAt.localeCompare(a.startedAt)).map(clone);
-                case 'getRun':return clone(get(payload.id));
+                case 'runs':return [...records.values()].filter(run=>workspaceRoot&&run.workspaceRoot===workspaceRoot).sort((a,b)=>b.startedAt.localeCompare(a.startedAt)).map(run=>clone(safeRun(run)));
+                case 'getRun':return clone(safeRun(get(payload.id)));
                 case 'pruneRuns':{
-                    requireWorkspace();if(!Array.isArray(payload.ids)||payload.ids.length>10000||payload.ids.some(id=>!uuid(id))||new Set(payload.ids).size!==payload.ids.length)throw Error('Retention needs up to 10000 unique native run UUIDs.');
+                    requireWorkspace();if(!Array.isArray(payload.ids)||payload.ids.some(id=>!uuid(id))||new Set(payload.ids).size!==payload.ids.length)throw Error('Retention needs unique native run UUIDs.');
                     if(fs.lstatSync(runsDir).isSymbolicLink())throw Error('Run retention refuses a linked persistence directory.');const canonical=fs.realpathSync(runsDir),targets=[];
-                    for(const id of payload.ids){const run=get(id);if(active.has(id)||!TERMINAL.has(run.status)||run.pendingReviews?.length||[...reviews.keys()].some(key=>key.startsWith(id+':')))throw Error('Retention cannot prune an active or pending run.');const filename=path.join(runsDir,id+'.json'),stat=fs.lstatSync(filename);if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||path.dirname(fs.realpathSync(filename))!==canonical)throw Error('Run retention refuses linked or invalid persistence files.');targets.push({id,filename});}
-                    const deletedRunIds=[];for(const target of targets){fs.unlinkSync(target.filename);records.delete(target.id);deletedRunIds.push(target.id);}return {deletedRunIds,deletedCount:deletedRunIds.length};
+                    for(const id of payload.ids){const run=get(id);if(active.has(id)||!TERMINAL.has(run.status)||run.pendingReviews?.length||[...reviews.keys()].some(key=>key.startsWith(id+':')))throw Error('Retention cannot prune an active or pending run.');const filename=path.join(runsDir,id+'.json'),stat=fs.lstatSync(filename);if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||path.dirname(fs.realpathSync(filename))!==canonical)throw Error('Run retention refuses linked or invalid persistence files.');const logs=['stdout','stderr'].map(stream=>logPath(id,stream)).filter(file=>fs.existsSync(file)).map(checkedLog);targets.push({id,filename,logs});}
+                    const deletedRunIds=[];for(const target of targets){fs.unlinkSync(target.filename);for(const log of target.logs)fs.unlinkSync(log);records.delete(target.id);deletedRunIds.push(target.id);}return {deletedRunIds,deletedCount:deletedRunIds.length};
                 }
                 case 'debug':return debug(payload);
                 case 'exportConfiguration':return exportConfiguration();
@@ -397,13 +402,13 @@ function createService(options = {}) {
                 case 'runWorkflow':return runWorkflow(payload);
                 case 'reviewDecision':return reviewDecision(payload);
                 case 'pendingReviews':return [...records.values()].filter(run=>run.workspaceRoot===workspaceRoot&&run.status==='RUNNING').flatMap(run=>(run.pendingReviews||[]).map(review=>({id:run.id,...clone(review)})));
-                case 'sourceFiles':requireWorkspace();return redact(machina.sourceFiles(payload));
+                case 'sourceFiles':{requireWorkspace();const generation=workspaceGeneration,controller=new AbortController();sourceControllers.add(controller);try{const files=await machina.sourceFiles(payload,controller.signal);if(generation!==workspaceGeneration||closed)throw Error('Workspace changed while reading source.');return redact(files);}finally{sourceControllers.delete(controller);}}
                 case 'generatePreview':{requireWorkspace();const generation=workspaceGeneration,result=await machina.generatePreview(payload);if(closed||generation!==workspaceGeneration)throw Error('Workspace changed while generating the preview. Retry in the selected workspace.');return redact(result);}
                 case 'rerunFailed':{const old=get(payload.id);if(old.engine!=='workflow'||!TERMINAL.has(old.status))throw new Error('Choose a completed workflow run.');const validation=GraphEngine.validate(payload.workflow,{strict:true});if(!validation.valid)throw new Error(validation.errors.join(' '));if(crypto.createHash('sha256').update(JSON.stringify(validation.workflow)).digest('hex')!==old.workflowHash)throw new Error('Workflow changed. Start a fresh run instead of reusing evidence.');if(crypto.createHash('sha256').update(JSON.stringify(payload.parameters||{})).digest('hex')!==old.parametersHash)throw new Error('Run parameters changed. Start a fresh run instead of reusing evidence.');const failed=new Set(Object.entries(old.results).filter(([,r])=>r.status!=='SUCCESS').map(([id])=>id));if(!failed.size)throw new Error('This run has no failed steps.');const affected=new Set(failed);let changed=true;while(changed){changed=false;for(const edge of validation.workflow.edges)if(affected.has(edge.source)&&!affected.has(edge.target)){affected.add(edge.target);changed=true;}}const initialResults=Object.fromEntries(Object.entries(old.results).filter(([id,r])=>!affected.has(id)&&r.status==='SUCCESS').map(([id,r])=>[id,{...r,reusedFromRunId:old.id}]));return runWorkflow({workflow:validation.workflow,parameters:payload.parameters},{originalRunId:old.id,initialResults});}
                 case 'fixtures':return scopedFixtures().map(item=>clone(portableFixture(item)));
-                case 'saveFixture':{requireWorkspace();if(typeof payload.name!=='string'||!payload.name.trim()||!['javascript','playwright','python'].includes(payload.engine))throw new Error('Fixture needs a name and JavaScript, Playwright or Python engine. Native frameworks use their project setup/teardown hooks.');const id=payload.id||crypto.randomUUID(),version=1+Math.max(0,...scopedFixtures().filter(f=>f.id===id).map(f=>f.version));const item={id,version,name:payload.name,engine:payload.engine,setup:String(payload.setup||''),cleanup:String(payload.cleanup||''),workspaceRoot};if(configurationHasCredential({fixtures:[item]}))throw new Error('Fixture contains a resolved credential. Use a secret parameter reference.');config.fixtures.push(item);save();return portableFixture(item);}
+                case 'saveFixture':{requireWorkspace();if(typeof payload.name!=='string'||!payload.name.trim()||!['javascript','playwright','python'].includes(payload.engine))throw new Error('Fixture needs a name and JavaScript, Playwright or Python engine. Native frameworks use their project setup/teardown hooks.');const id=payload.id||crypto.randomUUID(),version=1+scopedFixtures().filter(f=>f.id===id).reduce((value,fixture)=>Math.max(value,fixture.version),0);const item={id,version,name:payload.name,engine:payload.engine,setup:String(payload.setup||''),cleanup:String(payload.cleanup||''),workspaceRoot};if(configurationHasCredential({fixtures:[item]}))throw new Error('Fixture contains a resolved credential. Use a secret parameter reference.');config.fixtures.push(item);save();return portableFixture(item);}
                 case 'schedules':return clone(config.schedules.filter(item=>item.workspaceRoot===workspaceRoot));
-                case 'saveSchedule':{requireWorkspace();const validation=GraphEngine.validate(payload.workflow,{strict:true});if(!validation.valid)throw new Error(validation.errors.join(' '));const intervalMs=Number(payload.intervalMs);if(!Number.isInteger(intervalMs)||intervalMs<1000||intervalMs>31536000000)throw new Error('Schedule interval must be between one second and one year.');if(!['skip','run-once'].includes(payload.missedRun))throw new Error('Choose a missed-run policy.');const item={id:payload.id||crypto.randomUUID(),name:String(payload.name||'Scheduled workflow'),workspaceRoot,workflow:validation.workflow,intervalMs,missedRun:payload.missedRun,enabled:payload.enabled===true,nextRun:payload.nextRun||new Date(Date.now()+intervalMs).toISOString()};if(!Number.isFinite(Date.parse(item.nextRun)))throw new Error('Invalid next run date.');const check=validateConfiguration({format:'lvx-execution-configuration',schemaVersion:1,fixtures:[],schedules:[portableSchedule(item)]});if(!check.valid)throw new Error(check.errors.join(' '));const index=config.schedules.findIndex(s=>s.id===item.id&&s.workspaceRoot===workspaceRoot);if(index<0)config.schedules.push(item);else config.schedules[index]=item;save();arm(item);return clone(item);}
+                case 'saveSchedule':{requireWorkspace();const validation=GraphEngine.validate(payload.workflow,{strict:true});if(!validation.valid)throw new Error(validation.errors.join(' '));const intervalMs=Number(payload.intervalMs);if(!Number.isSafeInteger(intervalMs)||intervalMs<1)throw new Error('Schedule interval must be a positive number of milliseconds.');if(!['skip','run-once'].includes(payload.missedRun))throw new Error('Choose a missed-run policy.');const item={id:payload.id||crypto.randomUUID(),name:String(payload.name||'Scheduled workflow'),workspaceRoot,workflow:validation.workflow,intervalMs,missedRun:payload.missedRun,enabled:payload.enabled===true,nextRun:payload.nextRun||new Date(Date.now()+intervalMs).toISOString()};if(!Number.isFinite(Date.parse(item.nextRun)))throw new Error('Invalid next run date.');const check=validateConfiguration({format:'lvx-execution-configuration',schemaVersion:1,fixtures:[],schedules:[portableSchedule(item)]});if(!check.valid)throw new Error(check.errors.join(' '));const index=config.schedules.findIndex(s=>s.id===item.id&&s.workspaceRoot===workspaceRoot);if(index<0)config.schedules.push(item);else config.schedules[index]=item;save();arm(item);return clone(item);}
                 case 'cancelSchedule':{const item=config.schedules.find(s=>s.id===payload.id&&s.workspaceRoot===workspaceRoot);if(!item)throw new Error('Schedule not found.');item.enabled=false;const key=scheduleKey(item);clearTimeout(timers.get(key));timers.delete(key);save();if(payload.cancelActive&&item.lastRunId&&!TERMINAL.has(get(item.lastRunId).status))await cancel(item.lastRunId);return clone(item);}
                 case 'templates':return [{id:'assertion',name:'Check a value',description:'A single explicit assertion. Added only when you choose it.',workflow:{schemaVersion:1,nodes:[{id:'check',type:'script',data:{name:'Check a value',engine:'javascript',code:'assert(parameters.actual === parameters.expected, "Values should match");',parameterSchema:{actual:{type:'number',required:true},expected:{type:'number',required:true}},parameters:{actual:2,expected:2}}}],edges:[]}}];
                 case 'exportWorkflow':{const validation=GraphEngine.validate(payload.workflow,{strict:true});if(!validation.valid)throw new Error(validation.errors.join(' '));const fixtureIds=new Set(validation.workflow.nodes.map(n=>n.data.fixtureId).filter(Boolean));const content={format:'lvx-workflow',schemaVersion:1,workflow:validation.workflow,fixtures:scopedFixtures().filter(f=>fixtureIds.has(f.id)).map(portableFixture)};return {...content,checksum:crypto.createHash('sha256').update(JSON.stringify(content)).digest('hex')};}
@@ -411,7 +416,7 @@ function createService(options = {}) {
                 default:throw new Error(`Unknown execution action: ${action}`);
             }
         },
-        async close(){if(closed)return;closed=true;workspaceGeneration++;for(const timer of timers.values())clearTimeout(timer);timers.clear();await Promise.all([...capabilityWorkers].map(worker=>worker.terminate()));await Promise.all([...active.keys()].map(cancel));const deadline=Date.now()+5000;while(active.size&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,10));if(active.size)throw new Error('Some execution sessions are still shutting down.');}
+        async close(){if(closed)return;closed=true;workspaceGeneration++;for(const c of sourceControllers)c.abort();for(const timer of timers.values())clearTimeout(timer);timers.clear();for(const controller of capabilityWorkers)controller.abort();await Promise.allSettled([...capabilityCache.values()].map(entry=>entry.promise));await Promise.all([...active.keys()].map(cancel));const deadline=Date.now()+5000;while(active.size&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,10));if(active.size)throw new Error('Some execution sessions are still shutting down.');}
     };
 }
 module.exports={createService,validateParameters,killTree,within,TERMINAL};

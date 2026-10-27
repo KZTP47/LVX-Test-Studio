@@ -112,11 +112,11 @@ class DataManager {
         return this.typedAction('maskDataset', { rows: dataset.data, columns, seed });
     }
 
-    async parseCSVFile(file, { maxRows = 100000 } = {}) {
-        if (!Number.isSafeInteger(maxRows) || maxRows < 1 || maxRows > 100000) throw new Error('CSV preview is limited to 100,000 rows. Use workspace validation for larger files.');
+    async parseCSVFile(file, { maxRows = 0 } = {}) {
+        if (!Number.isSafeInteger(maxRows) || maxRows < 0) throw new Error('Row budget must be a nonnegative safe integer; 0 means all rows.');
         if (typeof file.stream !== 'function') {
             const parsed = this.parseCSV(await file.text());
-            if (parsed.data.length > maxRows) throw new Error('This CSV is too large for the editor. Use streaming workspace validation.');
+            if (maxRows && parsed.data.length > maxRows) throw new Error('This CSV is too large for the editor. Use streaming workspace validation.');
             return parsed;
         }
         const reader = file.stream().getReader();
@@ -125,7 +125,6 @@ class DataManager {
         const data = [];
         const push = () => {
             row.push(field); field = ''; state = 'plain';
-            if (row.length > 500) throw new Error('CSV is limited to 500 columns.');
         };
         const record = () => {
             push();
@@ -134,7 +133,7 @@ class DataManager {
                 if (headers.some(h => !h.trim()) || new Set(headers).size !== headers.length) throw new Error('CSV headers must be nonempty and unique');
             } else {
                 if (row.length !== headers.length) throw new Error(`CSV row ${data.length + 2} has ${row.length} fields; expected ${headers.length}`);
-                if (data.length >= maxRows) throw new Error('This CSV is too large for the editor. Use streaming workspace validation.');
+                if (maxRows && data.length >= maxRows) throw new Error('This CSV is too large for the editor. Use streaming workspace validation.');
                 data.push(Object.fromEntries(headers.map((name, i) => [name, row[i]])));
             }
             row = []; touched = false;
@@ -151,7 +150,6 @@ class DataManager {
                 else if (state === 'closed') throw new Error('Malformed CSV quoted field');
                 else if (c === '"') { if (field !== '') throw new Error('Malformed CSV quoted field'); state = 'quoted'; }
                 else field += c;
-                if (field.length > 1024 * 1024) throw new Error('CSV field exceeds one million characters.');
             }
         };
         try {
@@ -207,6 +205,7 @@ class DataManager {
     // Generate test data using faker patterns
     generateFakerData(pattern, count) {
         // Patterns like: {{firstName}}, {{email}}, {{number:1:100}}
+        if (!Number.isSafeInteger(count) || count < 1) throw new Error('Row count must be a positive safe integer.');
         const data = [];
         for (let i = 0; i < count; i++) {
             const row = { index: i + 1 };
@@ -323,11 +322,14 @@ function renderDataSetsList() {
 }
 
 // Select data set for viewing
-function selectDataSetForView(dataSetId) {
+function selectDataSetForView(dataSetId, page = 0) {
     selectedDataSetId = dataSetId;
     const dataSet = window.dataManager.getDataSet(dataSetId);
 
     if (!dataSet) return;
+    const pageSize = 200, pages = Math.max(1, Math.ceil(dataSet.data.length / pageSize));
+    page = Number.isSafeInteger(page) ? Math.max(0, Math.min(page, pages - 1)) : 0;
+    const rowStart = page * pageSize;
 
     const container = document.getElementById('data-set-details');
     container.innerHTML = `
@@ -362,15 +364,19 @@ function selectDataSetForView(dataSetId) {
             </tr>
           </thead>
           <tbody>
-            ${dataSet.data.slice(0, 200).map((row, index) => `
+            ${dataSet.data.slice(rowStart, rowStart + pageSize).map((row, index) => `
               <tr class='border-b aero-divider hover:bg-blue-50'>
-                <td class='p-2 aero-text-muted'>${index + 1}</td>
+                <td class='p-2 aero-text-muted'>${rowStart + index + 1}</td>
                 ${dataSet.headers.map(h => `<td class='p-2'>${dataHTML(row[h])}</td>`).join('')}
               </tr>
             `).join('')}
           </tbody>
         </table>
-        ${dataSet.data.length > 200 ? '<p class="text-sm aero-text-muted">Showing the first 200 rows. Export CSV to inspect every row, or use workspace validation for a complete typed report.</p>' : ''}
+        <div class='flex gap-2 items-center mt-2'>
+          <button class='aero-button-secondary' onclick='selectDataSetForView(${dataArgument(dataSetId)}, ${page - 1})' ${page === 0 ? 'disabled' : ''}>Previous rows</button>
+          <span>Page ${page + 1} of ${pages}; all ${dataSet.data.length} rows are available.</span>
+          <button class='aero-button-secondary' onclick='selectDataSetForView(${dataArgument(dataSetId)}, ${page + 1})' ${page + 1 >= pages ? 'disabled' : ''}>Next rows</button>
+        </div>
       </div>
     </div>
 
@@ -620,8 +626,8 @@ function generateAndSaveDataSet() {
         return;
     }
 
-    if (rowCount < 1 || rowCount > 1000) {
-        window.showMessage('Row count must be between 1 and 1000', 'warning');
+    if (!Number.isSafeInteger(rowCount) || rowCount < 1) {
+        window.showMessage('Row count must be a positive safe integer', 'warning');
         return;
     }
 

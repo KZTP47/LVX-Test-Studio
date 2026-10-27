@@ -157,12 +157,12 @@ const vwt_availableSteps = [
     icon: window.LVXIcons?.svg('clock') || '',
     params: [
       { key: 'selector', label: 'CSS Selector', type: 'text', placeholder: 'e.g., #results' },
-      { key: 'timeout', label: 'Timeout (ms)', type: 'number', placeholder: '5000' }
+      { key: 'timeout', label: 'Deadline in ms (0 = none)', type: 'number', placeholder: '0' }
     ],
     execute: async (params, iframeWin, log) => {
-      const timeout = parseInt(params.timeout, 10) || 5000;
+      const timeout = Number(params.timeout ?? 0);if(!Number.isSafeInteger(timeout)||timeout<0)throw Error('Element deadline must be a nonnegative safe integer; 0 means no deadline.');
       const startTime = Date.now();
-      while (Date.now() - startTime < timeout) {
+      while (timeout === 0 || Date.now() - startTime < timeout) {
         if (iframeWin.document.querySelector(params.selector)) {
           log(` Waited for and found element: ${params.selector}`);
           return;
@@ -171,7 +171,7 @@ const vwt_availableSteps = [
       }
       throw new Error(`Wait timed out after ${timeout}ms for element: ${params.selector}`);
     },
-    robot: (p) => ` Wait For Element ${p.selector} timeout=${(parseInt(p.timeout, 10) || 5000) / 1000}s`
+    robot: (p) => ` Wait For Element ${p.selector} timeout=${Number(p.timeout ?? 0) / 1000}s`
   },
   {
     name: 'Save Screenshot Baseline',
@@ -276,7 +276,7 @@ vwt_availableSteps.forEach(config => {
       case 'Click Element': return vwtRobotRow('Click Element', p.selector);
       case 'Input Text': return vwtRobotRow('Input Text', p.selector, p.text);
       case 'Element Should Contain': return vwtRobotRow('Element Should Contain', p.selector, p.text);
-      case 'Wait For Element': return vwtRobotRow('Wait For Element', p.selector, String((Number(p.timeout) || 5000) / 1000));
+      case 'Wait For Element': return vwtRobotRow('Wait For Element', p.selector, String(Number(p.timeout ?? 0) / 1000));
       default: return vwtRobotRow('Fail', `${config.name} requires the Visual Web Tester runtime; run this saved visual suite in LVX Test Studio.`);
     }
   };

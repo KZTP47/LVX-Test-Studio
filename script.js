@@ -304,7 +304,7 @@ sys.modules['BrowserLibrary'] = _browser_module
 
 async function executeDesktopCode(engine, code, inputFiles = [], contextVariables = {}, executionOptions = {}) {
     const api=window.electronAPI.studioOps;
-    const run=await api.invoke('execution','start',{engine,code,inputFiles,contextVariables,timeoutMs:120000,...executionOptions});
+    const run=await api.invoke('execution','start',{engine,code,inputFiles,contextVariables,timeoutMs:0,...executionOptions});
     window.LVXActiveRuns ||= new Set();
     window.LVXActiveRuns.add(run.id);
     try {
@@ -3088,7 +3088,6 @@ async function importFromJSON(event) {
     window.LVXStudio?.clearImport?.();
     input.disabled = true;
     try {
-        if (file.size > 100 * 1024 * 1024) throw new Error('This file is too large. Project imports support files up to 100 MB.');
         const content = JSON.parse((await file.text()).replace(/^\uFEFF/, ''));
         // Full project exports use the native validated importer, including graphs,
         // agents, conversations and evidence. Never reduce them to legacy suites.

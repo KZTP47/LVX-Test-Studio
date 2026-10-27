@@ -1,6 +1,9 @@
 const { app, BrowserWindow, ipcMain, dialog, safeStorage, session } = require('electron');
 const path = require('path');
-const { exec, execFile, spawn } = require('child_process');
+const { exec: rawExec, execFile: rawExecFile, spawn } = require('child_process');
+const legacyProcesses=require('./services/legacy-processes.cjs');
+const exec=(...args)=>legacyProcesses.track(rawExec(...args));
+const execFile=(...args)=>legacyProcesses.track(rawExecFile(...args));
 const fs = require('fs');
 const os = require('os');
 
@@ -8,7 +11,7 @@ const os = require('os');
 // const __dirname = path.dirname(__filename); // __dirname is global in CommonJS
 
 if (process.env.LVX_TEST_USER_DATA) app.setPath('userData', path.resolve(process.env.LVX_TEST_USER_DATA));
-const studioHost = require('./services/studio-host.cjs').createStudioHost({app,BrowserWindow,ipcMain,dialog,safeStorage,session});
+const studioHost = require('./services/studio-host.cjs').createStudioHost({app,BrowserWindow,ipcMain,dialog,safeStorage,session,onWorkspaceChanging:()=>legacyProcesses.stopAll()});
 studioHost.register();
 
 const createWindow = () => {
@@ -83,7 +86,7 @@ ipcMain.handle('git-ops', async (event, command, args) => {
 
             const cloneArgs = ['clone', ...(branch ? ['-b', String(branch)] : []), '--', cloneUrl, targetPath];
             console.log('[Main] Cloning repository (credentials omitted from log)');
-            execFile('git', cloneArgs, { windowsHide: true,timeout:120000,maxBuffer:16*1024*1024 }, (err, stdout, stderr) => {
+            execFile('git', cloneArgs, { windowsHide: true,timeout:0,maxBuffer:Infinity }, (err, stdout, stderr) => {
                 const safe=value=>studioHost.redact(auth?String(value||'').split(auth).join('[REDACTED]'):String(value||''));
                 if (err) {
                     console.error('[Main] Clone Error:', safe(stderr));
@@ -162,7 +165,7 @@ ipcMain.handle('sys-ops', async (event, command, args) => {
     if (command === 'runCommand') {
         const { cwd, cmd } = args;
         studioHost.scoped(cwd, {mustExist:true,directory:true});
-        if(typeof cmd !== 'string' || !cmd.trim() || cmd.length > 32768) throw new Error('Command is missing or too long.');
+        if(typeof cmd !== 'string' || !cmd.trim()) throw new Error('Command is missing.');
         await studioHost.checkImported({command:cmd});
 
         if (!fs.existsSync(cwd)) {
@@ -171,7 +174,7 @@ ipcMain.handle('sys-ops', async (event, command, args) => {
 
         return new Promise((resolve) => {
             console.log('Executing an authorized workspace command.');
-            exec(cmd, { cwd: cwd, windowsHide:true,timeout:120000,maxBuffer:16*1024*1024 }, (error, stdout, stderr) => {
+            exec(cmd, { cwd: cwd, windowsHide:true,timeout:0,maxBuffer:Infinity }, (error, stdout, stderr) => {
                 resolve({
                     exitCode: error ? error.code || 1 : 0,
                     stdout: studioHost.redact(stdout || ''),
@@ -230,7 +233,7 @@ app.on('browser-window-created',(_event,win)=>{
 app.on('before-quit',event=>{
     if(studioClosing)return;
     event.preventDefault();studioClosing=true;
-    studioHost.close().catch(()=>{}).finally(()=>app.quit());
+    Promise.allSettled([studioHost.close(),legacyProcesses.stopAll()]).finally(()=>app.quit());
 });
 
 // IPC Handler Placeholders
@@ -240,7 +243,7 @@ ipcMain.handle('run-playwright-test', async (event, testScript) => {
     studioHost.sender(event);
     await studioHost.trusted();
     await studioHost.checkImported({code:testScript});
-    if(typeof testScript !== 'string' || testScript.length > 1024*1024) throw new Error('Invalid Playwright script.');
+    if(typeof testScript !== 'string') throw new Error('Invalid Playwright script.');
     console.log('Received Playwright test request. Length:', testScript.length);
     try {
         const result = await runPlaywrightScript(testScript);

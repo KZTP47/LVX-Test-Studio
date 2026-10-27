@@ -128,7 +128,7 @@ class SASTScanner {
                     recommendation: rule.recommendation,
                     line: lineNumber,
                     column: match.index - code.lastIndexOf('\n', match.index),
-                    match: match[0].substring(0, 100),
+                    match: match[0],
                     language: language
                 });
             }
@@ -231,9 +231,9 @@ class DependencyScanner {
         const results = (data.vulns || []).map(vuln => ({
             scanner: this.name, package: packageName, version: cleanVersion, vulnId: vuln.id,
             severity: this._mapSeverity(vuln.severity, vuln.database_specific?.severity),
-            description: vuln.summary || vuln.details?.substring(0, 200) || vuln.id,
+            description: vuln.summary || vuln.details || vuln.id,
             recommendation: `Update ${packageName} to a patched version`,
-            references: vuln.references?.slice(0, 3).map(r => r.url) || []
+            references: (vuln.references || []).map(r => r.url)
         }));
         this.cache.set(cacheKey, { data: results, timestamp: Date.now() });
         return results;
@@ -459,7 +459,7 @@ class XSSScanner {
                     type: 'reflected-xss',
                     severity: 'HIGH',
                     line: code.substring(0, match.index).split('\n').length,
-                    match: match[0].substring(0, 80),
+                    match: match[0],
                     description: desc,
                     recommendation: 'Sanitize all user input before DOM insertion'
                 });
@@ -515,7 +515,7 @@ class SecurityTestManager {
         this.STORAGE_KEY = 'security_scan_results';
         this.POLICY_KEY = 'security_policy';
         this.HISTORY_KEY = 'security_scan_history';
-        this.MAX_HISTORY = 100;
+        this.MAX_HISTORY = 0;
 
         // Initialize scanners
         this.scanners = new Map();
@@ -871,25 +871,25 @@ class SecurityTestManager {
             });
 
             // Keep only MAX_HISTORY entries
-            history = history.slice(0, this.MAX_HISTORY);
+            if (this.MAX_HISTORY) history = history.slice(0, this.MAX_HISTORY);
             localStorage.setItem(this.HISTORY_KEY, JSON.stringify(history));
         } catch (e) {
             console.error('Failed to save scan history:', e);
         }
     }
 
-    getHistory(limit = 50) {
+    getHistory(limit = 0) {
         try {
             const stored = localStorage.getItem(this.HISTORY_KEY);
             const history = stored ? JSON.parse(stored) : [];
-            return history.slice(0, limit);
+            return limit ? history.slice(0, limit) : history;
         } catch (e) {
             return [];
         }
     }
 
     getStatistics() {
-        const history = this.getHistory(100);
+        const history = this.getHistory();
         const stats = {
             totalScans: history.length,
             passedScans: history.filter(h => h.policyPassed).length,

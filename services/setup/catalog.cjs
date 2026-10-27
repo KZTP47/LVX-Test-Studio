@@ -18,9 +18,19 @@ function allowedURL(value){
  if(!allowed)throw Error('Download source is outside the supported catalog.');return u.href;
 }
 async function officialFetch(url,{fetchImpl=fetch,signal}={}){
- for(let hop=0;hop<6;hop++){url=allowedURL(url);const response=await fetchImpl(url,{redirect:'manual',signal});if([301,302,303,307,308].includes(response.status)){const location=response.headers.get('location');await response.body?.cancel();if(!location)throw Error('Download redirect has no destination.');url=new URL(location,url).href;continue;}if(!response.ok)throw Error('Download failed (HTTP '+response.status+'). Check your connection and try again.');return response;}throw Error('Too many download redirects.');
+ const seen=new Set();while(true){
+  if(signal?.aborted)throw signal.reason||Object.assign(Error('Setup cancelled.'),{name:'AbortError'});
+  url=allowedURL(url);if(seen.has(url))throw Error('Download redirect loop detected.');seen.add(url);
+  const response=await fetchImpl(url,{redirect:'manual',signal});
+  if([301,302,303,307,308].includes(response.status)){const location=response.headers.get('location');await response.body?.cancel();if(!location)throw Error('Download redirect has no destination.');url=new URL(location,url).href;continue;}
+  if(!response.ok){await response.body?.cancel();throw Error('Download failed (HTTP '+response.status+'). Check your connection and try again.');}return response;
+ }
 }
-async function metadata(url,options={},json=true){const response=await officialFetch(url,options);let size=0,parts=[];for await(const data of response.body){size+=data.length;if(size>4*1024*1024)throw Error('Setup metadata is unexpectedly large.');parts.push(data);}const text=Buffer.concat(parts).toString('utf8');return json?JSON.parse(text):text;}
+async function metadata(url,options={},json=true){
+ const response=await officialFetch(url,options),parts=[];let size=0;
+ for await(const data of response.body){if(options.signal?.aborted)throw options.signal.reason;const part=Buffer.from(data);size+=part.length;if(!Number.isSafeInteger(size))throw Error('Setup metadata exceeds this runtime numeric capacity.');parts.push(part);}
+ const text=Buffer.concat(parts,size).toString('utf8');return json?JSON.parse(text):text;
+}
 function artifact(id,version,url,digest,algorithm='sha256',size){allowedURL(url);if(!new RegExp('^[a-f0-9]{'+(algorithm==='sha512'?128:64)+'}$','i').test(digest))throw Error('Publisher checksum is missing or invalid.');return{id,version,url,digest:digest.toLowerCase(),algorithm,size:size||null};}
 async function resolveArtifacts(id,{runtimePaths={},capabilities={},fetchImpl=fetch,signal,workspaceRoot}={}){
  item(id);const net={fetchImpl,signal},artifacts=[];let projectFile=null;

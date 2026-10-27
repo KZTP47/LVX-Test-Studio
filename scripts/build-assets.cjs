@@ -7,7 +7,14 @@ async function main() {
   require('./build-ui.cjs').buildUI();
   const copy = (from,to) => { fs.mkdirSync(path.dirname(to),{recursive:true}); fs.cpSync(from,to,{recursive:true}); };
   const vendor = path.join(root,'assets/vendor');
+  copy(path.join(root,'node_modules/@tweenjs/tween.js/dist/tween.esm.js'),path.join(vendor,'tween.esm.js'));
   const licenses=path.join(root,'assets/licenses');fs.mkdirSync(licenses,{recursive:true});
+  copy(path.join(root,'node_modules/@tweenjs/tween.js/LICENSE'),path.join(licenses,'tweenjs-LICENSE'));
+  copy(path.join(root,'node_modules/yaml/browser/dist'),path.join(vendor,'yaml'));
+  copy(path.join(root,'node_modules/yaml/LICENSE'),path.join(licenses,'yaml-LICENSE'));
+  for(const [pkg,file,name]of [['@apidevtools/swagger-parser','LICENSE','swagger-parser-LICENSE'],['@apidevtools/json-schema-ref-parser','LICENSE','json-schema-ref-parser-LICENSE'],['ajv','LICENSE','ajv-LICENSE'],['ajv-formats','LICENSE','ajv-formats-LICENSE']])copy(path.join(root,'node_modules',pkg,file),path.join(licenses,name));
+  for(const [pkg,name]of [['typescript','LICENSE.txt'],['typescript','ThirdPartyNoticeText.txt'],['diff','LICENSE'],['web-tree-sitter','LICENSE'],['tree-sitter-wasms','LICENSE']])copy(path.join(root,'node_modules',pkg,name),path.join(licenses,pkg+'-'+name));
+  for(const name of ['tree-sitter-python-LICENSE','tree-sitter-c-sharp-LICENSE','tree-sitter-wasms-PROVENANCE.json'])if(!fs.existsSync(path.join(licenses,name)))throw Error('Missing source-parser notice: '+name);
   for(const [pkg,name]of [['chart.js','LICENSE.md'],['html2canvas','LICENSE'],['monaco-editor','LICENSE'],['monaco-editor','ThirdPartyNotices.txt']])copy(path.join(root,'node_modules',pkg,name),path.join(licenses,pkg+'-'+name));
   for(const [name,url]of [['pyodide-MPL-2.0.txt','https://raw.githubusercontent.com/pyodide/pyodide/0.24.1/LICENSE'],['sheetjs-LICENSE.txt','https://cdn.sheetjs.com/xlsx-0.20.3/package/LICENSE']]){const file=path.join(licenses,name);if(!fs.existsSync(file)){const response=await fetch(url);if(!response.ok)throw Error('License download failed: '+url);fs.writeFileSync(file,await response.text());}}
   copy(path.join(root,'node_modules/chart.js/dist/chart.umd.js'),path.join(vendor,'chart.umd.js'));

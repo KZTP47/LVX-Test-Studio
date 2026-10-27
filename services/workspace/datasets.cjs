@@ -2,10 +2,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { StringDecoder } = require('node:string_decoder');
+const { nonnegative } = require('../capacity.cjs');
 const { WorkspaceError, sha256 } = require('./store.cjs');
 
 function normalizeSchema(schema) {
-  if (!Array.isArray(schema) || !schema.length || schema.length > 500) throw new WorkspaceError('VALIDATION', 'Define 1–500 dataset columns.');
+  if (!Array.isArray(schema) || !schema.length) throw new WorkspaceError('VALIDATION', 'Define at least one dataset column.');
   const names = new Set();
   for (const column of schema) {
     if (!column || typeof column.name !== 'string' || !column.name.trim() || names.has(column.name) || !['string', 'integer', 'number', 'boolean', 'date', 'email'].includes(column.type)) throw new WorkspaceError('VALIDATION', 'Column names must be unique and each column needs a supported type.');
@@ -47,18 +48,20 @@ function validateRow(row, schema, rowNumber) {
 }
 // A state machine, rather than line splitting: UTF-8, escaped quotes, and quoted
 // multiline fields remain correct when a stream chunk splits any token.
-async function* csvRecords(chunks, { maxFieldBytes = 1024 * 1024, maxColumns = 500 } = {}) {
+async function* csvRecords(chunks, { maxFieldBytes = 0, maxColumns = 0, signal } = {}) {
+  maxFieldBytes = nonnegative(maxFieldBytes, 'CSV field budget'); maxColumns = nonnegative(maxColumns, 'CSV column budget');
   const decoder = new StringDecoder('utf8');
-  let field = '', row = [], state = 'plain', first = true, skipLF = false, touched = false;
+  let field = '', fieldBytes = 0, row = [], state = 'plain', first = true, skipLF = false, touched = false;
   function append(c) {
-    field += c;
-    if (field.length > maxFieldBytes) throw new WorkspaceError('CSV_LIMIT', 'A CSV field exceeds the size limit.');
+    field += c; fieldBytes += Buffer.byteLength(c);
+    if (maxFieldBytes && fieldBytes > maxFieldBytes) throw new WorkspaceError('CSV_LIMIT', 'A CSV field exceeds the size limit.');
   }
   function push() {
-    row.push(field); field = ''; state = 'plain';
-    if (row.length > maxColumns) throw new WorkspaceError('CSV_LIMIT', 'CSV has too many columns.');
+    row.push(field); field = ''; fieldBytes = 0; state = 'plain';
+    if (maxColumns && row.length > maxColumns) throw new WorkspaceError('CSV_LIMIT', 'CSV has too many columns.');
   }
   for await (const chunk of (async function* () { for await (const chunk of chunks) yield decoder.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)); yield decoder.end(); })()) {
+    signal?.throwIfAborted();
     for (const c of chunk) {
       if (first) { first = false; if (c === '\uFEFF') continue; }
       if (skipLF) { skipLF = false; if (c === '\n') continue; }
@@ -84,22 +87,23 @@ function scopedFile(workspaceRoot, filename) {
   if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) || !fs.statSync(candidate).isFile()) throw new WorkspaceError('PATH_SCOPE', 'Dataset files must be inside the selected workspace.');
   return candidate;
 }
-async function validateDataset({ rows, filePath, schema, maxErrors = 200, sampleSize = 20 }, workspaceRoot) {
+async function validateDataset({ rows, filePath, schema, maxErrors = 0, sampleSize = 0, signal }, workspaceRoot) {
   normalizeSchema(schema);
-  if (!Number.isSafeInteger(maxErrors) || maxErrors < 1 || maxErrors > 10000 || !Number.isSafeInteger(sampleSize) || sampleSize < 0 || sampleSize > 1000) throw new WorkspaceError('VALIDATION', 'Invalid error or sample limit.');
+  maxErrors = nonnegative(maxErrors, 'Error budget'); sampleSize = nonnegative(sampleSize, 'Sample budget');
   let totalRows = 0, invalidRows = 0, errorCount = 0;
   const errors = [], sample = [];
   const validate = row => {
+    signal?.throwIfAborted();
     totalRows++;
     const issues = validateRow(row, schema, totalRows);
     if (issues.length) invalidRows++;
     errorCount += issues.length;
-    errors.push(...issues.slice(0, Math.max(0, maxErrors - errors.length)));
-    if (sample.length < sampleSize) sample.push(row);
+    for (const issue of issues) if (!maxErrors || errors.length < maxErrors) errors.push(issue);
+    if (!sampleSize || sample.length < sampleSize) sample.push(row);
   };
   if (filePath !== undefined) {
     let headers;
-    for await (const values of csvRecords(fs.createReadStream(scopedFile(workspaceRoot, filePath), { highWaterMark: 64 * 1024 }))) {
+    for await (const values of csvRecords(fs.createReadStream(scopedFile(workspaceRoot, filePath), { highWaterMark: 64 * 1024 }), {signal})) {
       if (!headers) {
         headers = values;
         if (headers.some(h => !h.trim()) || new Set(headers).size !== headers.length) throw new WorkspaceError('CSV_INVALID', 'CSV header names must be unique and nonempty.');
@@ -113,6 +117,7 @@ async function validateDataset({ rows, filePath, schema, maxErrors = 200, sample
   } else {
     if (!Array.isArray(rows)) throw new WorkspaceError('VALIDATION', 'Supply dataset rows or a workspace CSV file.');
     for (const row of rows) {
+      if (totalRows % 1024 === 0) await new Promise(resolve => setImmediate(resolve));
       if (!row || typeof row !== 'object' || Array.isArray(row)) throw new WorkspaceError('VALIDATION', 'Dataset rows must be objects.');
       validate(row);
     }
@@ -123,13 +128,14 @@ function seeded(seed) {
   let state = parseInt(sha256(String(seed)).slice(0, 8), 16) || 1;
   return () => { state ^= state << 13; state ^= state >>> 17; state ^= state << 5; return (state >>> 0) / 4294967296; };
 }
-function generateDataset({ schema, count = 100, seed = 'lvx' }) {
+async function generateDataset({ schema, count = 100, seed = 'lvx', signal }) {
   normalizeSchema(schema);
-  if (!Number.isSafeInteger(count) || count < 1 || count > 100000) throw new WorkspaceError('VALIDATION', 'Generate between 1 and 100,000 rows.');
-  const estimatedBytes = count * schema.reduce((sum, column) => sum + column.name.length * 4 + (column.type === 'string' ? Math.max(column.min || 0, Math.min(column.max ?? 20, 10)) * 4 : 80) + 16, 0);
-  if (estimatedBytes > 32 * 1024 * 1024) throw new WorkspaceError('DATASET_LIMIT', 'This generated dataset would exceed 32 MiB. Generate fewer rows or columns.');
+  if (!Number.isSafeInteger(count) || count < 1) throw new WorkspaceError('VALIDATION', 'Generate a positive safe-integer row count.');
   const random = seeded(seed);
-  const rows = Array.from({ length: count }, (_, i) => Object.fromEntries(schema.map(column => {
+  const rows = [];
+  for (let i = 0; i < count; i++) {
+    if (i % 1024 === 0) { await new Promise(resolve => setImmediate(resolve)); signal?.throwIfAborted(); }
+    rows.push(Object.fromEntries(schema.map(column => {
     const min = column.min ?? 0, max = column.max ?? (column.type === 'string' ? 20 : 100);
     let value;
     if (column.values) value = column.values[Math.floor(random() * column.values.length)];
@@ -140,17 +146,25 @@ function generateDataset({ schema, count = 100, seed = 'lvx' }) {
     else if (column.type === 'email') value = `person-${i + 1}-${Math.floor(random() * 10000)}@example.invalid`;
     else {
       const length = Math.max(Math.ceil(min), Math.min(Math.floor(max), 10));
-      if (length < 0 || length > 100000 || length > max) throw new WorkspaceError('VALIDATION', 'String length bounds are invalid or too large.');
+      if (!Number.isSafeInteger(length) || length < 0 || length > max) throw new WorkspaceError('VALIDATION', 'String length bounds are invalid.');
       value = Array.from({ length }, () => 'abcdefghijklmnopqrstuvwxyz'[Math.floor(random() * 26)]).join('');
     }
     return [column.name, value];
-  })));
-  for (let i = 0; i < rows.length; i++) if (validateRow(rows[i], schema, i + 1).length) throw new WorkspaceError('VALIDATION', 'These constraints cannot be satisfied by the generator. Adjust the schema.');
+    })));
+    if (validateRow(rows[i], schema, i + 1).length) throw new WorkspaceError('VALIDATION', 'These constraints cannot be satisfied by the generator. Adjust the schema.');
+  }
   return { status: 'SUCCESS', rows, count, seed: String(seed), synthetic: true };
 }
-function maskDataset({ rows, columns, seed = 'lvx-mask' }) {
+async function maskDataset({ rows, columns, seed = 'lvx-mask', signal }) {
   if (!Array.isArray(rows) || !Array.isArray(columns) || !columns.length) throw new WorkspaceError('VALIDATION', 'Select the columns to mask.');
-  if (rows.length > 100000 || columns.some(column => typeof column !== 'string' || !column)) throw new WorkspaceError('VALIDATION', 'Invalid masking selection.');
-  return { status: 'SUCCESS', rows: rows.map(row => Object.fromEntries(Object.entries(row).map(([name, value]) => [name, columns.includes(name) && value !== null && value !== '' && value !== undefined ? `masked-${sha256(`${seed}\0${name}\0${String(value)}`).slice(0, 16)}` : value]))), maskedColumns: [...new Set(columns)], reversible: false, note: 'Pseudonymisation preserves equality. It is not a guarantee of anonymisation.' };
+  if (columns.some(column => typeof column !== 'string' || !column)) throw new WorkspaceError('VALIDATION', 'Invalid masking selection.');
+  const masked = [];
+  for (let i = 0; i < rows.length; i++) {
+    if (i % 1024 === 0) { await new Promise(resolve => setImmediate(resolve)); signal?.throwIfAborted(); }
+    const row = rows[i];
+    if (!row || typeof row !== 'object' || Array.isArray(row)) throw new WorkspaceError('VALIDATION', 'Dataset rows must be objects.');
+    masked.push(Object.fromEntries(Object.entries(row).map(([name, value]) => [name, columns.includes(name) && value !== null && value !== '' && value !== undefined ? `masked-${sha256(`${seed}\0${name}\0${String(value)}`).slice(0, 16)}` : value])));
+  }
+  return { status: 'SUCCESS', rows: masked, maskedColumns: [...new Set(columns)], reversible: false, note: 'Pseudonymisation preserves equality. It is not a guarantee of anonymisation.' };
 }
 module.exports = { validateDataset, generateDataset, maskDataset, csvRecords, validateRow, normalizeSchema, scopedFile };

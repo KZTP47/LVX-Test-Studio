@@ -1,0 +1,48 @@
+.gs-editor { min-width: 0; color: #173954; }
+.gs-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px; padding-bottom: 12px; }
+.gs-title h3 { font-size: 21px; font-weight: 650; margin: 0; overflow-wrap: anywhere; }
+.gs-title p { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
+.gs-title > button { margin-left: auto; }
+.gs-tabs, .gs-tools { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.gs-tabs { padding: 12px 0; border-block: 1px solid #acc9dd; align-items: center; }
+.gs-tabs > span { margin-left: auto; font-size: 13px; }
+.gs-notice { min-height: 24px; margin: 12px 0; overflow-wrap: anywhere; }
+.gs-body { min-width: 0; background: #f8fcff; padding: 18px; border: 1px solid #aac8df; border-radius: 12px; }
+.gs-body h4 { margin: 20px 0 12px; font-size: 17px; font-weight: 650; overflow-wrap: anywhere; }
+.gs-body h4:first-child { margin-top: 0; }
+.gs-body small { font-size: 12px; font-weight: 400; }
+.gs-body p { font-size: 13px; line-height: 1.6; margin: 10px 0; overflow-wrap: anywhere; }
+.gs-field { display: grid; gap: 6px; font-size: 13px; font-weight: 600; margin: 10px 0; min-width: 0; }
+.gs-field textarea { color: #173954; background: #fff; border: 1px solid #8bacbf; border-radius: 6px; padding: 9px 10px; width: 100%; min-width: 0; resize: vertical; font: 12px/1.6 Consolas, monospace; caret-color: #006fba; tab-size: 2; }
+.gs-field textarea::placeholder { color: #586d7d; }
+.gs-workflow-layout, .gs-test-layout { display: grid; grid-template-columns: minmax(200px, .8fr) minmax(0, 2.2fr); gap: 22px; margin-top: 18px; }
+.gs-job-nav, .gs-case-nav { min-width: 0; padding-right: 16px; border-right: 1px solid #b6cfdf; }
+.gs-job-nav > button, .gs-case-nav > button { display: flex; width: 100%; justify-content: start; text-align: left; overflow-wrap: anywhere; margin: 0 0 8px; }
+.gs-job-details, .gs-case-details { min-width: 0; }
+.gs-add-job { margin: 24px 0; }
+.gs-needs { margin: 18px 0; padding: 10px 12px; border: 1px solid #b6cfdf; border-radius: 6px; }
+.gs-needs legend { font-size: 13px; font-weight: 600; padding: 0 5px; }
+.gs-needs label { display: inline-flex; align-items: center; gap: 7px; margin: 5px 14px 5px 0; font-size: 13px; }
+.gs-editor input[type="checkbox"] { width: 16px; height: 16px; min-height: 16px; padding: 0; accent-color: #096ba8; vertical-align: middle; }
+.gs-step, .gs-body details { margin: 12px 0; }
+.gs-body summary { cursor: pointer; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.gs-step { padding-block: 8px; border-bottom: 1px solid #c8dce9; }
+.gs-source-editor, .gs-new-case, .gs-new-test, .gs-reusable:not(:empty), .gs-new-workflow { margin-top: 24px; padding-top: 18px; border-top: 1px solid #b6cfdf; }
+.gs-publish-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; margin: 20px 0; }
+.gs-change-list { display: grid; gap: 10px; margin: 16px 0; }
+.gs-change-list li { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 13px; }
+.gs-change-list label { min-width: 0; overflow-wrap: anywhere; }
+.gs-change-list strong { margin-left: 10px; font-weight: 600; }
+.gs-publish-preview:not(:empty), .gs-publication { margin-top: 22px; padding-top: 18px; border-top: 1px solid #b6cfdf; }
+.gs-publish-preview > label { display: block; font-size: 13px; margin: 16px 0; }
+.gs-runtime-jobs { display: grid; gap: 12px; margin: 18px 0; }
+.gs-runtime-jobs li { padding-bottom: 10px; border-bottom: 1px solid #c8dce9; font-size: 13px; }
+.gs-editor .gs-diff { max-height: 540px; white-space: pre; }
+.gs-editor [hidden], .gw-workspace [hidden] { display: none !important; }
+.theme-dark .gs-editor { color: #e6eff7; }
+.theme-dark .gs-body { background: #1f3042; border-color: #7897af; }
+.theme-dark .gs-field textarea { background: #132436; color: #e6eff7; border-color: #7897af; }
+.theme-dark .gs-field textarea::placeholder { color: #c0d2e0; }
+.theme-dark .gs-tabs, .theme-dark .gs-job-nav, .theme-dark .gs-case-nav, .theme-dark .gs-needs, .theme-dark .gs-step, .theme-dark .gs-source-editor, .theme-dark .gs-new-test, .theme-dark .gs-new-case, .theme-dark .gs-new-workflow, .theme-dark .gs-publication, .theme-dark .gs-publish-preview { border-color: #7897af; }
+@media (max-width: 950px) { .gs-workflow-layout, .gs-test-layout { grid-template-columns: minmax(0, 1fr); } .gs-job-nav, .gs-case-nav { border-right: 0; border-bottom: 1px solid #b6cfdf; padding: 0 0 16px; } }
+@media (max-width: 650px) { .gs-publish-options { grid-template-columns: minmax(0, 1fr); } .gs-title > button, .gs-tabs > span { margin-left: 0; } .gs-body { padding: 12px; } }

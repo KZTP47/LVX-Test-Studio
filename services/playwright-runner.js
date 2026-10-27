@@ -21,12 +21,12 @@ async function runPlaywrightScript(scriptContent) {
         const developmentBrowsers = path.resolve(__dirname, '../.external/playwright-browsers');
         if (!env.PLAYWRIGHT_BROWSERS_PATH && fs.existsSync(developmentBrowsers)) env.PLAYWRIGHT_BROWSERS_PATH = developmentBrowsers;
         return await new Promise(resolve => {
-            execFile(process.execPath, [filename], {
-                cwd: directory, env, windowsHide: true, timeout: 120000, maxBuffer: 16 * 1024 * 1024
+            require('./legacy-processes.cjs').track(execFile(process.execPath, [filename], {
+                cwd: directory, env, windowsHide: true, timeout: 0, maxBuffer: Infinity
             }, (error, stdout, stderr) => resolve({
                 status: error ? (typeof error.code === 'number' ? 'FAILURE' : 'ERROR') : 'SUCCESS',
                 logs: `--- STDOUT ---\n${stdout || ''}\n\n--- STDERR ---\n${stderr || ''}${error ? `\nEXIT ERROR: ${error.message}` : ''}`
-            }));
+            })));
         });
     } catch (error) {
         return { status: 'ERROR', logs: `Playwright runtime unavailable: ${error.message}` };

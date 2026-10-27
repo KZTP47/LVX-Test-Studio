@@ -251,10 +251,11 @@ function updateDebugVariablesList() {
     return;
   }
 
+  const escape = value => String(value).replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
   container.innerHTML = entries.map(([key, value]) => `
     <div class='p-1 aero-button rounded mb-1'>
-      <div class='font-mono font-semibold text-xs'>${key}</div>
-      <div class='aero-text-muted break-all text-xs'>${String(value).substring(0, 50)}${String(value).length > 50 ? '...' : ''}</div>
+      <div class='font-mono font-semibold text-xs'>${escape(key)}</div>
+      <div class='aero-text-muted break-all text-xs'>${escape(value)}</div>
     </div>
   `).join('');
 }

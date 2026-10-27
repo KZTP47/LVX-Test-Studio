@@ -5,7 +5,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const KEY = /^[a-zA-Z0-9][a-zA-Z0-9_.@:-]{0,159}$/;
+const KEY = /^[a-zA-Z0-9][a-zA-Z0-9_.@:-]*$/;
 const STATES = new Set(['todo', 'active', 'review', 'done', 'blocked']);
 const TERMINAL_FAILURE = new Set(['blocked', 'limit', 'partial', 'error', 'cancelled', 'interrupted']);
 const copy = value => JSON.parse(JSON.stringify(value));
@@ -13,9 +13,9 @@ const hash = value => crypto.createHash('sha256').update(JSON.stringify(value)).
 const now = () => new Date().toISOString();
 function fail(code, message) { throw Object.assign(new Error(message), { code }); }
 function identifier(value, label) { if (typeof value !== 'string' || !KEY.test(value)) fail('VALIDATION', `${label} needs a simple identifier.`); return value; }
-function text(value, label, limit = 65536) { if (typeof value !== 'string' || Buffer.byteLength(value) > limit || value.includes('\0')) fail('VALIDATION', `${label} must be text no larger than ${limit} bytes.`); return value; }
-function required(value, label, limit) { const result = text(value, label, limit); if (!result.trim()) fail('VALIDATION', `${label} cannot be empty.`); return result; }
-function ids(value, label) { if (!Array.isArray(value) || value.length > 1000 || new Set(value).size !== value.length) fail('VALIDATION', `${label} must be a list of distinct identifiers.`); return value.map(v => identifier(v, label)); }
+function text(value, label) { if (typeof value !== 'string' || value.includes('\0')) fail('VALIDATION', `${label} must be text without null characters.`); return value; }
+function required(value, label) { const result = text(value, label); if (!result.trim()) fail('VALIDATION', `${label} cannot be empty.`); return result; }
+function ids(value, label) { if (!Array.isArray(value) || new Set(value).size !== value.length) fail('VALIDATION', `${label} must be a list of distinct identifiers.`); return value.map(v => identifier(v, label)); }
 function object(value, label) { if (!value || typeof value !== 'object' || Array.isArray(value)) fail('VALIDATION', `${label} must be an object.`); return value; }
 function unwrap(result) { return result?.run || result?.record?.value || result?.value || result; }
 function workspacePath(value) { if (value === null) return null; if (typeof value !== 'string' || !path.isAbsolute(value) || !fs.statSync(value).isDirectory()) fail('VALIDATION', 'Choose an existing absolute workspace folder.'); return fs.realpathSync(value); }
@@ -63,7 +63,6 @@ function createService({ workspace, workspaceRoot = null, sendTask, getTaskRun, 
   }
   function append(record, action, details = {}) {
     const history = record.history || [];
-    if (history.length >= 2000) fail('HISTORY_LIMIT', 'This task has reached its history limit. Create a follow-up task to preserve its complete history.');
     return { ...record, updatedAt: now(), history: [...history, { action, at: now(), ...copy(details) }] };
   }
   async function commit(s, collection, recordId, value, prior) {
@@ -126,7 +125,7 @@ function createService({ workspace, workspaceRoot = null, sendTask, getTaskRun, 
     if (action === 'listMissions') return { result: { records: s.records.filter(r => r.collection === 'agent-missions') } };
     if (action === 'saveMission') {
       const input = object(payload.mission, 'Project'), id = identifier(input.id, 'Project ID'), prior = find(s, 'agent-missions', id); revision(prior, payload.expectedRevision);
-      const value = { id, name: required(input.name, 'Project name', 300), goal: required(input.goal, 'Project goal'), criteria: text(input.criteria ?? '', 'Project acceptance criteria'), boardId: identifier(input.boardId, 'Agent board ID'), ...(input.workflowId ? { workflowId: identifier(input.workflowId, 'Workflow ID') } : {}) };
+      const value = { id, name: required(input.name, 'Project name'), goal: required(input.goal, 'Project goal'), criteria: text(input.criteria ?? '', 'Project acceptance criteria'), boardId: identifier(input.boardId, 'Agent board ID'), ...(input.workflowId ? { workflowId: identifier(input.workflowId, 'Workflow ID') } : {}) };
       board(s, value);
       if (value.workflowId && !find(s, 'workflows', value.workflowId)) fail('NOT_FOUND', 'The selected workflow is not saved in this workspace.');
       if (prior && tasks(s, id).some(t => ['active', 'review', 'done'].includes(t.value.status)) && ['goal', 'criteria', 'boardId', 'workflowId'].some(k => prior.value[k] !== value[k])) fail('ACTIVE_TASK', 'This project has active or reviewed work. Create a new project to change its goal, board or workflow without invalidating its evidence.');
@@ -142,7 +141,7 @@ function createService({ workspace, workspaceRoot = null, sendTask, getTaskRun, 
       if (!STATES.has(status) || (!existing && status !== 'todo') || (existing && status !== existing.value.status && !(existing.value.status === 'blocked' && status === 'todo'))) fail('INVALID_TRANSITION', 'Use Start, Submit and Review to change task status.');
       if (existing && ['active', 'review', 'done'].includes(existing.value.status)) fail('ACTIVE_TASK', 'Active and reviewed tasks preserve their exact brief and owner. Request rework before editing a task in review.');
       if (existing?.value.status === 'blocked') await priorRunSettled(s, mission, existing.value);
-      const value = { id, missionId: mission.id, title: required(input.title, 'Task title', 500), description: text(input.description ?? '', 'Task description'), criteria: text(input.criteria ?? '', 'Task acceptance criteria'), agentId: identifier(input.agentId, 'Task owner'), dependsOn: ids(input.dependsOn ?? [], 'Task dependencies'), workflowNodeIds: ids(input.workflowNodeIds ?? [], 'Workflow nodes'), status };
+      const value = { id, missionId: mission.id, title: required(input.title, 'Task title'), description: text(input.description ?? '', 'Task description'), criteria: text(input.criteria ?? '', 'Task acceptance criteria'), agentId: identifier(input.agentId, 'Task owner'), dependsOn: ids(input.dependsOn ?? [], 'Task dependencies'), workflowNodeIds: ids(input.workflowNodeIds ?? [], 'Workflow nodes'), status };
       board(s, mission, value.agentId); dependencyCheck(s, mission.id, value);
       if (value.workflowNodeIds.length && !mission.workflowId) fail('WORKFLOW_REQUIRED', 'Choose a workflow before selecting its nodes.');
       if (value.workflowNodeIds.length) await contextFor(mission, value);

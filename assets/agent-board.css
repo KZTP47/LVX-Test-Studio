@@ -505,7 +505,7 @@
 }
 .ab-message {
   border: 1px solid #b5d2e5;
-  border-radius: 6px;
+  border-radius: 14px 14px 14px 3px;
   margin-bottom: 12px;
   background: #fff;
   overflow-wrap: anywhere;
@@ -519,7 +519,16 @@
 }
 .ab-message[data-role="user"] {
   border-color: #82b1d4;
+  margin-left:24px;
+  border-radius:14px 14px 3px 14px;
 }
+.agent-board [data-view-context] { margin-top:6px; padding:4px 9px; font-size:12px; }
+.agent-board [data-view-context]>summary { cursor:pointer; }
+.agent-board .ab-picture-feedback { display:flex; align-items:center; gap:10px; margin:8px 0; }
+.agent-board [data-ab="picture-preview"] { display:grid; place-items:center; width:48px; height:48px; flex:none; overflow:hidden; border:1px solid var(--ab-border,#668298); border-radius:50%; background:var(--ab-panel,#17394b); }
+.agent-board [data-ab="picture-preview"] img { width:100%; height:100%; object-fit:cover; }
+.agent-board [data-ab="picture-status"] { margin:0; font-size:12px; overflow-wrap:anywhere; }
+.agent-board [data-view-context]>pre { max-height:260px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
 .ab-message[data-role="user"] > header {
   background: #d9edfc;
 }
@@ -847,3 +856,13 @@
 .ab-transition-dialog footer {display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.ab-transition-dialog [data-transition-error] {color:#ffc4c4;white-space:pre-wrap}
 
 :is(#studio-task-surface,#studio-workbench,body) .agent-board .ab-folder-connect-tools .ab-field {text-align:left}
+.lvx-chat-markdown { white-space:normal !important; font-family:inherit; line-height:1.6; overflow-wrap:anywhere; }
+.lvx-chat-markdown :is(p,ul,ol,pre) { margin:0 0 12px; }
+.lvx-chat-markdown :is(h4,strong) { color:inherit; }
+.lvx-chat-markdown h4 { font-size:1.1em; margin:16px 0 8px; }
+.lvx-chat-markdown a { color:inherit; text-decoration:underline; text-underline-offset:3px; }
+.lvx-chat-markdown pre { white-space:pre-wrap; font-family:Consolas,monospace; }
+.lvx-chat-markdown code { font-family:Consolas,monospace; }
+.lvx-chat-table { overflow:auto; max-width:100%; }
+.lvx-chat-table table { border-collapse:collapse; min-width:420px; white-space:normal; font:inherit; }
+.lvx-chat-table :is(th,td) { border:1px solid currentColor; padding:8px; text-align:left; vertical-align:top; }

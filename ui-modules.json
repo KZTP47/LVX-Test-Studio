@@ -4,6 +4,11 @@
   "output": "assets/app-modules.js",
   "modules": [
     {
+      "id": "github-workflow-model",
+      "source": "github-workflow-model.js",
+      "dependsOn": []
+    },
+    {
       "id": "runtime-assets",
       "source": "runtime-assets.js",
       "external": true,

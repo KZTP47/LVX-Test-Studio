@@ -1,0 +1,27 @@
+{
+  "bundle": "tree-sitter-wasms",
+  "version": "0.1.13",
+  "npmGitHead": "3e88dc9e36b4e8bf752ce53bea61e4b67282a2bb",
+  "lockSource": "https://raw.githubusercontent.com/Gregoor/tree-sitter-wasms/3e88dc9e36b4e8bf752ce53bea61e4b67282a2bb/pnpm-lock.yaml",
+  "retrieved": "2026-10-26",
+  "grammars": [
+    {
+      "name": "tree-sitter-python",
+      "version": "0.21.0",
+      "license": "MIT",
+      "licenseSource": "https://raw.githubusercontent.com/tree-sitter/tree-sitter-python/v0.21.0/LICENSE",
+      "licenseSha256": "d724405ce238a22c0d35769c5a36b386ad5958192efe8bbb304fb2896254575f",
+      "wasm": "tree-sitter-python.wasm",
+      "wasmSha256": "9056d0fb0c337810d019fae350e8167786119da98f0f282aceae7ab89ee8253b"
+    },
+    {
+      "name": "tree-sitter-c-sharp",
+      "version": "0.20.0",
+      "license": "MIT",
+      "licenseSource": "https://raw.githubusercontent.com/tree-sitter/tree-sitter-c-sharp/v0.20.0/LICENSE",
+      "licenseSha256": "2e0110e07abef7c2548b26ec9d6969775617ca539a0dc8dbeeb14d6452c711d1",
+      "wasm": "tree-sitter-c_sharp.wasm",
+      "wasmSha256": "6266a7e32d68a3459104d994dc848df15d5672b0ea8e86d327274b694f8e6991"
+    }
+  ]
+}

@@ -234,10 +234,13 @@ test('FW-23 binary artifacts survive reopen; retention previews changes and neve
   await f.service.handle('pinArtifact', { runId: 'pinned', pinned: true });
   const reopened = f.reopen();
   assert.equal((await reopened.handle('readArtifact', { id: a.artifact.id })).dataBase64, Buffer.from('1234567890').toString('base64'));
-  const preview = await reopened.handle('retention', { maxBytes: 0 });
+  const unlimited = await reopened.handle('retention', { maxAgeDays: 0, maxBytes: 0, dryRun: false });
+  assert.equal(unlimited.removed.length, 0); assert.equal(unlimited.limitBlockedByPinned, false);
+  assert.equal((await reopened.handle('artifacts')).artifacts.length, 2);
+  const preview = await reopened.handle('retention', { maxBytes: 1 });
   assert.equal(preview.dryRun, true); assert.equal(preview.removed.length, 1); assert.equal(preview.limitBlockedByPinned, true);
   assert.equal((await reopened.handle('artifacts')).artifacts.length, 2);
-  await reopened.handle('retention', { maxBytes: 0, dryRun: false });
+  await reopened.handle('retention', { maxBytes: 1, dryRun: false });
   const remaining = await reopened.handle('artifacts');
   assert.equal(remaining.artifacts.length, 1); assert.equal(remaining.artifacts[0].runId, 'pinned');
   assert.equal(remaining.artifactBytes, 10); assert.ok(remaining.diskBytes > 0);
@@ -321,5 +324,6 @@ test('FW-24 existing visual dataset editor streams CSV, preserves zero, escapes 
   assert.ok(nodes.get('data-set-details').innerHTML.includes('>0</td>'));
   await context.dataManager.validateTypedDataSet(id, [{ name: 'n', type: 'integer' }]);
   assert.equal(calls[0][0], 'workspace'); assert.equal(calls[0][1], 'validateDataset');
-  await assert.rejects(context.dataManager.parseCSVFile(file, { maxRows: 0 }));
+  assert.equal((await context.dataManager.parseCSVFile(file, { maxRows: 0 })).data.length, 1);
+  for (const maxRows of [-1, Infinity]) await assert.rejects(context.dataManager.parseCSVFile(file, { maxRows }));
 });

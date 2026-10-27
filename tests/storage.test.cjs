@@ -128,7 +128,7 @@ test('S14 retained collaboration snapshots have monotonically increasing version
   const { c } = collaborationHarness();
   for (let i = 0; i < 25; i++) c.collaborationManager.createVersionSnapshot({ id: 'one', name: 'One' });
   const history = c.collaborationManager.getVersionHistory('one');
-  assert.equal(history.length, 20); assert.deepEqual(plain(history.map(v => v.version)), Array.from({ length: 20 }, (_, i) => i + 6));
+  assert.equal(history.length, 25); assert.deepEqual(plain(history.map(v => v.version)), Array.from({ length: 25 }, (_, i) => i + 1));
 });
 
 test('S03 IndexedDB saves and deletes resolve only on commit; abort rejects after request success', async () => {

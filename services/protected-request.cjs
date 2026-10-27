@@ -11,13 +11,13 @@ async function protectedRequest(payload,{resolveSecret,redact=value=>value,fetch
  if(target.username||target.password){if(!headers.Authorization&&!headers.authorization)headers.Authorization='Basic '+Buffer.from(decodeURIComponent(target.username)+':'+decodeURIComponent(target.password)).toString('base64');target.username='';target.password='';}
  let body=payload.body;
  const contentType=Object.entries(headers).find(([k])=>k.toLowerCase()==='content-type')?.[1]||'';
- if(body!==undefined){if(typeof body!=='string')throw Error('Request body must be text.');if(/application\/json/i.test(contentType))body=JSON.stringify(resolve(JSON.parse(body)));else body=resolve(body);if(Buffer.byteLength(body)>8*1024*1024)throw Error('Request body is too large.');}
- const timeoutMs=Number(payload.timeoutMs??30000);if(!Number.isInteger(timeoutMs)||timeoutMs<100||timeoutMs>120000)throw Error('Request timeout must be 100–120000 milliseconds.');
- const requestSignal=signal?AbortSignal.any([signal,AbortSignal.timeout(timeoutMs)]):AbortSignal.timeout(timeoutMs);
+ if(body!==undefined){if(typeof body!=='string')throw Error('Request body must be text.');if(/application\/json/i.test(contentType))body=JSON.stringify(resolve(JSON.parse(body)));else body=resolve(body);}
+ const timeoutMs=Number(payload.timeoutMs??0);require('./capacity.cjs').nonnegative(timeoutMs,'Request timeout');
+ const budget=require('./capacity.cjs').deadline(timeoutMs,signal);try{const requestSignal=budget.signal;
  const response=await fetchImpl(target.href,{method,headers,...(!['GET','HEAD'].includes(method)&&body!==undefined?{body}:{}),redirect:'error',signal:requestSignal});
- const chunks=[];let bytes=0;if(response.body)for await(const chunk of response.body){bytes+=chunk.length;if(bytes>8*1024*1024)throw Error('Response exceeds the 8 MB limit.');chunks.push(chunk);}
+ const chunks=[];let bytes=0;if(response.body)for await(const chunk of response.body){bytes+=chunk.length;chunks.push(chunk);}
  const text=Buffer.concat(chunks).toString('utf8'),responseType=response.headers.get('content-type')||'text/plain';
  let safeBody;if(/application\/json/i.test(responseType)){try{safeBody=JSON.stringify(redact(JSON.parse(text)));}catch{safeBody=redact(text);}}else safeBody=redact(text);
- return {status:response.status,statusText:response.statusText,headers:{'content-type':responseType},body:safeBody};
+ return {status:response.status,statusText:response.statusText,headers:payload.includeResponseHeaders?redact(Object.fromEntries(response.headers.entries())):{'content-type':responseType},body:safeBody};}finally{budget.dispose();}
 }
 module.exports={protectedRequest};

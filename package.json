@@ -33,7 +33,9 @@
     "asarUnpack": [
       "node_modules/playwright/**",
       "node_modules/playwright-core/**",
-      "services/**"
+      "services/**",
+      "node_modules/web-tree-sitter/**",
+      "node_modules/tree-sitter-wasms/**"
     ],
     "directories": {
       "output": "release",
@@ -48,7 +50,8 @@
       "package.json",
       "!**/*.test.js",
       "THIRD_PARTY_NOTICES.md",
-      "LICENSE"
+      "LICENSE",
+      "!node_modules/tree-sitter-wasms/out/tree-sitter-!(python|c_sharp).wasm"
     ],
     "extraResources": [
       {
@@ -85,7 +88,16 @@
     "node": ">=22.18.0"
   },
   "dependencies": {
-    "playwright": "1.58.0"
+    "@apidevtools/swagger-parser": "12.1.0",
+    "@tweenjs/tween.js": "25.0.0",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "diff": "9.0.0",
+    "playwright": "1.58.0",
+    "tree-sitter-wasms": "0.1.13",
+    "typescript": "6.0.3",
+    "web-tree-sitter": "0.20.8",
+    "yaml": "2.9.1"
   },
   "devDependencies": {
     "axe-core": "4.14.0",

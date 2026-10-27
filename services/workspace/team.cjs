@@ -2,11 +2,12 @@
 const http = require('node:http');
 const crypto = require('node:crypto');
 const { WorkspaceError, key, sha256 } = require('./store.cjs');
+const { validatePayload } = require('../security/boundaries.cjs');
 
 function identity(row) { return { id: row.id, workspaceId: row.tenant, name: row.name, role: row.role, revoked: !!row.revoked, created: row.created }; }
 function createIdentity(store, { name, role = 'viewer', workspaceId = 'default' }) {
   key(workspaceId, 'Team workspace id');
-  if (typeof name !== 'string' || !name.trim() || name.length > 200 || !['owner', 'editor', 'viewer'].includes(role)) throw new WorkspaceError('VALIDATION', 'Identity needs a name and owner/editor/viewer role.');
+  if (typeof name !== 'string' || !name.trim() || !['owner', 'editor', 'viewer'].includes(role)) throw new WorkspaceError('VALIDATION', 'Identity needs a name and owner/editor/viewer role.');
   const token = crypto.randomBytes(32).toString('base64url');
   const row = { id: crypto.randomUUID(), tenant: workspaceId, name: name.trim(), role, token_hash: sha256(token), revoked: 0, created: new Date().toISOString() };
   store.db.prepare('INSERT INTO identities VALUES(?,?,?,?,?,?,?)').run(row.id, row.tenant, row.name, row.role, row.token_hash, 0, row.created);
@@ -41,9 +42,10 @@ function createTeam(store, emit = () => {}) {
   }
   async function body(request) {
     if (!/^application\/json(?:;|$)/i.test(request.headers['content-type'] || '')) throw new WorkspaceError('VALIDATION', 'Content-Type must be application/json.');
-    const chunks = []; let length = 0;
-    for await (const chunk of request) { length += chunk.length; if (length > 2 * 1024 * 1024) throw new WorkspaceError('PAYLOAD_TOO_LARGE', 'Request exceeds 2 MiB.'); chunks.push(chunk); }
-    try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw new WorkspaceError('VALIDATION', 'Request must contain valid JSON.'); }
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    if (request.aborted || !request.complete) throw new WorkspaceError('ABORTED', 'Request was disconnected before it completed.');
+    try { return validatePayload(JSON.parse(Buffer.concat(chunks).toString('utf8'))); } catch { throw new WorkspaceError('VALIDATION', 'Request must contain valid plain JSON data.'); }
   }
   async function route(request, response) {
     let requestPrefix;
@@ -90,6 +92,7 @@ function createTeam(store, emit = () => {}) {
       else throw new WorkspaceError('FORBIDDEN', 'This role cannot perform that action.');
       response.writeHead(200); response.end(JSON.stringify(result));
     } catch (error) {
+      if (request.aborted || response.destroyed) return;
       const code = { UNAUTHORIZED: 401, FORBIDDEN: 403, CONFLICT: 409, NOT_FOUND: 404, PAYLOAD_TOO_LARGE: 413 }[error.code] || 400;
       const details = error.details ? structuredClone(error.details) : undefined;
       if (requestPrefix && details?.current) details.current = externalRecord(details.current, requestPrefix);
@@ -102,9 +105,13 @@ function createTeam(store, emit = () => {}) {
       if (server) throw new WorkspaceError('TEAM_RUNNING', 'Stop the current team service before starting another.');
       if (!Number.isSafeInteger(port) || port < 0 || port > 65535) throw new WorkspaceError('VALIDATION', 'Port must be 0–65535.');
       key(workspaceId, 'Team workspace id');
-      if (typeof ownerName !== 'string' || !ownerName.trim() || ownerName.length > 200) throw new WorkspaceError('VALIDATION', 'Owner name must contain 1–200 characters.');
+      if (typeof ownerName !== 'string' || !ownerName.trim()) throw new WorkspaceError('VALIDATION', 'Owner name must contain text.');
       const candidate = http.createServer((request, response) => { void route(request, response); });
-      candidate.requestTimeout = 15000; candidate.headersTimeout = 10000;
+      // A caller may cancel by disconnecting. Large or slow local transactions
+      // have no artificial request/body deadline or connection-count ceiling.
+      candidate.requestTimeout = 0; candidate.headersTimeout = 0;
+      candidate.timeout = 0; candidate.keepAliveTimeout = 0;
+      candidate.maxHeadersCount = 0;
       await new Promise((resolve, reject) => { candidate.once('error', reject); candidate.listen(port, '127.0.0.1', resolve); });
       server = candidate; activeWorkspace = workspaceId;
       let owner;

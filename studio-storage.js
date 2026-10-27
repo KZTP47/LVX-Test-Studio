@@ -1,7 +1,7 @@
 /* Canonical desktop suite storage and an explicit, non-destructive legacy import. */
 (function (global) {
   'use strict';
-  const ID = /^[a-zA-Z0-9][a-zA-Z0-9_.:@-]{0,199}$/;
+  const ID = /^[a-zA-Z0-9][a-zA-Z0-9_.:@-]*$/;
   const SECRET = /(?:^(?:api[_-]?key|password|passwd|secret|secret[_-]?value|ciphertext|encryption[_-]?key|access[_-]?token|refresh[_-]?token|authorization|private[_-]?key|credential|credentials|client[_-]?secret|token)$|(?:api[_-]?key|password|passwd|secret|token|authheader|webhookurl|clientsecret|private[_-]?key)$)/i;
   const ARRAY_SOURCES = {
     pipeline_test_suites: 'suites', test_data_sets: 'datasets', test_environments: 'environments',
@@ -180,8 +180,7 @@
       db = await new Promise((resolve, reject) => {
         const request = global.indexedDB.open('LVX_Machina_Versions');
         let settled = false;
-        const timer = global.setTimeout(() => finish(false, failure('VERSION_BLOCKED', 'Opening version history timed out. Close other editors and retry.')), 10000);
-        function finish(ok, value) { if (settled) { if (ok) value.close(); return; } settled = true; global.clearTimeout(timer); if (ok) resolve(value); else reject(value); }
+        function finish(ok, value) { if (settled) { if (ok) value.close(); return; } settled = true; if (ok) resolve(value); else reject(value); }
         request.onupgradeneeded = () => { request.transaction.abort(); finish(false, failure('VERSION_COVERAGE', 'Version database disappeared while opening; nothing was created.')); };
         request.onsuccess = () => finish(true, request.result);
         request.onerror = () => finish(false, failure('VERSION_READ', 'Legacy IndexedDB could not be opened. Originals remain unchanged.'));
@@ -195,16 +194,9 @@
         const transaction = db.transaction(['version_histories'], 'readonly');
         const request = transaction.objectStore('version_histories').openCursor();
         const result = [];
-        let bytes = 0, versionCount = 0;
         request.onsuccess = () => {
           const cursor = request.result;
           if (!cursor) return;
-          bytes += JSON.stringify(cursor.value).length * 2;
-          versionCount += Array.isArray(cursor.value?.versions) ? cursor.value.versions.length : 0;
-          if (bytes > 32 * 1024 * 1024 || versionCount > 9999) {
-            reject(failure('VERSION_LIMIT', 'Legacy version history exceeds the safe 32 MiB / 9,999-version import limit. Export histories separately or explicitly exclude versions.'));
-            transaction.abort(); return;
-          }
           result.push(cursor.value); cursor.continue();
         };
         request.onerror = () => reject(failure('VERSION_READ', 'Version histories could not be read.'));
@@ -220,14 +212,14 @@
     if (typeof global.indexedDB.databases !== 'function') throw failure('LEGACY_COVERAGE', 'Cannot safely inspect the consolidated Machina database. Use the desktop app to preview migration; originals are unchanged.');
     const databases = await global.indexedDB.databases(); if (!databases.some(db => db.name === 'LVX_Machina_Storage')) return { records: [], coverage: 'absent' };
     const db = await new Promise((resolve, reject) => { const request = global.indexedDB.open('LVX_Machina_Storage'); request.onupgradeneeded = () => { request.transaction.abort(); reject(failure('LEGACY_COVERAGE', 'Consolidated storage disappeared; no database was created.')); }; request.onsuccess = () => resolve(request.result); request.onerror = () => reject(failure('LEGACY_READ', 'Consolidated Machina storage could not be opened. Close the old app and retry.')); request.onblocked = () => reject(failure('LEGACY_BLOCKED', 'Close other Machina windows before previewing consolidated storage.')); });
-    const supported = { test_suites: 'suites', execution_history: 'history', security_scans: 'security-history', screenshots: 'baselines', versions: 'versions', datasets: 'datasets', unit_tests: 'unit-tests' }, records = []; let bytes = 0;
+    const supported = { test_suites: 'suites', execution_history: 'history', security_scans: 'security-history', screenshots: 'baselines', versions: 'versions', datasets: 'datasets', unit_tests: 'unit-tests' }, records = [];
     try {
       const stores = Object.keys(supported).filter(name => (includeVersions || name !== 'versions') && db.objectStoreNames.contains(name));
       if(stores.length)await new Promise((resolve,reject)=>{
         // One readonly transaction is a coherent snapshot across every original
         // category, even when another old Machina window is still open.
-        const tx=db.transaction(stores,'readonly'),rows=Object.fromEntries(stores.map(name=>[name,[]]));let count=0;
-        for(const name of stores){const request=tx.objectStore(name).openCursor();request.onsuccess=()=>{const cursor=request.result;if(!cursor)return;bytes+=JSON.stringify(cursor.value).length*2;count++;if(bytes>32*1048576||count>9999){reject(failure('LEGACY_LIMIT','Consolidated Machina storage exceeds the 32 MiB / 9,999-record migration limit. Export and split it without deleting originals.'));tx.abort();return;}rows[name].push(clone(cursor.value));cursor.continue();};request.onerror=()=>reject(failure('LEGACY_READ',`Could not read ${name}; originals remain unchanged.`));}
+        const tx=db.transaction(stores,'readonly'),rows=Object.fromEntries(stores.map(name=>[name,[]]));
+        for(const name of stores){const request=tx.objectStore(name).openCursor();request.onsuccess=()=>{const cursor=request.result;if(!cursor)return;rows[name].push(clone(cursor.value));cursor.continue();};request.onerror=()=>reject(failure('LEGACY_READ',`Could not read ${name}; originals remain unchanged.`));}
         tx.oncomplete=()=>{for(const name of stores)for(const value of rows[name])records.push({collection:supported[name],value,source:`IndexedDB:LVX_Machina_Storage/${name}`});resolve();};tx.onerror=tx.onabort=()=>reject(failure('LEGACY_READ','Consolidated Machina snapshot failed; originals remain unchanged.'));
       });
       return { records, coverage: 'complete' };
@@ -249,7 +241,7 @@
       omitted.count++; return false;
     }).map(([name, child]) => [name, sanitize(child, omitted, name)]));
     if (typeof value === 'string') {
-      const result = value.replace(/-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z]+ )?PRIVATE KEY-----/g, '[REDACTED PRIVATE KEY]').replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,})\b/g, '[REDACTED CREDENTIAL]').replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/:]+:[^\s/@]+@/gi, '$1[REDACTED]@');
+      const result = value.replace(/-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z]+ )?PRIVATE KEY-----/g, '[REDACTED PRIVATE KEY]').replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,})\b/g, '[REDACTED CREDENTIAL]').replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^\s/:]+:[^\s/@]+@/gi, '$1[REDACTED]@');
       if (result !== value) omitted.count++;
       return result;
     }
@@ -387,7 +379,6 @@
       }
       if (deps.size) record.value.dependencies = [...deps.values()];
     }
-    if (collected.length > 9999) errors.push('Legacy project exceeds the 9,999-record atomic migration limit. Export and split it before migrating.');
     if (omitted.count) warnings.push(`${omitted.count} credential-like fields or values were omitted. Configure credentials in the OS-backed secret vault; originals remain unchanged.`);
     if (versions.coverage === 'unavailable') warnings.push('IndexedDB is unavailable in this environment. Only localStorage versions could be captured.');
     if (!includeVersions) warnings.push('Version histories were explicitly excluded.');

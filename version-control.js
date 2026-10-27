@@ -4,7 +4,6 @@
 
 class VersionControl {
   constructor() {
-    this.MAX_VERSIONS_PER_SUITE = 50;
     this.pending = Promise.resolve();
   }
 
@@ -36,10 +35,6 @@ class VersionControl {
     }
 
     versions.push(newVersion);
-
-    if (versions.length > this.MAX_VERSIONS_PER_SUITE) {
-      versions.shift();
-    }
 
     localStorage.setItem(`suite_versions_${suiteId}`, JSON.stringify(versions));
     return newVersion.versionId;

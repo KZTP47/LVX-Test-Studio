@@ -19,9 +19,18 @@ test('Gemini receives native conversation roles and content-filtered output cann
  assert.equal(body.contents[0].role,'model');assert.equal(body.contents[1].parts[0].text,'next');
 });
 test('Anthropic context limits are incomplete failures and numeric usage remains inspectable',async()=>{
- await assert.rejects(requestAI({provider:'anthropic',prompt:'exact'},fixture({content:[{type:'text',text:'partial'}],stop_reason:'model_context_window_exceeded'})),error=>error.code==='AI_INCOMPLETE');
- const result=await requestAI({provider:'anthropic',prompt:'exact'},fixture({content:[{type:'text',text:'complete'}],stop_reason:'end_turn',usage:{input_tokens:0,output_tokens:3,other:'not usage'}}));assert.deepEqual(result.usage,{input_tokens:0,output_tokens:3});
+ await assert.rejects(requestAI({provider:'anthropic',prompt:'exact',maxTokens:100000},fixture({content:[{type:'text',text:'partial'}],stop_reason:'model_context_window_exceeded'})),error=>error.code==='AI_INCOMPLETE');
+ const result=await requestAI({provider:'anthropic',prompt:'exact',maxTokens:100000},fixture({content:[{type:'text',text:'complete'}],stop_reason:'end_turn',usage:{input_tokens:0,output_tokens:3,other:'not usage'}}));assert.deepEqual(result.usage,{input_tokens:0,output_tokens:3});
 });
 test('Invalid conversation roles are rejected before any request',async()=>{
  let called=false;await assert.rejects(requestAI({...base,messages:[{role:'tool',content:'unsupported'}]},{fetch:async()=>{called=true;throw Error('not reached');}}),/user\/assistant/);assert.equal(called,false);
+});
+
+test('Common API providers send the explicit model, protected key and provider-specific output budget',async()=>{
+ for(const provider of ['openai','anthropic','google','custom']){
+  let sent;const result=await requestAI({...base,provider,model:'user-chosen-model',apiKey:'secret:11111111-1111-4111-8111-111111111111',maxTokens:8192},{resolveSecret:()=> 'fixture-private-key',fetch:async(url,options)=>{sent={url,headers:options.headers,body:JSON.parse(options.body)};return new Response(JSON.stringify(provider==='google'?{candidates:[{finishReason:'STOP',content:{parts:[{text:'generated'}]}}]}:provider==='anthropic'?{stop_reason:'end_turn',content:[{type:'text',text:'generated'}]}:{choices:[{finish_reason:'stop',message:{content:'generated'}}]}));}});
+  assert.equal(result.generatedText,'generated');assert.ok(!sent.url.includes('fixture-private-key'));
+  if(provider==='google'){assert.ok(sent.url.includes('user-chosen-model'));assert.equal(sent.headers['x-goog-api-key'],'fixture-private-key');assert.equal(sent.body.generationConfig.maxOutputTokens,8192);assert.ok(!('temperature' in sent.body.generationConfig));}
+  else{assert.equal(sent.body.model,'user-chosen-model');assert.equal(sent.headers[provider==='anthropic'?'x-api-key':'Authorization'],provider==='anthropic'?'fixture-private-key':'Bearer fixture-private-key');assert.equal(sent.body[provider==='openai'?'max_completion_tokens':'max_tokens'],8192);if(provider==='openai'){assert.ok(!('temperature' in sent.body));assert.ok(!('max_tokens' in sent.body));}}
+ }
 });

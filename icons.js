@@ -5,6 +5,8 @@
   hand:'<path d="M8 13V5a2 2 0 0 1 4 0v7-9a2 2 0 0 1 4 0v9-6a2 2 0 0 1 4 0v9c0 4-2 7-6 7h-2c-3 0-5-2-7-5l-2-4c-1-2 1-4 3-2l2 2Z"/>',
   redo:'<path d="m15 3 6 6-6 6M21 9H9a6 6 0 0 0 0 12"/>',
   minus:'<path d="M4 12h16"/>',
+  maximize:'<rect x="3" y="3" width="18" height="18" rx="2"/>',
+  restore:'<path d="M8 8V3h13v13h-5"/><rect x="3" y="8" width="13" height="13" rx="1"/>',
   select:'<path d="m4 3 16 9-7 2-3 7Z"/>',
   sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',
   moon:'<path d="M20 14a9 9 0 0 1-10-12 9 9 0 1 0 10 12Z"/>',

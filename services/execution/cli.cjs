@@ -24,13 +24,13 @@ async function main(){
                 const url=new URL(req.url,'http://127.0.0.1');let result;
                 if(req.method==='GET'&&/^\/runs\/[\w-]+$/.test(url.pathname))result=await service.handle('getRun',{id:url.pathname.split('/')[2]});
                 else if(req.method==='POST'&&url.pathname==='/runs'){
-                    let body='';for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>2*1024*1024)throw new Error('Request exceeds 2 MiB.');}result=await service.handle('runWorkflow',{workflow:JSON.parse(body)});res.statusCode=202;
+                    req.setEncoding('utf8');let body='';for await(const chunk of req)body+=chunk;result=await service.handle('runWorkflow',{workflow:JSON.parse(body)});res.statusCode=202;
                 }else if(req.method==='POST'&&/^\/runs\/[\w-]+\/cancel$/.test(url.pathname))result=await service.handle('cancel',{id:url.pathname.split('/')[2]});
                 else{res.writeHead(404);res.end(JSON.stringify({error:'Unknown endpoint.'}));return;}
                 res.end(JSON.stringify(result));
             }catch(error){res.statusCode=400;res.end(JSON.stringify({error:error.message}));}
         });
-        server.requestTimeout=15000;server.headersTimeout=10000;await new Promise(resolve=>server.listen(port,'127.0.0.1',resolve));process.stdout.write(JSON.stringify({url:`http://127.0.0.1:${server.address().port}`,authenticated:true})+'\n');
+        server.requestTimeout=0;server.headersTimeout=0;await new Promise(resolve=>server.listen(port,'127.0.0.1',resolve));process.stdout.write(JSON.stringify({url:`http://127.0.0.1:${server.address().port}`,authenticated:true})+'\n');
         const stop=async()=>{server.close();await service.close();};process.once('SIGINT',stop);process.once('SIGTERM',stop);
     }else{await service.close();throw new Error('Use run or serve.');}
 }

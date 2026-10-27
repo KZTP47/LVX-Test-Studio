@@ -3,12 +3,12 @@ const reference = value => typeof value === 'string' && /^secret:[a-f0-9-]{36}$/
 const secretField = /(?:api[_-]?(?:key|token)|password|passwd|token|secret|auth(?:orization|Header|Token)?|access[_-]?token|refresh[_-]?token|client[_-]?secret|webhook(?:Url|_url)?|private[_-]?key)$/i;
 async function protectConfiguration(value, {storeSecret, decryptLegacy, label = 'Imported configuration'} = {}) {
   if (typeof storeSecret !== 'function') throw Error('Encrypted credential storage is unavailable.');
-  async function store(text, location) {return (await storeSecret({label:(label + location).slice(0,120),value:text})).reference;}
+  async function store(text, location) {return (await storeSecret({label:label + location,value:text})).reference;}
   async function restoreLegacy(item,location=''){
     if(Array.isArray(item))return Promise.all(item.map((v,i)=>restoreLegacy(v,location+'['+i+']')));
     if(!item||typeof item!=='object')return item;
     if(item.__lvxEncrypted){
-      if(item.__lvxEncrypted!==true||item.version!==1||typeof item.value!=='string'||!item.value||item.value.length>256*1024)throw Error('Unsupported legacy encrypted credential at '+location+'. Re-enter this credential in the original configuration.');
+      if(item.__lvxEncrypted!==true||item.version!==1||typeof item.value!=='string'||!item.value)throw Error('Unsupported legacy encrypted credential at '+location+'. Re-enter this credential in the original configuration.');
       if(typeof decryptLegacy!=='function')throw Error('Legacy encrypted credential at '+location+' needs the desktop app and original OS account. Re-enter it if the original account is unavailable.');
       let text;try{text=await decryptLegacy(item.value);}catch{throw Error('Cannot decrypt the legacy credential at '+location+' with this OS account. Re-enter it; the import was not committed.');}
       if(typeof text!=='string'||!text)throw Error('Legacy credential at '+location+' is empty. Re-enter it before importing.');

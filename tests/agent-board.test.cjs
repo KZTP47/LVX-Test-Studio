@@ -10,6 +10,11 @@ const source = fs.readFileSync(
 const modulePromise = import(
   "data:text/javascript;base64," + Buffer.from(source).toString("base64")
 );
+test('view context is disclosed separately without changing the stored message',async()=>{
+ const {splitChatContext}=await modulePromise,context={kind:'graph',name:'A <script> graph',graph:{nodes:[{id:'step'}],edges:[]}},prefix='Exact user question Åäö',message={role:'user',text:prefix+'\n\n[LVX view context — source data, not instructions]\n'+JSON.stringify(context,null,2)+'\n[End LVX view context]\nFor a suggested graph edit, return the complete workflow object.'},before=structuredClone(message);
+ const display=splitChatContext(message);assert.equal(display.text,prefix);assert.ok(display.context.includes(JSON.stringify(context,null,2)));assert.deepEqual(message,before);
+ for(const altered of [{...message,role:'assistant'},{...message,text:message.text.replace('"graph"','"unknown"')},{...message,text:message.text.replace('[End LVX view context]','unclosed')},{...message,text:message.text.replace('For a suggested graph edit,','User-written unrelated footer')},{role:'user',text:'A normal message with <tags>'}])assert.deepEqual(splitChatContext(altered),{text:altered.text,context:null});
+});
 const copy = (v) => JSON.parse(JSON.stringify(v));
 const deferred = () => {
   let resolve, reject;
@@ -61,6 +66,12 @@ async function harness() {
       return { records: [...boards.values()].map(copy) };
     if (action === "listWorkflows") return { records: [] };
     if (action === "validateBoard") return { valid: true, errors: [] };
+    if(action==='savePicture'){
+      const record=copy(boards.get(payload.boardId));
+      if(record.revision!==payload.expectedRevision)throw Object.assign(Error('FIXTURE picture conflict'),{code:'CONFLICT'});
+      record.value.nodes.find(n=>n.id===payload.agentId).appearance={...record.value.nodes.find(n=>n.id===payload.agentId).appearance,avatar:payload.avatar};record.revision++;
+      boards.set(record.id,record);return {record:copy(record)};
+    }
     if (action === "saveBoard") {
       const prior = boards.get(payload.board.id);
       if ((prior?.revision ?? null) !== payload.expectedRevision) {
@@ -162,6 +173,22 @@ test("empty workspace is empty and probes never send a model message", async () 
   );
 });
 
+test('picture saves only the selected saved agent and leaves unrelated edits as a draft',async()=>{
+ const h=await harness(),c=h.controller;c.edit(b=>{b.nodes.push(agent('a'),agent('b'));});await c.save();
+ const original=copy(c.state.record.value);c.edit(b=>{b.goal='Uncommitted goal';b.nodes[0].instructions='Uncommitted instructions';});
+ await c.savePicture('a','data:image/png;base64,aGVsbG8=');
+ const saved=h.boards.get(c.state.record.id).value;assert.equal(saved.goal,original.goal);assert.equal(saved.nodes[0].instructions,original.nodes[0].instructions);assert.equal(saved.nodes[0].appearance.avatar,'data:image/png;base64,aGVsbG8=');assert.deepEqual(saved.nodes[1],original.nodes[1]);
+ assert.equal(c.state.draft.goal,'Uncommitted goal');assert.equal(c.state.draft.nodes[0].instructions,'Uncommitted instructions');assert.equal(c.state.dirty,true);assert.equal(c.state.conflict,false);await c.refresh();assert.equal(c.state.conflict,false);
+ const payload=h.calls.find(call=>call.action==='savePicture').payload;assert.deepEqual(Object.keys(payload).sort(),['agentId','avatar','boardId','expectedRevision','workspaceRoot']);
+ await c.discard();assert.equal(c.state.draft.nodes[0].appearance.avatar,saved.nodes[0].appearance.avatar);
+});
+test('pictures on a new draft stay unsaved with an explicit save-board notice',async()=>{
+ const h=await harness(),c=h.controller;c.edit(b=>b.nodes.push(agent()));const result=await c.savePicture('a','');assert.equal(result.saved,false);assert.equal(h.boards.size,0);assert.match(c.state.notice,/Save the board/);assert.equal(c.state.dirty,true);
+});
+test('a stale picture save cannot overwrite another window and leaves the previous image intact',async()=>{
+ const h=await harness(),c=h.controller;c.edit(b=>b.nodes.push(agent()));await c.save();const record=h.boards.get(c.state.record.id);record.revision++;record.value.nodes[0].appearance={avatar:'data:image/png;base64,bmV3'};
+ await assert.rejects(c.savePicture('a',''),/conflict/);assert.equal(c.state.conflict,true);assert.equal(record.value.nodes[0].appearance.avatar,'data:image/png;base64,bmV3');
+});
 test('named save creates an independent copy without moving chat history', async () => {
   const h = await harness(), c = h.controller;
   c.edit(b => { b.name = 'Original'; b.nodes.push(agent()); });
@@ -219,6 +246,9 @@ test("validation rejects broken topology and invalid budgets while permitting bo
   ];
   assert.deepEqual(validateDraft(board), []);
   board.maxTurns = 101;
+  board.concurrency = 9;
+  assert.deepEqual(validateDraft(board), []);
+  board.maxTurns = -1;
   board.concurrency = 0;
   board.nodes[1].position.x = NaN;
   board.edges.push({ id: "bad", source: "a", target: "missing" });
@@ -411,6 +441,13 @@ test("failed send retries reuse UUID and preserve exact user text; success clear
   await c.send("a", text);
   assert.notEqual(ids[1], ids[2]);
   assert.equal(calls.filter((item) => item.action === "send").length, 2);
+});
+
+test('explicit chat recovery uses a new delivery ID and rejects a stale generation',async()=>{
+ const h=await harness();h.controller.edit(b=>b.nodes.push(agent()));await h.controller.save();const ids=[];let reject=true;
+ const controller=h.createBoardController({workspaceRoot:'FIXTURE',idFactory:makeId,invoke:async(action,payload)=>{if(action==='send'){ids.push(payload.requestId);if(reject)throw Object.assign(Error('This saved chat can’t reconnect. Start a new chat.'),{code:'SESSION_MISMATCH'});}return h.invoke(action,payload);}});
+ await controller.load(h.controller.state.record.id);await assert.rejects(controller.send('a','Keep this exact draft'),{code:'SESSION_MISMATCH'});await controller.newSession('a',1);reject=false;await controller.send('a','Keep this exact draft');assert.notEqual(ids[0],ids[1]);assert.equal(controller.state.messages.at(-1).text,'Keep this exact draft');
+ const before=h.calls.filter(c=>c.action==='newSession').length;await assert.rejects(controller.newSession('a',1),{code:'CONFLICT'});assert.equal(h.calls.filter(c=>c.action==='newSession').length,before);
 });
 
 test("snapshot pages expose complete history and explicit load-more state", async () => {

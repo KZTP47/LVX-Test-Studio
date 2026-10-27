@@ -9,12 +9,12 @@
     const parsed=typeof content==='string'?JSON.parse(content):clone(content);
     const result={sourceName,format:'unknown',suites:[],views:[],pipelines:[],versionHistories:{},extraRecords:[],warnings:[]};
     const seen=new Set();let depth=0;
-    function visit(value,level=0){if(level>12)throw Error('Legacy nesting exceeds 12 levels.');if(!object(value))return;if(seen.has(value))return;seen.add(value);
-      if(suite(value)){result.suites.push(value);return;}
-      for(const key of ['test_suites','suites','tests'])if(Array.isArray(value[key])){result.suites.push(...value[key].filter(object));if(result.format==='unknown')result.format=key==='test_suites'?'session-export':key==='suites'?'legacy-suite-bundle':'legacy-test-bundle';}
-      for(const key of ['views'])if(Array.isArray(value[key]))result.views.push(...value[key].filter(object));
-      for(const key of ['pipelines','workflows'])if(Array.isArray(value[key]))result.pipelines.push(...value[key].filter(object));
-      for(const key of ['version_histories','versionHistories','suite_versions'])if(object(value[key]))for(const [id,versions]of Object.entries(value[key]))if(Array.isArray(versions))result.versionHistories[id]=[...(result.versionHistories[id]||[]),...versions.filter(object)];
+    function visit(first){const pending=[first];while(pending.length){const value=pending.pop();if(!object(value)||seen.has(value))continue;seen.add(value);
+      if(suite(value)){result.suites.push(value);continue;}
+      for(const key of ['test_suites','suites','tests'])if(Array.isArray(value[key])){for(const item of value[key])if(object(item))result.suites.push(item);if(result.format==='unknown')result.format=key==='test_suites'?'session-export':key==='suites'?'legacy-suite-bundle':'legacy-test-bundle';}
+      if(Array.isArray(value.views))for(const item of value.views)if(object(item))result.views.push(item);
+      for(const key of ['pipelines','workflows'])if(Array.isArray(value[key]))for(const item of value[key])if(object(item))result.pipelines.push(item);
+      for(const key of ['version_histories','versionHistories','suite_versions'])if(object(value[key]))for(const [id,versions]of Object.entries(value[key]))if(Array.isArray(versions)){result.versionHistories[id]||=[];for(const version of versions)if(object(version))result.versionHistories[id].push(version);}
       const extraCollections={execution_history:'history',security_scans:'security-history',screenshots:'baselines',datasets:'datasets',unit_tests:'unit-tests',test_environments:'environments'};
       for(const [key,collection]of Object.entries(extraCollections))if(Array.isArray(value[key]))for(const record of value[key].filter(object))result.extraRecords.push({collection,value:clone(record)});
       const configKeys=['notification_integrations','execution_config','storage_config','sharing_backend_config','cicd_backend_config','lvx_storage_preferences','storagePreferences'];
@@ -22,8 +22,8 @@
       if(value.execution_mode!==undefined&&!Object.hasOwn(value,'execution_config')){result.extraRecords.push({collection:'legacy-config',value:{id:'execution_config',key:'execution_config',value:{mode:value.execution_mode},applyRequired:true}});result.warnings.push('The exported execution_mode is retained as a configuration draft; review engine settings before applying it.');}
       if(value.storage_type!==undefined&&!Object.hasOwn(value,'storage_config')){result.extraRecords.push({collection:'legacy-config',value:{id:'storage_config',key:'storage_config',value:{type:value.storage_type},applyRequired:true}});result.warnings.push('The exported storage_type is retained as a draft. Connection details absent from the export must be re-entered.');}
       for(const key of Object.keys(value))if(/config|preferences|environment|integration/i.test(key)&&!configKeys.includes(key)&&!['test_environments','execution_mode','storage_type'].includes(key))result.warnings.push(`Unsupported setting ${key} was not activated or imported. Export or re-enter it separately.`);
-      for(const key of ['appState','data','session','bundle','payload','state'])if(object(value[key])){visit(value[key],level+1);depth++;}
-    }
+      for(const key of ['state','payload','bundle','session','data','appState'])if(object(value[key])){pending.push(value[key]);depth++;}
+    }}
     if(Array.isArray(parsed)){result.format='suite-array';result.suites=parsed.filter(object);}else if(suite(parsed)){result.format='single-suite';result.suites=[parsed];}else visit(parsed);
     if(depth)result.format='app-state-backup';
     if(!result.suites.length&&!result.views.length&&!result.pipelines.length&&!result.extraRecords.length&&!Object.keys(result.versionHistories).length)throw Error(`"${sourceName}" contains no supported suites, views or workflows.`);
@@ -32,10 +32,10 @@
   }
   function normalizeImport(payload,{existingRecords=[],idFactory=()=>globalThis.crypto.randomUUID()}={}) {
     const reserved=new Set(existingRecords.map(r=>`${r.collection}/${r.id}`)),records=[],warnings=[...(payload.warnings||[])],maps={suites:Object.create(null),views:Object.create(null),pipelines:Object.create(null),nodes:Object.create(null),extra:Object.create(null)},origins=new Map();
-    function id(collection,old){let candidate=String(old||'');if(!/^[a-zA-Z0-9][a-zA-Z0-9_.:@-]{0,199}$/.test(candidate)||reserved.has(`${collection}/${candidate}`)){do{candidate=`import-${idFactory()}`;}while(reserved.has(`${collection}/${candidate}`));}reserved.add(`${collection}/${candidate}`);return candidate;}
+    function id(collection,old){let candidate=String(old||'');if(!/^[a-zA-Z0-9][a-zA-Z0-9_.:@-]*$/.test(candidate)||reserved.has(`${collection}/${candidate}`)){do{candidate=`import-${idFactory()}`;}while(reserved.has(`${collection}/${candidate}`));}reserved.add(`${collection}/${candidate}`);return candidate;}
     // Each file is a separate import namespace, preventing accidental cross-file links.
     const groups=[['suites','suites'],['views','views'],['pipelines','workflows']];
-    for(const [kind,collection]of groups)for(const item of payload[kind]){const old=String(item.id||'');if(old&&Object.hasOwn(maps[kind],old))throw Error(`Duplicate ${kind} id in one import: ${old}`);const next=id(collection,old);if(old)Object.defineProperty(maps[kind],old,{value:next,enumerable:true});records.push({collection,id:next,expectedRevision:null,value:clone(item)});}
+    for(const [kind,collection]of groups)for(const item of payload[kind]){const old=String(item.id||'');if(old&&Object.hasOwn(maps[kind],old))throw Error(`Duplicate ${kind} id in one import: ${old}`);const next=id(collection,old);if(old)Object.defineProperty(maps[kind],old,{value:next,enumerable:true});const record={collection,id:next,expectedRevision:null,value:clone(item)};records.push(record);origins.set(record,item.id||null);}
     for(const entry of payload.extraRecords||[]){const old=String(entry.value.id||''),next=id(entry.collection,old);if(!maps.extra[entry.collection])maps.extra[entry.collection]=Object.create(null);if(old&&maps.extra[entry.collection][old])throw Error(`Duplicate ${entry.collection} id in one import.`);if(old)maps.extra[entry.collection][old]=next;const record={collection:entry.collection,id:next,expectedRevision:null,value:clone(entry.value)};records.push(record);origins.set(record,old);}
     const remap=(value,key='',nodeMap={})=>{
       if(Array.isArray(value))return value.map(v=>remap(v,key,nodeMap));
@@ -53,7 +53,7 @@
       if(Array.isArray(nodes)){const used=new Set();for(const node of nodes){const old=String(node.id||'');if(!old||used.has(old))throw Error('Workflow nodes need unique identifiers.');used.add(old);nodeMap[old]=`node-${idFactory()}`;}maps.nodes[record.id]=nodeMap;}
       record.value=remap(record.value,'',nodeMap);record.value.id=record.id;
       const newNodes=record.value.nodes||record.value.graph?.nodes;if(Array.isArray(newNodes))for(const node of newNodes){node.originalNodeId=node.originalNodeId||node.id;node.id=nodeMap[node.id]||node.id;}
-      record.value.importedFrom={sourceName:payload.sourceName,originalId:origins.has(record)?origins.get(record):(payload[record.collection==='workflows'?'pipelines':record.collection]||[]).find(x=>(maps[record.collection==='workflows'?'pipelines':record.collection]?.[String(x.id)]||'')===record.id)?.id||null};
+      record.value.importedFrom={sourceName:payload.sourceName,originalId:origins.get(record)??null};
       // Trust is deliberately not inherited from old renderer data.
       record.value.requiresTrustReview=true;delete record.value.trusted;delete record.value.trust;
     }
@@ -68,9 +68,10 @@
     }
     return {records,maps,warnings,counts:{suites:payload.suites.length,views:payload.views.length,workflows:payload.pipelines.length,histories:Object.keys(payload.versionHistories).length,extraRecords:(payload.extraRecords||[]).length},sourceName:payload.sourceName};
   }
-  function collectLegacyImportFiles(directoryPath,{maxFiles=500,maxDepth=12}={}) {
+  function collectLegacyImportFiles(directoryPath,{maxFiles=0,maxDepth=0}={}) {
+    for(const budget of [maxFiles,maxDepth])if(!Number.isSafeInteger(budget)||budget<0)throw Error('Legacy import budgets must be nonnegative integers; zero disables a budget.');
     if(typeof require!=='function')throw Error('Folder import requires the native workspace service.');const fs=require('node:fs'),path=require('node:path');const root=path.resolve(directoryPath);if(fs.lstatSync(root).isSymbolicLink())throw Error('Symbolic link import roots are not allowed.');const results=[];
-    function walk(dir,depth){if(depth>maxDepth)throw Error('Legacy folder nesting limit exceeded.');for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const full=path.join(dir,entry.name);if(entry.isSymbolicLink())throw Error('Symbolic links are not allowed in legacy imports.');if(entry.isDirectory())walk(full,depth+1);else if(entry.isFile()&&/\.json$/i.test(entry.name)){if(results.length>=maxFiles)throw Error('Legacy folder file limit exceeded.');results.push({path:full,fileName:entry.name,relativePath:path.relative(root,full)});}}}walk(root,0);return results.sort((a,b)=>a.relativePath.localeCompare(b.relativePath));
+    const pending=[{dir:root,depth:0}];while(pending.length){const {dir,depth}=pending.pop();if(maxDepth>0&&depth>maxDepth)throw Error('The selected legacy folder depth budget was reached.');for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const full=path.join(dir,entry.name);if(entry.isSymbolicLink())throw Error('Symbolic links are not allowed in legacy imports.');if(entry.isDirectory())pending.push({dir:full,depth:depth+1});else if(entry.isFile()&&/\.json$/i.test(entry.name)){if(maxFiles>0&&results.length>=maxFiles)throw Error('The selected legacy folder file budget was reached.');results.push({path:full,fileName:entry.name,relativePath:path.relative(root,full)});}}}return results.sort((a,b)=>a.relativePath.localeCompare(b.relativePath));
   }
   function reconcileFolderReferences(records,reports) {
     const maps={suites:Object.create(null),views:Object.create(null),pipelines:Object.create(null)},ambiguous={suites:new Set(),views:new Set(),pipelines:new Set()};

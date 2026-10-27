@@ -11,6 +11,6 @@ function windowsPowerShell(script,{env={},...options}={}){
  if(process.platform!=='win32')throw Error('Windows PowerShell requires Windows.');
  const executable=path.join(process.env.SystemRoot||'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe');
  const prelude="$ErrorActionPreference='Stop'; Import-Module -Name (Join-Path $PSHOME 'Modules\\Microsoft.PowerShell.Security\\Microsoft.PowerShell.Security.psd1') -Force; ";
- return execFileSync(executable,['-NoProfile','-NonInteractive','-Command',prelude+script],{windowsHide:true,encoding:'utf8',timeout:30000,...options,env:windowsEnvironment(env)});
+ return execFileSync(executable,['-NoProfile','-NonInteractive','-Command',prelude+script],{windowsHide:true,encoding:'utf8',timeout:0,...options,env:windowsEnvironment(env)});
 }
 module.exports={windowsEnvironment,windowsPowerShell};

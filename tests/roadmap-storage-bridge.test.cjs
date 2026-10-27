@@ -232,12 +232,15 @@ test('BRIDGE existing IndexedDB discovery never creates a missing database and r
   assert.equal(opens, 0);
 });
 
-test('BRIDGE oversized version cursor aborts before any SQLite records or marker are committed', async t => {
+test('BRIDGE version cursor beyond the former ceiling migrates every record atomically', async t => {
   const { service } = await setup(t);
   const db = idbDatabase([{ suiteId: 'one', versions: Array.from({ length: 10000 }, (_, i) => ({ versionId: `version-${i}` })) }]);
   const h = browser(service, { pipeline_test_suites: [{ id: 'one', name: 'one' }] }, { indexedDBVersionControl: { storage: { db } } });
-  await assert.rejects(h.api.migrateLegacy({ includeVersions: true }), { code: 'VERSION_LIMIT' });
-  assert.equal((await service.handle('list')).records.length, 0);
+  await h.api.migrateLegacy({ includeVersions: true });
+  const records = (await service.handle('list', { collection: 'versions' })).records;
+  assert.equal(records.length, 10000);
+  assert.equal(records.filter(record => record.value.versionId === 'version-9999').length, 1);
+  assert.equal((await service.handle('list', { collection: 'suites' })).records.length, 1);
 });
 
 test('BRIDGE portable archive restore uses reviewed revision and does not rewrite browser originals', async t => {

@@ -7,7 +7,7 @@ class IntegrationsManager {
     constructor() {
         this.STORAGE_KEY = 'notification_integrations';
         this.HISTORY_KEY = 'notification_history';
-        this.MAX_HISTORY = 100;
+        this.MAX_HISTORY = 0;
     }
 
     // Save integration configuration
@@ -317,7 +317,7 @@ LVX-Machina Test Automation
 
     // Record notification attempt
     recordNotification(integration, testResult, success, error = null) {
-        const history = this.getNotificationHistory();
+        const history = JSON.parse(localStorage.getItem(this.HISTORY_KEY) || '[]');
 
         const record = {
             id: this._generateId(),
@@ -334,17 +334,17 @@ LVX-Machina Test Automation
         history.push(record);
 
         // Keep only MAX_HISTORY
-        if (history.length > this.MAX_HISTORY) {
+        if (this.MAX_HISTORY && history.length > this.MAX_HISTORY) {
             history.splice(0, history.length - this.MAX_HISTORY);
         }
 
         localStorage.setItem(this.HISTORY_KEY, JSON.stringify(history));
     }
 
-    getNotificationHistory(limit = 50) {
+    getNotificationHistory(limit = 0) {
         const data = localStorage.getItem(this.HISTORY_KEY);
         const history = data ? JSON.parse(data) : [];
-        return history.slice(-limit).reverse(); // Most recent first
+        return history.slice(limit ? -limit : 0).reverse(); // Most recent first
     }
 
     _generateId() {
@@ -439,7 +439,7 @@ LVX-Machina Test Automation
 
         // Add top vulnerabilities if any
         if (vulnerabilities && vulnerabilities.length > 0) {
-            const topVulns = vulnerabilities.slice(0, 3).map(v =>
+            const topVulns = vulnerabilities.map(v =>
                 `• [${v.severity}] ${v.ruleName || v.type}: ${v.description?.substring(0, 50) || 'No description'}...`
             ).join('\n');
             message.attachments[0].fields.push({
@@ -498,7 +498,7 @@ LVX-Machina Test Automation
 
         // Add top vulnerabilities if any
         if (vulnerabilities && vulnerabilities.length > 0) {
-            const topVulns = vulnerabilities.slice(0, 3).map(v =>
+            const topVulns = vulnerabilities.map(v =>
                 `• **[${v.severity}]** ${v.ruleName || v.type}`
             ).join('\n');
             message.embeds[0].fields.push({
@@ -532,7 +532,7 @@ LVX-Machina Test Automation
             security: {
                 policyPassed: scanResults.policyPassed,
                 summary: scanResults.summary,
-                vulnerabilities: scanResults.vulnerabilities?.slice(0, 10), // Limit to 10
+                vulnerabilities: scanResults.vulnerabilities, // Limit to 10
                 duration: scanResults.duration
             }
         };
@@ -945,7 +945,7 @@ function switchIntegrationsTab(tab) {
 // Render notification history
 function renderNotificationHistory() {
     const container = document.getElementById('notification-history-list');
-    const history = window.integrationsManager.getNotificationHistory(50);
+    const history = window.integrationsManager.getNotificationHistory();
 
     if (history.length === 0) {
         container.innerHTML = '<p class="aero-text-muted text-sm">No notification history yet</p>';

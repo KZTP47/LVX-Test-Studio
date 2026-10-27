@@ -5,22 +5,29 @@ const {pathToFileURL} = require('node:url');
 const {randomUUID} = require('node:crypto');
 
 function validatePayload(value) {
-  let bytes = 0;
-  const visit = (item, depth) => {
-    if (depth > 30) throw new Error('Payload nesting limit exceeded');
+  // Walk iteratively: valid nested data must not consume the JavaScript stack.
+  // Only the current ancestry is tracked, so shared (non-cyclic) values remain valid.
+  const active = new Set(), work = [{ item: value }];
+  while (work.length) {
+    const { item, leave } = work.pop();
+    if (leave) { active.delete(item); continue; }
     if (item === null || typeof item === 'boolean' || typeof item === 'number') {
       if (typeof item === 'number' && !Number.isFinite(item)) throw new Error('Invalid numeric payload');
-      return;
+      continue;
     }
-    if (typeof item === 'string') { bytes += Buffer.byteLength(item); if(bytes > 16 * 1024 * 1024) throw new Error('Payload too large'); return; }
+    if (typeof item === 'string') continue;
     if (typeof item !== 'object' || (!Array.isArray(item) && Object.getPrototypeOf(item) !== Object.prototype && Object.getPrototypeOf(item) !== null)) throw new Error('Payload must contain plain data');
-    for (const [key, val] of Object.entries(item)) {
+    if (active.has(item)) throw new Error('Payload must not contain cycles');
+    active.add(item); work.push({ item, leave: true });
+    for (const key of Reflect.ownKeys(item)) {
+      if (typeof key !== 'string') throw new Error('Payload must contain plain data');
       if (['__proto__', 'constructor', 'prototype'].includes(key)) throw new Error('Unsafe payload key');
-      bytes += key.length; visit(val, depth + 1);
+      const descriptor = Object.getOwnPropertyDescriptor(item, key);
+      if (!Object.hasOwn(descriptor, 'value')) throw new Error('Payload must contain plain data');
+      if (descriptor.enumerable) work.push({ item: descriptor.value });
     }
-    if (bytes > 16 * 1024 * 1024) throw new Error('Payload too large');
-  };
-  visit(value, 0); return value;
+  }
+  return value;
 }
 
 function assertScopedPath(root, candidate = '.', {mustExist = true, directory = false} = {}) {
@@ -88,7 +95,7 @@ function configurePreviewContents(contents,policy=createPreviewPolicy()){
   return policy;
 }
 function preparePreviewHtml(html,policy=createPreviewPolicy()){
-  if(typeof html!=='string'||html.length>8*1024*1024)throw new Error('Preview HTML must be text below 8 MiB');
+  if(typeof html!=='string')throw new Error('Preview HTML must be text');
   const escaped=policy.contentSecurityPolicy.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
   // This meta element is parsed before any untrusted content, including a supplied <head>.
   return '<!doctype html><meta http-equiv="Content-Security-Policy" content="'+escaped+'">'+html;

@@ -5,7 +5,7 @@
   'use strict';
   const own = (o,k) => Object.prototype.hasOwnProperty.call(o || {}, k);
   const forbidden = new Set(['__proto__','prototype','constructor']);
-  function variable(value) { if (typeof value !== 'string' || value.length>200 || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value) || forbidden.has(value)) throw Error('Use a valid variable name of up to 200 characters.'); return value; }
+  function variable(value) { if (typeof value !== 'string' || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value) || forbidden.has(value)) throw Error('Use a valid variable name .'); return value; }
   const templates = Object.freeze({
     'api-response': '{\n  "status": 200,\n  "body": {"user_id":"{{random_id}}","email":"{{random_email}}","token":"{{random_token}}"}\n}',
     'database-record': '{\n  "id":"{{random_id}}","email":"{{random_email}}","name":"{{random_name}}","role":"user"\n}',
@@ -47,7 +47,6 @@
   }
   function normalizeFileData(file={}) {
     const headers=Array.isArray(file.headers)?file.headers.map(String):[], rows=Array.isArray(file.rows)?file.rows:[];
-    if(headers.length>500 || rows.length>10000)throw Error('Fixture files support up to 500 columns and 10,000 rows.');
     if(new Set(headers).size!==headers.length || headers.some(h=>!h||forbidden.has(h)))throw Error('Column headers must be unique and nonempty.');
     if(rows.some(r=>!r||Array.isArray(r)||typeof r!=='object'))throw Error('Each data row must be an object.');
     const usageMode=file.usageMode||'per-row'; if(!['all','per-row','selected','sample'].includes(usageMode))throw Error('Unknown file usage mode.');
@@ -74,7 +73,7 @@
     return {...state,mocks,setupSteps:normalizeSteps(state.setupSteps),teardownSteps:normalizeSteps(state.teardownSteps),fileData:normalizeFileData(state.fileData)};
   }
   function validateSteps(steps,mocks) {
-    for(const s of steps) {if(!actions.includes(s.action))throw Error(`Unsupported setup/teardown action: ${s.action}. Free-text notes are not executable.`);if(s.action==='create-test-data'){variable(s.variableName);if(!mocks.some(m=>m.id===s.mockId))throw Error('Choose an existing mock for create-test-data.');}if(s.action==='clear-test-data')variable(s.variableName);if(s.action==='set-environment')variable(s.envName);if(s.action==='reset-environment'&&!s.resetAll)variable(s.envName);if(s.action==='wait'&&(!Number.isSafeInteger(Number(s.delayMs))||Number(s.delayMs)<0||Number(s.delayMs)>300000))throw Error('Wait must be 0–300,000 milliseconds.');if(s.action==='run-code'&&(!['python','javascript'].includes(s.language)||!String(s.code||'').trim()))throw Error('Run-code needs Python or JavaScript and a nonempty snippet.');}
+    for(const s of steps) {if(!actions.includes(s.action))throw Error(`Unsupported setup/teardown action: ${s.action}. Free-text notes are not executable.`);if(s.action==='create-test-data'){variable(s.variableName);if(!mocks.some(m=>m.id===s.mockId))throw Error('Choose an existing mock for create-test-data.');}if(s.action==='clear-test-data')variable(s.variableName);if(s.action==='set-environment')variable(s.envName);if(s.action==='reset-environment'&&!s.resetAll)variable(s.envName);if(s.action==='wait'&&(!Number.isSafeInteger(Number(s.delayMs))||Number(s.delayMs)<0))throw Error('Wait must be 0–300,000 milliseconds.');if(s.action==='run-code'&&(!['python','javascript'].includes(s.language)||!String(s.code||'').trim()))throw Error('Run-code needs Python or JavaScript and a nonempty snippet.');}
   }
   function buildSuiteExecutionPlan(suite,inputs={},options={}) {
     const state=normalizeState(suite?.mock_builder||suite?.mockBuilder||{});validateSteps([...state.setupSteps,...state.teardownSteps],state.mocks);
@@ -84,7 +83,16 @@
     const iterations=buildFileIterations(state.fileData,options).map(i=>({...i,contextVariables:{...baseContextVariables,...i.variables}}));
     return {version:1,state,inputs:flattenInputContext(inputs),baseContextVariables,setupSteps:state.setupSteps,teardownSteps:state.teardownSteps,beforeDelayMs:state.setupSteps.filter(s=>s.action==='wait').reduce((n,s)=>n+Number(s.delayMs),0),afterDelayMs:state.teardownSteps.filter(s=>s.action==='wait').reduce((n,s)=>n+Number(s.delayMs),0),iterations,hasFileIterations:iterations.length>0};
   }
-  function delay(ms,signal) {return new Promise((resolve,reject)=>{if(signal?.aborted)return reject(Error('Execution cancelled.'));const done=()=>{signal?.removeEventListener('abort',abort);resolve();};const timer=setTimeout(done,ms);const abort=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);reject(Error('Execution cancelled.'));};signal?.addEventListener('abort',abort,{once:true});});}
+  function delay(ms,signal) {
+    if (!Number.isSafeInteger(ms) || ms < 0) return Promise.reject(Error('Wait must be a nonnegative safe integer.'));
+    return new Promise((resolve,reject)=>{
+      let timer,remaining=ms,last=Date.now();
+      const done=()=>{signal?.removeEventListener('abort',abort);resolve();};
+      const abort=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);reject(Error('Execution cancelled.'));};
+      const tick=()=>{const now=Date.now();remaining-=Math.max(0,now-last);last=now;if(remaining<=0)done();else timer=setTimeout(tick,Math.min(2147483647,remaining));};
+      if(signal?.aborted)return abort();signal?.addEventListener('abort',abort,{once:true});timer=setTimeout(tick,Math.min(2147483647,remaining));
+    });
+  }
   async function executeSuitePlan(plan,options={}) {
     // Revalidate the plan at its native boundary: renderer-supplied plans are untrusted.
     const safe=buildSuiteExecutionPlan({mock_builder:plan.state},plan.inputs,options),results=[];
@@ -103,10 +111,8 @@
       if(error)throw error;results.push({iteration:iteration.rowNumber,result,effects,finalContext:{...context}});
     }return {status:results.some(r=>r.result&&['FAILURE','FAILED','ERROR','CANCELLED','TIMEOUT'].includes(r.result.status))?'FAILED':'SUCCESS',results};
   }
-  const MAX_FILE_BYTES=10*1024*1024;
   function fileType(name){const extension=/\.([^.]+)$/.exec(String(name))?.[1].toLowerCase();if(!['csv','tsv','json','txt','xls','xlsx'].includes(extension))throw Error('Choose a CSV, TSV, Excel (.xlsx or .xls), JSON or TXT file.');return extension;}
   function structuredRows(rows){
-    if(rows.length>10000)throw Error('Fixture files support up to 500 columns and 10,000 rows.');
     const objects=rows.map(row=>Array.isArray(row)?Object.fromEntries(row.map((value,i)=>[`column_${i+1}`,value])):row&&typeof row==='object'?row:{value:row==null?'':String(row)});
     const headers=[...new Set(objects.flatMap(row=>Object.keys(row)))];
     return {headers,rows:objects.map(row=>Object.fromEntries(headers.map(header=>[header,row[header]??''])))};
@@ -116,17 +122,16 @@
     const ole=[0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1],zip=bytes[0]===0x50&&bytes[1]===0x4b&&bytes[2]===3&&bytes[3]===4;
     const binary=ole.every((v,i)=>bytes[i]===v)||(bytes[0]===9&&[0,2,4,8].includes(bytes[1])),xml=/urn:schemas-microsoft-com:office:spreadsheet/i.test(new TextDecoder().decode(bytes.subarray(0,8192)));
     if(!zip&&!binary&&!xml)throw Error('Excel file is malformed or is not a supported XLS/XLSX workbook.');
-    let book;try{book=xlsx.read(bytes,{type:'array',sheetRows:10002,cellFormula:false,cellHTML:false,cellText:false});}catch(error){throw Error('Excel file could not be read: '+error.message);}
+    let book;try{book=xlsx.read(bytes,{type:'array',cellFormula:false,cellHTML:false,cellText:false});}catch(error){throw Error('Excel file could not be read: '+error.message);}
     const sheetName=book.SheetNames?.[0],sheet=book.Sheets?.[sheetName];if(!sheet)throw Error('Excel workbook needs a worksheet.');
     const ref=sheet['!fullref']||sheet['!ref'];if(!ref)throw Error('Excel must have a header row and at least one data row.');
-    const range=xlsx.utils.decode_range(ref);if(range.e.c-range.s.c+1>500||range.e.r-range.s.r>10000)throw Error('Fixture files support up to 500 columns and 10,000 rows.');
     const matrix=xlsx.utils.sheet_to_json(sheet,{header:1,raw:true,defval:'',blankrows:false});if(matrix.length<2)throw Error('Excel must have a header row and at least one data row.');
     const headers=matrix.shift().map(value=>String(value??'')),rows=matrix.map(row=>Object.fromEntries(headers.map((header,i)=>[header,row[i]??''])));
     return normalizeFileData({fileName:name,fileType:'excel',sheetName,headers,rows});
   }
   function parseDataFile(input,name='data.csv',options={}) {
     const type=fileType(name),bytes=typeof input==='string'?new TextEncoder().encode(input):input instanceof ArrayBuffer?new Uint8Array(input):ArrayBuffer.isView(input)?new Uint8Array(input.buffer,input.byteOffset,input.byteLength):null;
-    if(!bytes)throw Error('Data file content must be text or bytes.');if(bytes.byteLength>MAX_FILE_BYTES)throw Error('Data file exceeds 10 MB.');
+    if(!bytes)throw Error('Data file content must be text or bytes.');
     if(type==='xls'||type==='xlsx')return parseExcel(bytes,name,options);
     let text=typeof input==='string'?input:new TextDecoder('utf-8',{fatal:true}).decode(bytes);text=text.replace(/^\uFEFF/,'');
     if(type==='json'){let parsed;try{parsed=JSON.parse(text);}catch(error){throw Error('JSON is not valid: '+error.message);}const rows=Array.isArray(parsed)?parsed:parsed&&Array.isArray(parsed.data)?parsed.data:parsed&&Array.isArray(parsed.rows)?parsed.rows:parsed&&typeof parsed==='object'?[parsed]:null;if(!rows)throw Error('JSON must contain an object, an array, or a data/rows array.');return normalizeFileData({fileName:name,fileType:'json',...structuredRows(rows)});}
@@ -134,6 +139,6 @@
     const separator=/\.tsv$/i.test(name)?'\t':',';let field='',row=[],records=[],quoted=false,closed=false;
     const push=()=>{row.push(field);field='';closed=false;};for(let i=0;i<text.length;i++){const c=text[i];if(quoted){if(c==='"'&&text[i+1]==='"'){field+='"';i++;}else if(c==='"'){quoted=false;closed=true;}else field+=c;}else if(c===separator){push();}else if(c==='\r'||c==='\n'){push();records.push(row);row=[];if(c==='\r'&&text[i+1]==='\n')i++;}else if(c==='"'&&!field&&!closed)quoted=true;else{if(closed)throw Error('Invalid CSV after closing quote.');field+=c;}}if(quoted)throw Error('Unclosed CSV quote.');if(field||row.length||closed){push();records.push(row);}const headers=(records.shift()||[]).map((h,i)=>i===0?h.replace(/^\uFEFF/,''):h);const rows=records.map((cells,i)=>{if(cells.length!==headers.length)throw Error(`Row ${i+2} has ${cells.length} columns; expected ${headers.length}.`);return Object.fromEntries(headers.map((h,j)=>[h,cells[j]]));});return normalizeFileData({fileName:name,fileType:separator==='\t'?'tsv':'csv',headers,rows});
   }
-  async function readDataFile(file,options={}){if(!file)throw Error('Choose a data file first.');const type=fileType(file.name);if(file.size>MAX_FILE_BYTES)throw Error('Data file exceeds 10 MB.');if(typeof file.arrayBuffer==='function')return parseDataFile(await file.arrayBuffer(),file.name,options);if(type==='xls'||type==='xlsx')throw Error('This file picker cannot read binary workbooks. Reopen Studio and try again.');return parseDataFile(await file.text(),file.name,options);}
+  async function readDataFile(file,options={}){if(!file)throw Error('Choose a data file first.');const type=fileType(file.name);if(typeof file.arrayBuffer==='function')return parseDataFile(await file.arrayBuffer(),file.name,options);if(type==='xls'||type==='xlsx')throw Error('This file picker cannot read binary workbooks. Reopen Studio and try again.');return parseDataFile(await file.text(),file.name,options);}
   return {templates,builtIns,actions,normalizeState,normalizeFileData,variable,getBuiltInValue,serializeVariableValue,resolveTemplateVariables,buildMockValue,sanitizeVariableName,flattenInputContext,parseSelectedRowIndexes,getFileRowsForExecution,mapFileRowVariables,buildFileIterations,buildSuiteExecutionPlan,executeSuitePlan,delay,parseDataFile,readDataFile};
 });

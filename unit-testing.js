@@ -910,7 +910,7 @@ async function executeNativePythonUnitTest(unitTest) {
     const code=buildPythonUnitTestCode(unitTest)+'\nprint('+JSON.stringify(marker)+' + json.dumps(_lvx_result))\nARTIFACTS={"unitResult": _lvx_result}\nif _lvx_result["status"] != "PASS":\n    _lvx_failure = _lvx_result.get("error") or _lvx_result.get("cleanup_error") or "Native unit tests failed"\n    if _lvx_result.get("errors") and not _lvx_result.get("assertions_failed"): raise RuntimeError(_lvx_failure)\n    raise AssertionError(_lvx_failure)\n';
     try {
         await studio.invoke('host','checkImported',{definition:unitTest});
-        const start=await studio.invoke('execution','start',{engine:'python',code,timeoutMs:Number(unitTest.timeout_ms||30000),...unitExecutionParameters(unitTest),inputs:unitTest.inputs||unitTest.contextVariables||{},inputFiles:unitTest.input_files||unitTest.inputFiles||[]});
+        const start=await studio.invoke('execution','start',{engine:'python',code,timeoutMs:Number(unitTest.timeout_ms ?? 0),...unitExecutionParameters(unitTest),inputs:unitTest.inputs||unitTest.contextVariables||{},inputFiles:unitTest.input_files||unitTest.inputFiles||[]});
         window.LVXActiveUnitRun=start.id;let run=start;
         while(run.status==='RUNNING'||run.status==='PENDING'){await new Promise(resolve=>setTimeout(resolve,40));run=await studio.invoke('execution','getRun',{id:start.id});}
         if(run.status==='CANCELLED')return {status:'CANCELLED',run_id:run.id,error:'Run cancelled.',output:run.stdout||'',assertions_passed:0,assertions_failed:0};
@@ -1037,7 +1037,7 @@ async function executeJavaScriptUnitTest(unitTest) {
             const started = await studio.invoke('execution', 'start', {
                 engine: unitTest.test_framework === 'jest' ? 'jest' : 'javascript',
                 code: unitTest.test_code || '', setup: unitTest.setup_code || '', cleanup: unitTest.teardown_code || '',
-                timeoutMs: Number(unitTest.timeout_ms || 30000),
+                timeoutMs: Number(unitTest.timeout_ms ?? 0),
                 ...(unitTest.project_path ? { projectPath:unitTest.project_path } : {}),
                 ...unitExecutionParameters(unitTest),
                 ...(unitTest.fixture_id ? { fixtureId:unitTest.fixture_id } : {})
@@ -1058,8 +1058,8 @@ async function executeJavaScriptUnitTest(unitTest) {
         const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
         const worker = new Worker(url);
         // Workers cannot create nested workers here; authored code runs only once.
-        const timeout = Number(unitTest.timeout_ms || 30000);
-        try { return await new Promise(resolve => { const timer = setTimeout(() => { worker.terminate(); resolve({ status:'FAIL',error:'Unit test timed out; worker stopped.',assertions_passed:0,assertions_failed:1 }); }, timeout); worker.onmessage=e=>{clearTimeout(timer);resolve(e.data);};worker.onerror=e=>{clearTimeout(timer);resolve({status:'FAIL',error:e.message,assertions_passed:0,assertions_failed:1});};worker.postMessage(unitTest); }); }
+        const timeout = Number(unitTest.timeout_ms ?? 0);
+        try { return await new Promise(resolve => { if(!Number.isSafeInteger(timeout)||timeout<0)throw Error('Test timeout must be a nonnegative safe integer.');let timer;const end=performance.now()+timeout;const arm=()=>{const remaining=end-performance.now();if(remaining<=0){worker.terminate();resolve({ status:'FAIL',error:'Unit test timed out; worker stopped.',assertions_passed:0,assertions_failed:1 });}else timer=setTimeout(arm,Math.min(2**31-1,remaining));};if(timeout)arm(); worker.onmessage=e=>{clearTimeout(timer);resolve(e.data);};worker.onerror=e=>{clearTimeout(timer);resolve({status:'FAIL',error:e.message,assertions_passed:0,assertions_failed:1});};worker.postMessage(unitTest); }); }
         finally { worker.terminate(); URL.revokeObjectURL(url); }
     }
     if (unitTest.test_framework === 'jest') return { status: 'FAIL', error: 'Jest runtime unavailable in this browser. Choose Custom for assert/expect script tests.', assertions_passed: 0, assertions_failed: 1 };
@@ -1188,8 +1188,8 @@ async function executeJavaScriptUnitTest(unitTest) {
                 }
             }
         `);
-        const configuredTimeout = Number(unitTest.timeout_ms ?? 30000);
-        if (!Number.isFinite(configuredTimeout) || configuredTimeout <= 0) throw new Error('Test timeout must be positive');
+        const configuredTimeout = Number(unitTest.timeout_ms ?? 0);
+        if (!Number.isSafeInteger(configuredTimeout) || configuredTimeout < 0) throw new Error('Test timeout must be a nonnegative safe integer; 0 means no deadline');
         let timer;
         try {
             await Promise.race([execute(testContext).then(async () => {
@@ -1200,7 +1200,7 @@ async function executeJavaScriptUnitTest(unitTest) {
                     catch (error) { cleanupError = error; }
                 }
             }), new Promise((_, reject) => {
-                timer = setTimeout(() => { controller.abort(); reject(new Error(`Unit test timed out after ${configuredTimeout}ms; cancellation requested`)); }, configuredTimeout);
+                if(configuredTimeout){const end=performance.now()+configuredTimeout;const arm=()=>{const remaining=end-performance.now();if(remaining<=0){controller.abort();reject(new Error(`Unit test timed out after ${configuredTimeout}ms; cancellation requested`));}else timer=setTimeout(arm,Math.min(2**31-1,remaining));};arm();}
             })]);
         } catch (error) { primaryError = primaryError || error; }
         finally { clearTimeout(timer); }

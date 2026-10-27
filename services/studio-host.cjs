@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {pathToFileURL} = require('node:url');
 
-function createStudioHost({app, BrowserWindow, ipcMain, dialog, safeStorage, session}) {
+function createStudioHost({app, BrowserWindow, ipcMain, dialog, safeStorage, session, onWorkspaceChanging}) {
   let services, workspaceRoot = null, previewWindow,evidenceQueue=Promise.resolve();
   const persistedRuns=new Set();
   const pendingRequests=new Map();
@@ -35,6 +35,10 @@ function createStudioHost({app, BrowserWindow, ipcMain, dialog, safeStorage, ses
         const run=require('./protocol-redaction.cjs').redactRun(event,redact);delete run.domain;delete run.type;
         const existing=await services.workspace.handle('read',{collection:'runs',id:run.id});
         await services.workspace.handle('transact',{records:[{collection:'runs',id:run.id,value:run,expectedRevision:existing?.revision??null}]});
+        const endpointRuns=[];
+        const collectEndpointRuns=(item,key='node')=>{if(item?.artifacts?.apiAtlasTestId){const a=item.artifacts;endpointRuns.push({id:run.id+'-'+key,testId:a.apiAtlasTestId,endpointId:a.apiAtlasEndpointId,definitionVersion:a.apiAtlasDefinitionVersion,workflowRunId:run.id,name:a.apiAtlasName,...a.apiAtlasResult});}for(const [id,result]of Object.entries(item?.results||{}))collectEndpointRuns(result,id);};
+        collectEndpointRuns(run);
+        for(const result of endpointRuns){const previous=await services.workspace.handle('read',{collection:'api-atlas-runs',id:result.id});await services.workspace.handle('transact',{records:[{collection:'api-atlas-runs',id:result.id,value:result,expectedRevision:previous?.revision??null}]});}
         const baseline=run.artifacts?.baseline;
         if(typeof baseline==='string'){
           const relative=path.relative(workspaceRoot,baseline);
@@ -115,7 +119,9 @@ function createStudioHost({app, BrowserWindow, ipcMain, dialog, safeStorage, ses
     const coordination={handle:(action,payload)=>{if(coordinationTransition)throw Error('Project coordination is switching workspace. Reopen the project after the switch.');return graphActions.has(action)?graphCollaboration.handle(action,payload):missions.handle(action,payload);},
       async setWorkspace(root){coordinationTransition=true;await graphCollaboration.drain();await missions.drain();await missions.setWorkspace(root);coordinationTransition=root===null;},async close(){coordinationTransition=true;await graphCollaboration.drain();await missions.close();}};
     const setup=require('./setup/index.cjs').createService({dataDir:path.join(dataDir,'setup'),execution,getWorkspaceRoot:()=>workspaceRoot,assertTrusted:()=>security.assertTrusted(),redact:value=>security.redact(value),fetchImpl:(...args)=>fetch(...args),emit});
-    services = {security,execution,workspace,preview,agents,coordination,setup};
+    const githubStudio=require('./github-studio/index.cjs').createService({workspace,getWorkspaceRoot:()=>workspaceRoot,resolveSecret:ref=>security.resolveSecret(ref),redact:value=>security.redact(value)});
+    const apiAssistant=require('./api-atlas/assistant.cjs').createAssistant({workspace,agents,getWorkspaceRoot:()=>workspaceRoot,protect:protectNative,redact});
+    services = {security,execution,workspace,preview,agents,coordination,setup,githubStudio,apiAssistant};
     return services;
   }
   async function persistSecurityScan(result,binding=workspaceRoot){if(!binding)return;if(binding!==workspaceRoot)throw Error('Workspace changed during the security scan. Run the inspection again in the selected project.');const record={...result,timestamp:result.timestamp||new Date().toISOString()};await init().workspace.handle('transact',{workspaceRoot:binding,records:[{collection:'security-history',id:/^[a-f0-9-]{36}$/.test(result.id||'')?result.id:crypto.randomUUID(),value:record,expectedRevision:null}]});}
@@ -127,10 +133,13 @@ function createStudioHost({app, BrowserWindow, ipcMain, dialog, safeStorage, ses
     if(result.canceled||!result.filePaths[0])return {cancelled:true,workspaceRoot};
     return mutateWorkspace(async()=>{
       const nextRoot=fs.realpathSync(result.filePaths[0]),current=init();
+      await onWorkspaceChanging?.();
+      for(const controller of pendingRequests.values())controller.abort();
       await evidenceQueue;
       await current.coordination.setWorkspace(null);
       await current.agents.setWorkspace(null);
       await current.preview.handle('closeAll',{});
+      await current.githubStudio.setWorkspace(nextRoot);
       await current.execution.setWorkspace?.(nextRoot);
       await current.workspace.setWorkspace?.(nextRoot);
       await current.security.setWorkspace?.(nextRoot);
@@ -174,7 +183,7 @@ function createStudioHost({app, BrowserWindow, ipcMain, dialog, safeStorage, ses
     sender(event);
     await trusted(payload);await checkImported(payload);
     if(payload.target){const opened=await init().preview.handle('open',payload);return init().preview.handle('show',{id:opened.id});}
-    if (typeof payload.html !== 'string' || Buffer.byteLength(payload.html)>8*1024*1024) throw new Error('Preview HTML must be smaller than 8 MB.');
+    if (typeof payload.html !== 'string') throw new Error('Preview HTML must be text.');
     const {createPreviewPolicy,configurePreviewContents,preparePreviewHtml}=require('./security');
     const policy=createPreviewPolicy({allowNetworkOrigins:payload.allowNetworkOrigins || []});
     const isolated = session.fromPartition('preview-'+require('node:crypto').randomUUID());
@@ -211,10 +220,53 @@ function createStudioHost({app, BrowserWindow, ipcMain, dialog, safeStorage, ses
       const securityModule=require('./security');
       securityModule.validatePayload(payload);
       if(['workspace','execution','agents'].includes(domain)&&payload.workspaceRoot&&payload.workspaceRoot!==workspaceRoot)throw Error('The selected workspace changed. Reload the editor before reading or saving.');
-      if (!['execution','workspace','security','host','agents','coordination','setup'].includes(domain)) throw new Error('Unknown studio capability.');
+      if (!['execution','workspace','security','host','agents','coordination','setup','githubStudio'].includes(domain)) throw new Error('Unknown studio capability.');
       if(payload.workspaceRoot!==undefined&&payload.workspaceRoot!==workspaceRoot)throw Error('Workspace changed. Reopen the record in its original project before continuing.');
+      if(domain==='githubStudio'){
+        if(!workspaceRoot||payload.workspaceRoot!==workspaceRoot)throw Error('Choose and reopen the selected project before using the repository studio.');
+        if(['publish','reconcile'].includes(action))await trusted(payload);
+        return await init().githubStudio.handle(action,payload);
+      }
       if(domain==='host') {
         if(action==='status')return {workspaceRoot,version:app.getVersion(),platform:process.platform,electron:process.versions.electron,node:process.versions.node,signing:'Not configured'};
+        if(action==='apiAtlasAiOptions')return await init().agents.authors(payload);
+        if(action==='apiAtlasAiSaveProvider'){await trusted(payload);return await init().agents.saveAuthor(payload,protectNative);}
+        if(action==='apiAtlasAiGenerate'){
+          const binding=workspaceRoot;await trusted(payload);
+          if(!binding||binding!==workspaceRoot||payload.workspaceRoot!==binding)throw Error('Workspace changed before AI generation.');
+          if(!/^[a-f0-9-]{36}$/.test(payload.requestId||''))throw Error('A unique AI request ID is required.');
+          const boardId=/^agent:([^:]+):/.exec(payload.authorId||'')?.[1];
+          if(boardId){const board=await init().workspace.handle('read',{collection:'agent-boards',id:boardId,workspaceRoot:binding});if(board)await checkImported(board.value);}
+          const apiProvider=/^api:(openai|anthropic|google|custom)$/.exec(payload.authorId||'')?.[1];
+          if(apiProvider){const profile=await init().workspace.handle('read',{collection:'api-ai-providers',id:apiProvider,workspaceRoot:binding});if(profile)await checkImported(profile.value);}
+          if(binding!==workspaceRoot)throw Error('Workspace changed before AI generation.');
+          const key=event.sender.id+':'+payload.requestId;if(pendingRequests.has(key))throw Error('This AI request is already active.');
+          const controller=new AbortController();pendingRequests.set(key,controller);
+          try{return await init().apiAssistant.generate(payload,controller.signal);}finally{pendingRequests.delete(key);}
+        }
+        if(action==='apiAtlasAiReview'){await trusted(payload);return await init().apiAssistant.review(payload);}
+        if(action==='apiAtlasRun'){
+          const requestedBinding=workspaceRoot;
+          await trusted(payload);
+          if(requestedBinding!==workspaceRoot||payload.workspaceRoot!==workspaceRoot)throw Error('Workspace changed before the API run.');
+          if(!/^[a-f0-9-]{36}$/.test(payload.requestId||''))throw Error('A unique request ID is required.');
+          const binding=workspaceRoot,service=init(),key=event.sender.id+':'+payload.requestId;
+          if(pendingRequests.has(key))throw Error('This test run is already active.');
+          const record=await service.workspace.handle('read',{collection:'api-atlas',id:'workspace'});
+          if(binding!==workspaceRoot)throw Error('Workspace changed before the API run.');
+          if(!record||record.revision!==payload.expectedRevision)throw Error('API tests changed in another window. Reload the API map before running.');
+          const test=record.value.tests.find(test=>test.id===payload.testId);
+          if(!test)throw Error('Save this endpoint test before running it.');
+          const controller=new AbortController();pendingRequests.set(key,controller);
+          let result;
+          try{result=await require('./api-atlas/runner.cjs').run(test,{resolveSecret:reference=>service.security.resolveSecret(reference),redact,signal:controller.signal});}
+          catch(error){result={status:controller.signal.aborted?'CANCELLED':'ERROR',error:redact(error.message),checks:[],finishedAt:new Date().toISOString()};}
+          finally{pendingRequests.delete(key);}
+          if(binding!==workspaceRoot)throw Error('Workspace changed during the API run. Reopen the original project.');
+          const run=redact({id:payload.requestId,testId:test.id,endpointId:test.endpointId,definitionVersion:test.updatedAt,name:test.name,definition:test,...result});
+          await service.workspace.handle('transact',{records:[{collection:'api-atlas-runs',id:run.id,value:run,expectedRevision:null}]});
+          return run;
+        }
         if(action==='request'){await trusted(payload);if(!/^[a-f0-9-]{36}$/.test(payload.requestId||''))throw Error('A unique request ID is required.');const key=event.sender.id+':'+payload.requestId;if(pendingRequests.has(key))throw Error('Request ID is already active.');const controller=new AbortController();pendingRequests.set(key,controller);try{return await require('./protected-request.cjs').protectedRequest(payload,{resolveSecret:reference=>init().security.resolveSecret(reference),redact,signal:controller.signal});}finally{pendingRequests.delete(key);}}
         if(action==='cancelRequest'){const key=event.sender.id+':'+payload.requestId;const controller=pendingRequests.get(key);controller?.abort();return {cancelled:!!controller};}
         if(action==='diagnostics'){const data=redact({version:app.getVersion(),platform:process.platform,electron:process.versions.electron,node:process.versions.node,workspaceSelected:!!workspaceRoot,capabilities:await init().execution.handle('capabilities',{}),security:await init().security.handle('diagnostics',{})});let serialized=JSON.stringify(data);for(const value of [workspaceRoot,require('node:os').homedir()].filter(Boolean)){serialized=serialized.split(JSON.stringify(value).slice(1,-1)).join('[local path]');}return JSON.parse(serialized);}
@@ -321,7 +373,7 @@ function createStudioHost({app, BrowserWindow, ipcMain, dialog, safeStorage, ses
       } catch(error) { return {__lvxError:{code:typeof error.code==='string'?error.code:'OPERATION_FAILED',message:redact(error.message),details:redact(error.details||null)}}; }
     });
   }
-  async function close(){for(const controller of pendingRequests.values())controller.abort();pendingRequests.clear();if(services){await services.setup.close();await services.coordination.close();await services.agents.close();await services.preview.handle('closeAll',{});await services.execution.close?.();await evidenceQueue;await services.workspace.close?.();await services.security.close?.();}}
+  async function close(){for(const controller of pendingRequests.values())controller.abort();pendingRequests.clear();if(services){await services.githubStudio.close();await services.setup.close();await services.coordination.close();await services.agents.close();await services.preview.handle('closeAll',{});await services.execution.close?.();await evidenceQueue;await services.workspace.close?.();await services.security.close?.();}}
   async function restoreWorkspace(){
     const file=path.join(app.getPath('userData'),'studio','selected-workspace.json');if(!fs.existsSync(file))return;
     try{const saved=JSON.parse(fs.readFileSync(file,'utf8'));if(typeof saved.workspaceRoot!=='string'||!fs.statSync(saved.workspaceRoot).isDirectory())return;workspaceRoot=fs.realpathSync(saved.workspaceRoot);init();}catch{workspaceRoot=null;return;}

@@ -5,26 +5,28 @@ export function compileSteps(steps,{engine='javascript'}={}) {
   let index=0;
   const literal=v=>{const text=String(v??'');if(/secret:[a-f0-9-]{36}/i.test(text))throw Error('Protect secret step values with prepareVisualExecution before compiling.');return JSON.stringify(text);};
   const lines=[`const values = Object.assign({}, parameters, typeof inputs === 'object' ? inputs : {});`, `for (const [key, resolved] of Object.entries(parameters)) if (key.startsWith('__lvx_secret_')) values[key] = resolved;`, String.raw`const value = text => String(text).replace(/\{\{([\w.-]+)\}\}/g, (_, key) => { if (!Object.hasOwn(values,key)) throw new Error('Missing parameter: ' + key); return String(values[key]); });`];
-  function walk(items,depth=0){if(depth>12)throw Error('Steps are nested too deeply.');for(const s of items){const n=++index;if(index>1000)throw Error('A test can contain at most 1,000 steps.');const a=`value(${literal(s.actual)})`,b=`value(${literal(s.expected)})`;
+  const stack=[{items:steps,offset:0}],active=new WeakSet([steps]);
+  function children(items){if(!Array.isArray(items))throw Error('Nested steps must be an array.');if(active.has(items))throw Error('Visual steps contain a cycle.');active.add(items);stack.push({items,offset:0,close:'}'});}
+  while(stack.length){const frame=stack.at(-1);if(frame.offset===frame.items.length){stack.pop();active.delete(frame.items);if(frame.close)lines.push(frame.close);continue;}const s=frame.items[frame.offset++];if(!s||typeof s!=='object')throw Error('Each visual step needs a configuration.');const n=++index;const a=`value(${literal(s.actual)})`,b=`value(${literal(s.expected)})`;
     lines.push(`console.log(${literal('Step '+n+': '+(stepTypes[s.type]||s.type))});`);
     if(s.type==='publish'){if(!/^[\w.-]+$/.test(s.name||''))throw Error('Give the published result a name.');const type=s.valueType||'string';const types={string:b,number:`Number(${b})`,boolean:`(${b} === 'true')`,object:`JSON.parse(${b})`};if(!types[type])throw Error('Choose a supported result type.');if(type==='number')lines.push(`if (!${b}.trim() || !Number.isFinite(Number(${b}))) throw new Error('Published number must be finite at step ${n}');`);if(type==='boolean')lines.push(`if (!['true','false'].includes(${b})) throw new Error('Published boolean must be true or false at step ${n}');`);if(type==='object')lines.push(`{ const object${n}=JSON.parse(${b}); if (!object${n} || typeof object${n}!=='object' || Array.isArray(object${n})) throw new Error('Published JSON value must be an object at step ${n}'); }`);lines.push(`artifacts[${literal(s.name)}] = ${types[type]};`);}
     else if(s.type==='assign'){if(!/^[\w.-]+$/.test(s.name||''))throw Error('Give each value a name using letters, numbers, dots or underscores.');lines.push(`values[${literal(s.name)}] = ${b};`);}
     else if(s.type==='compare'||s.type==='condition'){
       const ops={equal:`${a} === ${b}`,contains:`${a}.includes(${b})`,number:`Number.isFinite(Number(${a})) && Number.isFinite(Number(${b})) && Number(${a}) >= Number(${b})`,regex:`new RegExp(${b}).test(${a})`};
       const check=ops[s.operator||'equal'];if(!check)throw Error('Choose a supported comparison.');
-      if(s.type==='condition'){lines.push(`if (${check}) {`);walk(s.children||[],depth+1);lines.push('}');}
+      if(s.type==='condition'){lines.push(`if (${check}) {`);children(s.children||[]);}
       else lines.push(`assert(${check}, ${literal(s.message||'Step '+n+' did not match the expected value')});`);
-    } else if(s.type==='repeat'){const count=Number(s.count);if(!Number.isInteger(count)||count<1||count>10000)throw Error('Repeat count must be a whole number from 1 to 10,000.');lines.push(`for (let repeat${n}=0; repeat${n}<${count}; repeat${n}++) {`);walk(s.children||[],depth+1);lines.push('}');}
-    else if(s.type==='http'){lines.push(`{const response${n}=await fetch(value(${literal(s.url)}), {method:${literal(s.method||'GET')}, signal:AbortSignal.timeout(30000)}); assert(response${n}.status === Number(value(${literal(s.status||200)})), 'Unexpected HTTP status at step ${n}'); values[${literal(s.name||'responseBody')}]=await response${n}.text();}`);}
+    } else if(s.type==='repeat'){const count=Number(s.count);if(!Number.isSafeInteger(count)||count<1)throw Error('Repeat count must be a positive safe integer.');lines.push(`for (let repeat${n}=0; repeat${n}<${count}; repeat${n}++) {`);children(s.children||[]);}
+    else if(s.type==='http'){lines.push(`{const response${n}=await fetch(value(${literal(s.url)}), {method:${literal(s.method||'GET')}}); assert(response${n}.status === Number(value(${literal(s.status||200)})), 'Unexpected HTTP status at step ${n}'); values[${literal(s.name||'responseBody')}]=await response${n}.text();}`);}
     else if(['goto','fill','click','text'].includes(s.type)){
       if(engine!=='playwright')throw Error('Choose Browser steps to use page actions.');
-      if(s.type==='goto')lines.push(`await page.goto(value(${literal(s.url)}),{waitUntil:'domcontentloaded',timeout:30000});`);
+      if(s.type==='goto')lines.push(`await page.goto(value(${literal(s.url)}),{waitUntil:'domcontentloaded',timeout:0});`);
       if(s.type==='fill')lines.push(`await page.locator(${literal(s.selector)}).fill(${b});`);
       if(s.type==='click')lines.push(`await page.locator(${literal(s.selector)}).click();`);
       if(s.type==='text')lines.push(`assert((await page.locator(${literal(s.selector)}).innerText()).includes(${b}),${literal(s.message||'Expected page text was missing')});`);
     } else throw Error('Unsupported visual step: '+s.type);
-  }}
-  walk(steps);lines.push(`console.log('Completed ${index} visual steps');`);return lines.join('\n');
+  }
+  lines.push(`console.log('Completed ${index} visual steps');`);return lines.join('\n');
 }
 export function parseParameterRows(rows){const parameters={},schema={};for(const row of rows){if(!row.name||!row.name.trim())continue;if(!/^[\w.-]+$/.test(row.name)||row.name in schema||['__proto__','constructor','prototype'].includes(row.name))throw Error('Parameter names must be unique and contain no spaces.');const type=row.type||'string';if(!['string','number','boolean','secret'].includes(type))throw Error('Choose a supported parameter type.');let value=row.value??'';if(type==='number'){if(String(value).trim()==='')throw Error('Parameter '+row.name+' must be a number.');value=Number(value);if(!Number.isFinite(value))throw Error('Parameter '+row.name+' must be a number.');}if(type==='boolean'){if(!['true','false'].includes(String(value)))throw Error('Parameter '+row.name+' must be true or false.');value=String(value)==='true';}if(type==='secret'&&!/^secret:[a-f0-9-]{36}$/i.test(String(value)))throw Error('Parameter '+row.name+' requires a protected credential reference.');schema[row.name]={type:type==='secret'?'string':type,required:row.required!==false,secret:type==='secret'};parameters[row.name]=type==='secret'?{secretRef:String(value)}:value;}return {parameters,schema};}
 export function prepareVisualExecution(steps,{engine='javascript',parameters={},parameterSchema={},schema}={}){

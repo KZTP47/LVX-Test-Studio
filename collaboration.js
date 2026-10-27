@@ -43,8 +43,8 @@ class CollaborationManager {
       throw new Error('Invalid backend URL format. Must start with http:// or https://');
     }
 
-    if (!safeConfig.apiKey || safeConfig.apiKey.length < 10) {
-      throw new Error('API key must be at least 10 characters');
+    if (!safeConfig.apiKey) {
+      throw new Error('API key is required');
     }
 
     return this._persistProtected(this.BACKEND_CONFIG_KEY,safeConfig);
@@ -87,8 +87,6 @@ class CollaborationManager {
     }
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
       const response = await this._request(`${config.backendUrl}/health`, {
         method: 'GET',
@@ -96,10 +94,9 @@ class CollaborationManager {
           'X-API-Key': config.apiKey,
           'Content-Type': 'application/json'
         },
-        signal: controller.signal
+        timeout: 0
       });
 
-      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`Backend returned ${response.status}: ${response.statusText}`);
@@ -309,7 +306,7 @@ class CollaborationManager {
 
     // Include execution history if requested
     if (includeHistory && window.testHistoryManager) {
-      exportData.history = window.testHistoryManager.getSuiteHistory(suite.id, 50) || [];
+      exportData.history = window.testHistoryManager.getSuiteHistory(suite.id) || [];
     }
 
     // Create downloadable JSON file
@@ -542,11 +539,7 @@ class CollaborationManager {
 
     versions.push(snapshot);
 
-    // Keep only last 20 versions per suite
-    if (versions.length > 20) {
-      console.log(`Removing old versions, keeping last 20`);
-      versions.splice(0, versions.length - 20);
-    }
+    // Preserve complete version history; deletion is an explicit user action.
 
     return this._persistProtected(`versions_${suite.id}`,versions,snapshot);
   }
@@ -785,16 +778,7 @@ class CollaborationManager {
       });
     }
 
-    // Sanitize assertions (remove sensitive expected values)
-    if (clean.assertions && Array.isArray(clean.assertions)) {
-      clean.assertions.forEach(assertion => {
-        if (assertion.expected && typeof assertion.expected === 'string') {
-          if (assertion.expected.length > 100) {
-            assertion.expected = assertion.expected.substring(0, 100) + '... [truncated]';
-          }
-        }
-      });
-    }
+    // Preserve complete ordinary assertion text; sensitive fields were redacted above.
 
     return clean;
   }

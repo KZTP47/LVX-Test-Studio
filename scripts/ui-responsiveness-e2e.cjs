@@ -1,0 +1,54 @@
+'use strict';
+// Isolated Electron + real production IPC/SQLite. Only optional discovery is
+// deliberately held, with labelled responses; no real AI provider is contacted.
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
+const {_electron}=require('playwright'),root=path.resolve(__dirname,'..'),packaged=process.argv.includes('--packaged'),baseline=process.argv.includes('--baseline');
+async function main(){
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'lvx-ui-perf-')),workspace=path.join(dir,'project'),out=path.join(root,'output/ui-responsiveness');fs.mkdirSync(workspace);fs.mkdirSync(out,{recursive:true});
+ const checks=[],timings={},errors=[];let app,page,failure='';const suffix=baseline?'baseline':packaged?'packaged':'source';
+ const check=(name,value)=>{assert.ok(value,name);checks.push(name);console.log('PASS '+name);};
+ const invoke=(domain,action,payload={})=>page.evaluate(({domain,action,payload})=>electronAPI.studioOps.invoke(domain,action,payload),{domain,action,payload:{...payload,workspaceRoot:workspace}});
+ const action=name=>page.locator('.agent-board [data-ab-action="'+name+'"]');
+ const shot=async name=>{const data=await app.evaluate(async({BrowserWindow})=>(await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64'));fs.writeFileSync(path.join(out,name+'-'+suffix+'.png'),Buffer.from(data,'base64'));};
+ try{
+  if(packaged){const packages=require('./package-manifest.cjs');if(baseline)assert.equal(packages.packageIdentity().asarSha256,'1511b37cc4c9e85179ec823bd25878b69411cebb888149df517d1381cd1b2783','Baseline must use the preceding verified release');else packages.verifyPackage();}
+  const env={...process.env,LVX_TEST_USER_DATA:path.join(dir,'profile'),LVX_TEST_HIDDEN:'1'};delete env.ELECTRON_RUN_AS_NODE;
+  app=await _electron.launch({...(packaged?{executablePath:path.join(root,'release/win-unpacked/LVX Test Studio.exe')}:{args:[root]}),cwd:root,env});page=await app.firstWindow();page.setDefaultTimeout(15000);page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
+  await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];w.setContentSize(1700,1100);w.webContents.setBackgroundThrottling(false);});await page.waitForFunction(()=>window.LVXStudioInitialized===true);
+  await app.evaluate(({dialog},workspace)=>dialog.showOpenDialog=async()=>({canceled:false,filePaths:[workspace]}),workspace);
+  await page.evaluate(async()=>{await electronAPI.studioOps.chooseWorkspace();await electronAPI.studioOps.invoke('security','trust',{trusted:true});await LVXApp.useStorage(LVXWorkspaceBridge.createBackend());});
+  const avatar=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=180;c.height=180;const x=c.getContext('2d'),v=x.createImageData(180,180);let seed=42;for(let i=0;i<v.data.length;i++){seed=(seed*1664525+1013904223)>>>0;v.data[i]=i%4===3?255:seed>>>24;}x.putImageData(v,0,0);return c.toDataURL('image/png');});
+  for(let i=0;i<6;i++)await invoke('agents','saveBoard',{board:{schemaVersion:1,id:'board-'+i,name:i===3?'New board 3':'Board '+i,goal:'',mode:'manual',nodes:[{id:'agent',name:'Fixture agent',provider:'api',permission:'native',instructions:'',position:{x:0,y:0},appearance:{avatar},apiConfig:{provider:'custom',customEndpoint:'http://127.0.0.1/unused',model:'fixture'}}],edges:[],panels:[]},expectedRevision:null});
+  const records=Array.from({length:28},(_,i)=>({collection:'agent-messages',id:'history-'+i,expectedRevision:null,value:{id:'history-'+i,boardId:'board-0',agentId:'agent',role:'assistant',state:'completed',generation:1,sequence:i+1,createdAt:new Date().toISOString(),text:'[Labelled performance fixture] '+('historical response '.repeat(6200))}}));
+  await invoke('workspace','transact',{records});
+  await app.evaluate(({ipcMain})=>{
+   const original=ipcMain._invokeHandlers.get('studio:invoke');globalThis.__uiPerf={nativePending:0,enginePending:0,delayHost:false,hostGate:null,releaseHost:null,calls:[]};
+   ipcMain.removeHandler('studio:invoke');ipcMain.handle('studio:invoke',async(event,domain,action,payload)=>{
+    const qa=globalThis.__uiPerf,t=Date.now();
+    if(domain==='agents'&&action==='capabilities'){qa.nativePending++;await new Promise(r=>setTimeout(r,4000));qa.nativePending--;return{providers:[{id:'api',installed:true,name:'Labelled fixture API'}]};}
+    if(domain==='execution'&&action==='capabilities'){qa.enginePending++;await new Promise(r=>setTimeout(r,4000));qa.enginePending--;return{engines:[{id:'javascript',available:true,name:'Labelled JavaScript fixture'}]};}
+    if(domain==='host'&&action==='status'&&qa.delayHost){qa.delayHost=false;await new Promise(r=>qa.releaseHost=r);}
+    const result=await original(event,domain,action,payload);qa.calls.push({domain,action,ms:Date.now()-t,bytes:JSON.stringify(result).length});return result;
+   });
+  });
+  const start=Date.now();await page.evaluate(()=>LVXStudio.open('agentBoard'));await action('new').waitFor();await page.waitForFunction(()=>!document.querySelector('[data-ab-action="new"]').disabled);timings.boardControlsMs=Date.now()-start;
+  if(!baseline)check('Board controls become usable before the deliberately slow native discovery completes',timings.boardControlsMs<1500&&await app.evaluate(()=>globalThis.__uiPerf.nativePending>0));
+  await page.locator('.agent-board [name="saved-board"]').selectOption('board-3');const profiler=await page.context().newCDPSession(page);await profiler.send('Profiler.enable');await profiler.send('Profiler.start');await page.evaluate(()=>{window.__boardSwitchMs=null;let clicked=0;document.addEventListener('click',event=>{if(event.target.closest('[data-ab-action="load"]'))clicked=performance.now();},true);const observer=new MutationObserver(()=>{if(clicked&&document.querySelector('.agent-board [name="board-name"]')?.value==='New board 3'&&!document.querySelector('[data-ab-action="save"]').disabled){window.__boardSwitchMs=performance.now()-clicked;observer.disconnect();}});observer.observe(document.querySelector('.agent-board'),{subtree:true,childList:true,attributes:true});});let t=Date.now();await action('load').click();await page.waitForFunction(()=>document.querySelector('.ab-goal-summary')?.textContent.includes('New board 3')||document.querySelector('[data-ab="goal-summary"]')?.textContent.includes('New board 3')||document.querySelector('.agent-board [name="board-name"]')?.value==='New board 3');await page.waitForFunction(()=>!document.querySelector('[data-ab-action="save"]').disabled);timings.automationBoardSwitchMs=Date.now()-t;timings.selectedBoardMs=await page.evaluate(()=>window.__boardSwitchMs);fs.writeFileSync(path.join(out,'board-switch-'+suffix+'.cpuprofile'),JSON.stringify((await profiler.send('Profiler.stop')).profile));await profiler.detach();
+  if(!baseline){check('New board 3 opens and its controls accept input promptly',timings.selectedBoardMs<1200);await action('edit-goal').click();check('Board settings open while discovery is pending',await page.locator('.ab-settings').evaluate(el=>el.open));await shot('board-controls-ready');}
+  t=Date.now();await page.evaluate(()=>LVXStudio.open('readiness'));await page.locator('[data-action="setup-tool"]').first().waitFor();timings.readinessControlsMs=Date.now()-t;
+  if(!baseline){check('Runtime setup and preview controls load before slow engine discovery completes',timings.readinessControlsMs<1500&&await app.evaluate(()=>globalThis.__uiPerf.enginePending>0));await page.locator('[name="preview-html"]').fill('<p>Keep my unsaved preview</p>');await page.waitForFunction(()=>!document.querySelector('[data-action="export-diagnostics"]').disabled);check('Late diagnostics preserve entered preview text',await page.locator('[name="preview-html"]').inputValue()==='<p>Keep my unsaved preview</p>');await shot('background-readiness');}
+  if(!baseline){
+   // Delay the first navigation status reply, then choose a newer destination.
+   await app.evaluate(()=>globalThis.__uiPerf.delayHost=true);await page.evaluate(()=>{window.__oldNavigation=LVXStudio.open('security');});
+   await page.waitForFunction(async()=>true);await app.evaluate(async()=>{for(let n=0;n<100&&!globalThis.__uiPerf.releaseHost;n++)await new Promise(r=>setTimeout(r,10));if(!globalThis.__uiPerf.releaseHost)throw Error('Missing navigation control fixture');});
+   await page.evaluate(()=>LVXStudio.open('data'));await app.evaluate(()=>globalThis.__uiPerf.releaseHost());await page.evaluate(()=>window.__oldNavigation);check('A late navigation reply cannot replace the newer selected page',await page.locator('[name="dataset-name"]').count()===1&&await page.locator('[name="scan-kind"]').count()===0);
+   const pages=['start','build','workflow','runs','data','security','workspace','team','graph','githubActions','apiAtlas','machinaData','storage','agentBoard'];
+   for(const route of pages){t=Date.now();await page.evaluate(route=>LVXStudio.open(route),route);await page.waitForFunction(()=>![...document.querySelectorAll('#studio-task-surface h2,#studio-workbench h2')].some(el=>el.textContent==='Loading'));timings['navigate-'+route]=Date.now()-t;check(route+' opens promptly without an unavailable-page error',timings['navigate-'+route]<1500&&!(await page.locator('.studio-main').innerText()).includes('This section is unavailable'));}
+   await page.locator('.agent-board [name="saved-board"]').selectOption('board-3');await action('load').click();await page.waitForFunction(()=>!document.querySelector('[data-ab-action="save"]').disabled);await action('new').click();await action('save').click();await page.locator('[name="save-name"]').fill('Saved through responsive controls');await page.locator('[data-save-submit]').click();await page.locator('.ab-save-dialog').waitFor({state:'detached'});check('Real Save persists a new board after navigation and discovery',(await invoke('agents','listBoards')).records.some(r=>r.value.name==='Saved through responsive controls'));
+   check('No renderer exceptions',errors.length===0);
+  }
+  console.log('TIMINGS '+JSON.stringify(timings));console.log(baseline?'UI_RESPONSIVENESS_BASELINE_RECORDED':'UI_RESPONSIVENESS_E2E_PASSED '+checks.length+' checks');
+ }catch(error){failure=error.stack;if(page){console.error('Current notice',await page.locator('.ab-notice,.studio-notice').allTextContents().catch(()=>[]));await shot('failure').catch(()=>{});}throw error;}
+ finally{const calls=await app?.evaluate(()=>globalThis.__uiPerf?.calls||[]).catch(()=>[]);await app?.close();fs.writeFileSync(path.join(out,'last-'+suffix+'.log'),checks.map(c=>'PASS '+c).join('\n')+'\nTIMINGS '+JSON.stringify(timings)+'\nIPC '+JSON.stringify(calls)+'\n'+errors.join('\n')+'\n'+failure);}
+}
+main().catch(error=>{console.error(error.stack);process.exitCode=1;});

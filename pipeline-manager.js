@@ -1043,7 +1043,6 @@ async function runGraphPipeline(pipeline, options = {}) {
                         const filePaths = await window.electronAPI.fileOps.listFiles(repoPath, 'js');
                         consoleOutput.innerHTML += `<span class="text-gray-400">    Found ${filePaths.length} JS files.</span><br>`;
 
-                        if (filePaths.length > 500) return { status: 'ERROR', message: 'Repository exceeds 500-file scan limit; select a smaller scan target.' };
                         for (const fp of filePaths) {
                             const content = await window.electronAPI.fileOps.readFile(fp);
                             codeToScan += `\n\n// FILE: ${fp.split(/[\\/]/).pop()}\n${content}`;

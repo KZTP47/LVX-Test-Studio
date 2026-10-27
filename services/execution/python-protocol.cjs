@@ -17,7 +17,7 @@ function createProtocol({ onOutput, onResult, onError }) {
     }
     function consume(text) {
         pending += text;
-        if (pending.length > 32 * 1024 * 1024) { pending = ''; fail('Native Python result exceeded the 32 MiB in-memory protocol limit.'); return; }
+
         let index;
         while ((index = pending.indexOf('\n')) >= 0) { const line = pending.slice(0, index); pending = pending.slice(index + 1); parse(line); }
     }

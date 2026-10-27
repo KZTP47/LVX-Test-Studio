@@ -5,6 +5,29 @@ test('browser choice defaults safely and accepts only the two visible UI options
  assert.equal(browserMode(),'headless');assert.equal(browserMode('headed'),'headed');assert.equal(browserMode('headless'),'headless');
  for(const value of [null,true,false,0,'false','invalid',{},[]])assert.throws(()=>browserMode(value),/Headed.*Headless/);
 });
+
+test('graph browser preference survives reopen, stays scoped, and preserves explicit graph settings',async()=>{
+ const api=await import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(path.join(__dirname,'../graph-browser-mode.js'))).toString('base64'));
+ const items=new Map(),storage={getItem:key=>items.get(key)||null,setItem:(key,value)=>items.set(key,value)};
+ const workspace='C:\\Projects\\One',graph={id:'test-graph',browserMode:'headless'};
+ assert.equal(api.graphBrowserMode(storage,workspace),'headless');
+ api.rememberGraphBrowserMode(storage,workspace,graph.id,'headed');
+ assert.equal(api.graphBrowserMode(storage,'c:/projects/one/',graph),'headed');
+ assert.equal(api.graphBrowserMode(storage,workspace,{id:'new-graph'}),'headed');
+ assert.equal(api.graphBrowserMode(storage,workspace,{id:'explicit',browserMode:'headless'}),'headless');
+ assert.equal(api.graphBrowserMode(storage,'C:\\Projects\\Two',graph),'headless');
+ api.rememberGraphBrowserMode(storage,workspace,'other','headless');
+ assert.equal(api.graphBrowserMode(storage,workspace,graph),'headed');
+ assert.equal(api.graphBrowserMode(storage,workspace,{id:'other'}),'headless');
+ assert.throws(()=>api.rememberGraphBrowserMode(storage,workspace,graph.id,'invalid'),/Headed.*Headless/);
+ for(const key of items.keys())items.set(key,'corrupt');
+ assert.equal(api.graphBrowserMode(storage,workspace,graph),'headless');
+ assert.equal(api.graphBrowserMode(storage,workspace,{browserMode:'headed'}),'headed');
+ const blocked={getItem(){throw Error('Storage unavailable');},setItem(){throw Error('Storage unavailable');}};
+ assert.equal(api.graphBrowserMode(blocked,workspace,{browserMode:'headed'}),'headed');
+ assert.equal(api.graphBrowserMode(blocked,workspace),'headless');
+ assert.throws(()=>api.rememberGraphBrowserMode(blocked,workspace,graph.id,'headed'),/Storage unavailable/);
+});
 test('Nexus straight routing clips both ends to actual unequal card bounds in every direction',async()=>{
  const api=await import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(path.join(__dirname,'../agent-board.js'))).toString('base64'));
  const source={position:{x:100,y:120},width:230,height:210};

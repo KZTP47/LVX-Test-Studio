@@ -1,0 +1,69 @@
+'use strict';
+// Isolated Electron + production IPC/store/runner. In-memory source fixtures,
+// loopback HTTP only; no user project or portable save is created.
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),http=require('node:http'),assert=require('node:assert/strict');
+const {_electron}=require('playwright');
+const root=path.resolve(__dirname,'..'),packaged=process.argv.includes('--packaged');
+async function main(){
+ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'lvx-api-bubble-')),workspace=path.join(temp,'project'),output=path.join(root,'output/api-connection-bubble');fs.mkdirSync(workspace);fs.mkdirSync(output,{recursive:true});
+ let app,page;const requests=[],errors=[],checks=[];let rejectDraft=false;
+ const server=http.createServer((req,res)=>{requests.push(req.url);res.setHeader('content-type','application/json');res.end('{"id":42}');});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port;
+ const check=(name,ok)=>{assert.ok(ok,name);checks.push(name);console.log('PASS '+name);};
+ const invoke=(domain,action,payload={})=>page.evaluate(({domain,action,payload})=>electronAPI.studioOps.invoke(domain,action,payload),{domain,action,payload:{...payload,workspaceRoot:workspace}});
+ const shot=async name=>{await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const pixels=await app.evaluate(async({BrowserWindow})=>(await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64'));fs.writeFileSync(path.join(output,name+(packaged?'-packaged':'-source')+'.png'),Buffer.from(pixels,'base64'));};
+ const action=name=>page.locator('button[data-aa="'+name+'"]');
+ const edge=id=>page.locator('.aa-network-edge[data-connection="'+id+'"]');
+ const clickEdge=async id=>{
+  const control=edge(id);await control.scrollIntoViewIfNeeded();
+  const point=await control.evaluate(el=>{const path=el.querySelector('.aa-edge-hit'),matrix=path.getScreenCTM(),length=path.getTotalLength();for(let t=.12;t<.9;t+=.08){const p=path.getPointAtLength(length*t).matrixTransform(matrix),hit=document.elementFromPoint(p.x,p.y);if(hit?.closest('.aa-network-edge')===el)return {x:p.x,y:p.y};}throw Error('No exposed connection hit area');});await page.mouse.click(point.x,point.y);
+ };
+ const read=()=>invoke('workspace','read',{collection:'api-atlas',id:'workspace'});
+ const resize=async(width,height)=>{await app.evaluate(({BrowserWindow},{width,height})=>BrowserWindow.getAllWindows()[0].setContentSize(width,height),{width,height});await page.setViewportSize({width,height});};
+ try{
+  if(packaged)require('./package-manifest.cjs').verifyPackage();
+  const env={...process.env,LVX_TEST_USER_DATA:path.join(temp,'profile'),LVX_TEST_HIDDEN:'1'};delete env.ELECTRON_RUN_AS_NODE;
+  app=await _electron.launch({...(packaged?{executablePath:path.join(process.env.LVX_PACKAGE_DIR||path.join(root,'release/win-unpacked'),'LVX Test Studio.exe')}:{args:[root]}),cwd:root,env});page=await app.firstWindow();page.setDefaultTimeout(12000);page.on('pageerror',e=>errors.push(e.message));page.on('dialog',dialog=>rejectDraft?dialog.dismiss():dialog.accept());
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].webContents.setBackgroundThrottling(false));await resize(1600,1100);await page.waitForFunction(()=>window.LVXStudioInitialized===true);
+  await app.evaluate(({dialog},workspace)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[workspace]});},workspace);
+  await page.evaluate(async()=>{await electronAPI.studioOps.chooseWorkspace();await electronAPI.studioOps.invoke('security','trust',{trusted:true});await LVXApp.useStorage(LVXWorkspaceBridge.createBackend());});
+  const ev={kind:'Fixture source',path:'src/client.js',commit:'a'.repeat(40),line:1};
+  const services=[{id:'front',title:'Frontend',name:'fixture/front',scannedFiles:1},{id:'platform',title:'Platform',name:'fixture/platform',scannedFiles:2},{id:'health',title:'Health',name:'fixture/health',scannedFiles:1}];
+  const ep=(id,serviceId,apiServiceId,method,route)=>({id,serviceId,apiServiceId,method,path:route,baseUrl:origin,summary:method+' '+route,evidence:[ev],expectedStatus:200,schema:{type:'object',required:['id'],properties:{id:{type:'integer'}}}});
+  const atlas={version:1,scannedAt:new Date().toISOString(),coverage:'Labelled source fixtures',services,apiServices:[{id:'orders-api',repositoryId:'platform',type:'api-service',title:'Orders API',name:'orders.json',evidence:ev},{id:'catalogue-api',repositoryId:'platform',type:'api-service',title:'Catalogue API',name:'catalogue.json',evidence:ev}],externalNodes:[{id:'outside',title:'External API',name:'https://outside.invalid',type:'external'}],endpoints:[ep('orders-get','platform','orders-api','GET','/orders'),ep('orders-post','platform','orders-api','POST','/orders'),ep('catalogue-get','platform','catalogue-api','GET','/catalogue'),ep('health-get','health',null,'GET','/health')],connections:[{id:'config-orders',source:'front',target:'platform',targetApiServiceId:'orders-api',method:'CONFIG',url:origin,defaultOnly:true,evidence:ev,confidence:'Configured default'},{id:'literal-health',source:'front',target:'health',endpointId:'health-get',method:'GET',url:origin+'/health',evidence:ev,confidence:'Static URL match'},{id:'external',source:'front',externalId:'outside',method:'GET',url:'https://outside.invalid/info',evidence:ev,confidence:'Unverified provider'}],candidates:[],diagnostics:[]};
+  const initial=[{id:'imported',endpointId:'catalogue-get',kind:'api',name:'Reviewed repository test',method:'GET',url:origin+'/catalogue',expectedStatus:200,timeoutMs:2000,headers:{},updatedAt:'fixture',origin:{kind:'Postman'}},{id:'retained',endpointId:'missing',kind:'contract',name:'Retained contract',method:'GET',url:origin+'/retained',expectedStatus:200,timeoutMs:2000,headers:{},schema:{type:'object'},updatedAt:'fixture'}];
+  await invoke('workspace','transact',{records:[{collection:'api-atlas',id:'workspace',expectedRevision:null,value:{version:1,atlas,tests:initial}}]});await page.evaluate(()=>LVXStudio.open('apiAtlas'));await page.locator('.aa-network').waitFor();
+  check('Map opens without unsolicited panel or HTTP requests',await page.locator('.aa-bubble').count()===0&&requests.length===0);
+  check('Bottom library includes imported and retained tests before selecting a connection',(await page.locator('.aa-test-library').innerText()).includes('Retained contract')&&(await page.locator('.aa-test-library').innerText()).includes('Imported · Postman'));
+  await page.locator('[name="aa-service"]').selectOption('health');await page.locator('[name="aa-search"]').fill('unrelated filter');
+  await clickEdge('config-orders');await page.getByRole('dialog').waitFor();
+  check('Configured connection bubble contains only provider API operations despite page filters',await page.locator('.aa-bubble .aa-endpoints button').count()===2&&!(await page.locator('.aa-bubble .aa-map').innerText()).includes('/catalogue')&&(await page.locator('.aa-bubble').innerText()).includes('overridden at runtime'));
+  check('Popover is in the top layer with a named nonmodal dialog',await page.locator('.aa-bubble').evaluate(el=>el.matches(':popover-open')&&el.getAttribute('aria-modal')==='false'&&!!el.getAttribute('aria-labelledby')));
+  await action('new').click();await page.locator('.aa-editor [name="name"]').fill('Connection API test');
+  await page.locator('.aa-editor [name="url"]').fill('broken');await page.locator('.aa-editor button[type="submit"]').click();
+  check('Invalid form stays editable without adding a test',(await read()).value.tests.length===2&&await page.locator('.aa-editor').count()===1);
+  await page.locator('.aa-editor [name="url"]').fill(origin+'/orders');await page.locator('.aa-editor button[type="submit"]').click();await page.locator('.aa-editor').waitFor({state:'detached'});
+  let saved=(await read()).value.tests.find(t=>t.name==='Connection API test');check('Bubble saves a request on its selected provider endpoint',saved?.endpointId==='orders-get'&&saved.url===origin+'/orders'&&requests.length===0);
+  await action('tab-contract').click();await action('new').click();await page.locator('.aa-editor [name="name"]').fill('Connection contract test');
+  check('Contract draft starts with the actual selected endpoint schema',JSON.parse(await page.locator('.aa-editor [name="schema"]').inputValue()).required.includes('id'));
+  rejectDraft=true;await action('close-section').click();check('Declining close retains unsaved edits in the bubble',await page.locator('.aa-editor [name="name"]').inputValue()==='Connection contract test');rejectDraft=false;
+  await page.locator('.aa-editor button[type="submit"]').click();await page.locator('.aa-editor').waitFor({state:'detached'});await shot('connection-tests-light');
+  await page.keyboard.press('Escape');check('Escape closes the panel and returns focus to its source arrow',await page.locator('.aa-bubble').count()===0&&await edge('config-orders').evaluate(el=>el===document.activeElement));
+  check('Bottom library contains every saved API and contract definition across sections',(await read()).value.tests.length===4&&await page.locator('.aa-test-library [data-aa="run"]').count()===4);
+  await page.locator('.aa-test-library [data-aa="run"][data-test="'+saved.id+'"]').click();await page.waitForFunction(()=>document.querySelector('.aa-test-library [data-status="PASSED"]'));
+  check('Bottom library executes the real saved request and displays persisted run evidence',requests.length===1&&(await invoke('workspace','list',{collection:'api-atlas-runs'})).records.length===1);
+  await page.locator('.aa-test-library [data-aa="edit"][data-test="'+saved.id+'"]').click();check('Library Edit opens the correct endpoint bubble',await page.locator('.aa-bubble .aa-endpoints button').count()===1&&await page.locator('.aa-editor [name="name"]').inputValue()==='Connection API test');await action('close-section').click();
+  await edge('literal-health').focus();await page.keyboard.press('Enter');check('Keyboard activation opens only the literal matched endpoint',await page.locator('.aa-bubble .aa-endpoints button').count()===1&&(await page.locator('.aa-bubble .aa-map').innerText()).includes('/health'));await page.keyboard.press('Escape');
+  await page.locator('.aa-network-node[data-section="catalogue-api"]').click();check('API-description section opens only its own endpoints',await page.locator('.aa-bubble .aa-endpoints button').count()===1&&(await page.locator('.aa-bubble .aa-map').innerText()).includes('/catalogue'));await action('close-section').click();
+  await clickEdge('external');check('External connection shows evidence and a review action without borrowing source endpoints',await page.locator('.aa-bubble .aa-endpoints button').count()===0&&await action('review-connection').count()===1);
+  await action('review-connection').click();check('External request review keeps the literal URL and unverified provenance',await page.locator('.aa-editor [name="url"]').inputValue()==='https://outside.invalid/info');await action('close-section').click();check('Reviewing source does not execute external requests',requests.length===1);
+  await page.locator('.aa-network-node[data-section="orders-api"]').click();await action('new').click();await page.evaluate(()=>{document.body.classList.add('theme-dark');document.body.dataset.theme='dark';});
+  check('Dark popover inherits a dark surface and readable text',await page.locator('.aa-bubble').evaluate(el=>getComputedStyle(el).backgroundColor==='rgb(36, 54, 76)'&&getComputedStyle(el).color==='rgb(237, 244, 255)'));await shot('connection-tests-dark');
+  await resize(700,900);check('Narrow panel stays in the viewport with stacked endpoints and editor',await page.locator('.aa-bubble').evaluate(el=>{const r=el.getBoundingClientRect(),m=el.querySelector('.aa-map').getBoundingClientRect(),i=el.querySelector('.aa-inspector').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight+1&&i.top>=m.bottom-2;}));await shot('connection-tests-narrow');
+  await action('close-section').click();await page.locator('.aa-test-library').scrollIntoViewIfNeeded();await shot('all-tests-library');
+  await page.locator('.aa-test-library [data-aa="edit"][data-test="retained"]').click();check('Retained tests open their original URL and contract in a dedicated panel',await page.locator('.aa-editor [name="url"]').inputValue()===origin+'/retained'&&await page.locator('.aa-bubble .aa-endpoints button').count()===1);await action('close-section').click();
+  await page.locator('.aa-test-library [data-aa="delete"][data-test="imported"]').click();await page.waitForFunction(()=>document.querySelectorAll('.aa-test-library [data-aa="run"]').length===3);check('Library Delete removes only the chosen definition and keeps previous run evidence',(await read()).value.tests.length===3&&(await invoke('workspace','list',{collection:'api-atlas-runs'})).records.length===1);
+  await page.evaluate(()=>LVXStudio.open('testSuites'));await page.evaluate(()=>LVXStudio.open('apiAtlas'));await page.locator('.aa-test-library').waitFor();check('All definitions and run evidence survive closing and reopening the page',await page.locator('.aa-test-library [data-aa="run"]').count()===3&&(await page.locator('.aa-test-library').innerText()).includes('PASSED'));
+  check('Renderer has no uncaught errors',errors.length===0);console.log('API_CONNECTION_BUBBLE_E2E_PASSED '+checks.length+' checks');
+ }catch(error){if(page){console.error('Renderer errors:',errors);await shot('failure').catch(()=>{});}throw error;}finally{await app?.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+}
+main().catch(e=>{console.error(e.stack);process.exitCode=1;});

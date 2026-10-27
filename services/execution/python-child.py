@@ -22,8 +22,7 @@ class Output:
         if value:
             if config.get("validationCode"):
                 captured_size += len(str(value))
-                if captured_size > 8 * 1024 * 1024:
-                    raise ValueError("Validation output exceeds the 8 MB limit")
+
                 captured[self.kind].append(str(value))
             send({"type": self.kind, "text": str(value)})
         return len(value)

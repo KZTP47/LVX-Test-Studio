@@ -81,10 +81,10 @@ test('B07: result rendering orders critical before high and low',()=>{
     const html=h.context.document.getElementById('security-vulnerabilities-list').innerHTML;
     assert.ok(html.indexOf('critical-marker')<html.indexOf('high-marker'));assert.ok(html.indexOf('high-marker')<html.indexOf('low-marker'));
 });
-test('B08: history retains 100 scans with details and newest-first identity',()=>{
+test('B08: history retains all 120 scans with details and newest-first identity',()=>{
     const h=security(),m=h.context.securityManager;
     for(let i=0;i<120;i++)m._saveToHistory({id:i,summary:{critical:1},vulnerabilities:[{severity:'CRITICAL',description:'fixture'}]});
-    const history=m.getHistory(1000);assert.equal(history.length,100);assert.equal(history[0].id,119);assert.equal(history[99].id,20);assert.equal(history[0].vulnerabilities[0].severity,'CRITICAL');
+    const history=m.getHistory(1000);assert.equal(history.length,120);assert.equal(history[0].id,119);assert.equal(history[119].id,0);assert.equal(history[0].vulnerabilities[0].severity,'CRITICAL');
 });
 const unit=extra=>harness(['unit-testing.js'],extra);
 test('B09/B10/B11: shared const fixtures, awaited promises and teardown on failure',async()=>{

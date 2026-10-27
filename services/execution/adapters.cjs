@@ -1,20 +1,19 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
 const { pythonEnvironment } = require('./python-environment.cjs');
 const ENGINES = ['javascript', 'playwright', 'python', 'robot', 'java', 'csharp', 'jest', 'junit', 'nunit', 'pytest'];
-function probe(command, args, env, acceptedCodes = [0]) {
-    const r = spawnSync(command, args, { encoding: 'utf8', timeout: 5000, windowsHide: true, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', ...env } });
-    return { available: !r.error && acceptedCodes.includes(r.status), version: String(r.stdout || r.stderr || r.error?.message || '').trim().split(/\r?\n/).slice(0, 2).join(' '), command };
+async function probe(command,args,env,acceptedCodes=[0],signal){
+ try{const r=await require('../machina/process.cjs').runProcess(command,args,{env,signal,killTree:require('../process-control.cjs').stopProcessTree});return {available:acceptedCodes.includes(r.exitCode),version:String(r.stdout||r.stderr||'').trim(),command};}
+ catch(error){if(signal?.aborted)throw error;return {available:false,version:error.message,command};}
 }
-function capabilities(options = {}) {
+async function capabilities(options = {}) {
     const p = options.runtimePaths || {};
-    const node = probe(p.node || options.nodeExecutable || process.execPath, ['--version']);
-    const python = probe(p.python || 'python', ['--version']);
-    const java = probe(p.java || 'java', ['-version']);
-    const javac = probe(p.javac || 'javac', ['-version']);
-    const dotnet = probe(p.dotnet || 'dotnet', ['--list-sdks']);
+    const node = await probe(p.node || options.nodeExecutable || process.execPath, ['--version'],undefined,[0],options.signal);
+    const python = await probe(p.python || 'python', ['--version'],undefined,[0],options.signal);
+    const java = await probe(p.java || 'java', ['-version'],undefined,[0],options.signal);
+    const javac = await probe(p.javac || 'javac', ['-version'],undefined,[0],options.signal);
+    const dotnet = await probe(p.dotnet || 'dotnet', ['--list-sdks'],undefined,[0],options.signal);
     dotnet.available = dotnet.available && /\d+\.\d+\.\d+/.test(dotnet.version);
     const jestPath = options.workspaceRoot && path.join(options.workspaceRoot, 'node_modules', 'jest', 'bin', 'jest.js');
     const junitJar = p.junitJar || null;
@@ -33,7 +32,7 @@ function capabilities(options = {}) {
         const browserRoots=[...(p.browserRoot?[p.browserRoot]:[]),...(process.env.PLAYWRIGHT_BROWSERS_PATH?[process.env.PLAYWRIGHT_BROWSERS_PATH]:[resources&&path.join(resources,'playwright-browsers'),path.resolve(__dirname,'../../.external/playwright-browsers')])].filter(Boolean);
         for(const root of browserRoots)if(fs.existsSync(root))for(const folder of fs.readdirSync(root))if(/^chromium-\d+$/.test(folder))for(const executable of ['chrome-win64/chrome.exe','chrome-linux/chrome','chrome-linux64/chrome','chrome-mac/Chromium.app/Contents/MacOS/Chromium'])if(fs.existsSync(path.join(root,folder,executable)))playwrightAvailable=true;
     }catch{}
-    return { engines: ENGINES.map(id => {
+    const settled=await Promise.allSettled(ENGINES.map(async id => {
         let runtime = node, prerequisite = '';
         if (['python','pytest','robot'].includes(id)) runtime = python;
         if (['java','junit'].includes(id)) runtime = { ...java, available: java.available && javac.available };
@@ -43,14 +42,16 @@ function capabilities(options = {}) {
         if (id === 'playwright') runtime = {...node,available:node.available&&playwrightAvailable,version:playwrightVersion};
         if (id === 'jest') runtime = { ...node, available: node.available && !!jestPath && fs.existsSync(jestPath) };
         if (id === 'junit') runtime = { ...runtime, available: runtime.available && !!junitJar && fs.existsSync(junitJar) };
-        if (id === 'pytest') runtime = probe(p.python || 'python', ['-m', 'pytest', '--version'], pythonEnvironment({resourcePath:options.browserResourcePath}));
-        if (id === 'robot') { runtime = probe(p.python || 'python', ['-m', 'robot', '--version'], pythonEnvironment({resourcePath:options.browserResourcePath}), [0, 251]); runtime.available = runtime.available && /^Robot Framework \d/.test(runtime.version); runtime.browserAvailable = playwrightAvailable; }
+        if (id === 'pytest') runtime = await probe(p.python || 'python', ['-m', 'pytest', '--version'], pythonEnvironment({resourcePath:options.browserResourcePath}),[0],options.signal);
+        if (id === 'robot') { runtime = await probe(p.python || 'python', ['-m', 'robot', '--version'], pythonEnvironment({resourcePath:options.browserResourcePath}), [0, 251],options.signal); runtime.available = runtime.available && /^Robot Framework \d/.test(runtime.version); runtime.browserAvailable = playwrightAvailable; }
         if (!runtime.available) prerequisite = ({playwright:'Run npm run setup to install the pinned Playwright Chromium browser.',jest:'Install Jest in the selected project (npm install --save-dev jest).',junit:'Install a JDK and configure runtimePaths.junitJar to a JUnit Platform Console Standalone JAR.',nunit:'Install .NET SDK and add Microsoft.NET.Test.Sdk, NUnit and NUnit3TestAdapter to your project.',pytest:'Install Python and pytest (python -m pip install pytest).',java:'Install a JDK including javac.',csharp:'Install .NET SDK.',python:'Install Python 3.'})[id] || 'Install Node.js.';
         if(id==='robot'&&!runtime.available)prerequisite='Install Python 3 and the pinned Robot Framework package. BrowserLibrary additionally requires bundled Chromium.';
         if(id==='nunit'&&dotnet.available&&!nunitProjectReady)prerequisite='Choose an NUnit project directory whose .csproj references Microsoft.NET.Test.Sdk, NUnit and NUnit3TestAdapter. Restore its packages before Run.';
         const secretParameters=!['jest','junit','nunit','pytest'].includes(id);
         return { id, ...runtime, runtimeAvailable, prerequisite, secretParameters, secretParametersPrerequisite:secretParameters?null:'This framework writes reports to disk. Vault-backed parameters require a memory-only JavaScript, Playwright, Python or Robot engine.', debugger: { pause: id === 'javascript', resume: id === 'javascript', stepOver: id === 'javascript', variables: id === 'javascript', breakpoints: id === 'javascript', reason: id === 'javascript' ? null : 'This adapter does not expose an interactive debugger. Use its native IDE debugger; cancellation and output are available here.' } };
-    }), runtimes: { node, python, java, javac, dotnet } };
+    }));
+    const failure=settled.find(item=>item.status==='rejected');if(failure)throw failure.reason;
+    return {engines:settled.map(item=>item.value),runtimes:{node,python,java,javac,dotnet}};
 }
 function attributes(text) { const out = {}; for (const m of text.matchAll(/([\w:-]+)\s*=\s*["']([^"']*)["']/g)) out[m[1]] = m[2]; return out; }
 function xmlText(text) { return String(text||'').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1').replace(/<[^>]+>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&').trim(); }

@@ -16,6 +16,8 @@ The `assets/vendor` files are runtime resources used by the app, including its o
 
 ## Check before committing
 
+Follow the [pre-upload review workflow](PRE-UPLOAD-REVIEW.md). A complete local audit and the user's explicit decision are required before publishing. The local commit and push hooks reject private files even when force-added; an audit never grants approval by itself.
+
 ```text
 node scripts/verify-repository-contents.cjs check
 node scripts/verify-public-files.cjs check

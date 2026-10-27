@@ -2,7 +2,7 @@
 const crypto = require('node:crypto');
 
 function inventory(content, format) {
-  if (typeof content !== 'string' || content.length > 32 * 1024 * 1024) throw new Error('Inventory input must be text below 32 MiB');
+  if (typeof content !== 'string') throw new Error('Inventory input must be text');
   const packages = new Map(), unresolved = [];
   const add = (ecosystem, name, version, location) => {
     const exact = ecosystem === 'npm'

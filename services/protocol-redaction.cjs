@@ -4,6 +4,7 @@ const engines=new Set(['workflow','javascript','playwright','python','robot','ja
 const nodeTypes=new Set(require('./machina-catalog.cjs').nodes.map(node=>node.id));
 for(const type of nodeTypes)engines.add(type);
 const uuid=value=>typeof value==='string'&&/^[a-f0-9-]{36}$/.test(value);
+function redactSchema(schema,redact){if(Array.isArray(schema))return schema.map(value=>redactSchema(value,redact));if(schema&&typeof schema==='object')return Object.fromEntries(Object.entries(schema).map(([key,value])=>[key,redactSchema(value,redact)]));return typeof schema==='string'?redact(schema):schema;}
 // Preserve typed control fields, never a similarly named field inside user evidence.
 function redactRun(run,redact){
  const safe=redact(run);
@@ -33,6 +34,12 @@ function redactReview(review,redact){
 function redactProjectRecord(collection,value,redact){
  if(collection==='runs')return redactRun(value,redact);
  const safe=redact(value);
+  if(collection==='api-atlas') {
+    // Property names such as "token" are part of a schema's assertion grammar,
+    // not credential fields. Preserve contract structure and schema literals.
+    for(const [source,target] of [[value?.tests,safe?.tests],[value?.atlas?.endpoints,safe?.atlas?.endpoints]])for(let i=0;i<(source?.length||0);i++)if(source[i].schema!==undefined)target[i].schema=redactSchema(source[i].schema,redact);
+    return safe;
+  }
  if(!['checks','suites','workflows','pipelines','execution-config','datasets','versions'].includes(collection))return safe;
  const types=new Set(['string','number','integer','boolean','object','array','any','date','email']);
  function restore(source,target,path=[]){
@@ -43,6 +50,7 @@ function redactProjectRecord(collection,value,redact){
   if(typeof source.language==='string'&&[...engines,'website','security','unit'].includes(source.language))target.language=source.language;
   if(uuid(source.id))target.id=source.id;
   if(types.has(source.type)&&path.some(key=>['parameterSchema','parameter_schema','schema','columns'].includes(key)))target.type=source.type;
+  if(source.schema!==undefined)target.schema=redactSchema(source.schema,redact);
   for(const [key,child]of Object.entries(source))if(child&&typeof child==='object')restore(child,target[key],[...path,key]);
  }
  restore(value,safe);return safe;

@@ -8,16 +8,15 @@ const GraphEngine = require('../../graph-engine.js');
 const {ENGINES} = require('../execution/adapters.cjs');
 const {verifyArchive, scrub} = require('../workspace/archive.cjs');
 const ALLOWED = new Set(['suites','checks','workflows','datasets']);
-const KEY=/^[a-zA-Z0-9][a-zA-Z0-9_.@:-]{0,127}$/;
+const KEY=/^[a-zA-Z0-9][a-zA-Z0-9_.@:-]*$/;
 const VISUAL_STEPS=new Set(['compare','assign','publish','http','repeat','condition','goto','fill','click','text']);
 function validateCheckShape(check) {
   if(!ENGINES.includes(check.engine))throw Error('Unsupported check engine: '+check.engine);
   if(!Array.isArray(check.steps))throw Error('A saved test needs a steps array.');
   if(check.customSource!==undefined&&typeof check.customSource!=='boolean')throw Error('Custom source must be on or off.');
   if(check.parameterRows!==undefined&&!Array.isArray(check.parameterRows))throw Error('Test parameters must be a list.');
-  let count=0;
-  const walk=(steps,depth=0)=>{if(depth>12)throw Error('Steps are nested too deeply.');for(const step of steps){if(!step||!VISUAL_STEPS.has(step.type))throw Error('Unsupported visual step: '+step?.type);if(++count>1000)throw Error('A test can contain at most 1,000 steps.');if(step.children!==undefined){if(!Array.isArray(step.children))throw Error('Nested test steps must be a list.');walk(step.children,depth+1);}}};
-  walk(check.steps);
+  const pending=[check.steps];
+  while(pending.length){for(const step of pending.pop()){if(!step||!VISUAL_STEPS.has(step.type))throw Error('Unsupported visual step: '+step?.type);if(step.children!==undefined){if(!Array.isArray(step.children))throw Error('Nested test steps must be a list.');pending.push(step.children);}}}
   if(['jest','junit','nunit','pytest'].includes(check.engine)) {
     if(typeof check.projectPath!=='string'||!check.projectPath.trim())throw Error('A native project test needs a project folder.');
   } else if(check.customSource||!['javascript','playwright'].includes(check.engine)) {
@@ -26,7 +25,7 @@ function validateCheckShape(check) {
   } else if(!check.steps.length)throw Error('Add at least one visual test step.');
 }
 function parseGeneratedTests(text, filename='agent reply') {
-  if(typeof text!=='string'||Buffer.byteLength(text)>32*1024*1024)throw Error('Choose a JSON export smaller than 32 MB.');
+  if(typeof text!=='string')throw Error('Choose a JSON text export.');
   let data;
   const blocks=[...text.matchAll(/```(?:json|lvx-tests|lvx-workspace)\s*\n([\s\S]*?)```/gi)].map(m=>m[1]);
   for(const candidate of [text,...blocks]) {try {const parsed=JSON.parse(candidate);if(parsed?.payload?.records||parsed?.records||parsed?.suites||parsed?.checks){data=parsed;break;}}catch{}}
@@ -34,7 +33,7 @@ function parseGeneratedTests(text, filename='agent reply') {
   if(data.format==='lvx-workspace') {const result=verifyArchive(data);if(!result.valid)throw Error(result.errors.join(' '));}
   let records=data.payload?.records||data.records;
   if(!records)records=[...(data.suites||[]).map(value=>({collection:'suites',id:value.id||crypto.randomUUID(),value})),...(data.checks||[]).map(value=>({collection:'checks',id:value.id||crypto.randomUUID(),value}))];
-  if(!Array.isArray(records)||records.length>1000)throw Error('Use a bundle with 1–1,000 test, data and workflow records.');
+  if(!Array.isArray(records))throw Error('Use a bundle containing test, data and workflow records.');
   const ignored=records.filter(r=>!ALLOWED.has(r?.collection)).length;
   records=records.filter(r=>ALLOWED.has(r?.collection)).map(r=>JSON.parse(JSON.stringify(r)));
   if(!records.some(r=>['checks','suites'].includes(r.collection)))throw Error('This file contains no saved tests. Export the tests from the agent project first.');

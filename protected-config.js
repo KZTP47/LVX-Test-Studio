@@ -14,7 +14,7 @@
      for(const [name,v]of Object.entries(parameters))if(schema[name]?.secret===true||secretField.test(name)||reference(v)||reference(v?.secretRef)){
       if(v&&typeof v==='object'&&reference(v.secretRef)){schema[name]={...schema[name],type:'string',secret:true};changed=true;continue;}
       if(typeof v!=='string')throw Error('Secret parameter '+name+' must be a credential reference or text to encrypt.');
-      const stored=reference(v)?{reference:v}:await invoke('security','storeSecret',{label:(label+path+'.parameters.'+name).slice(0,120),value:v});parameters[name]={secretRef:stored.reference};schema[name]={...schema[name],type:'string',secret:true};changed=true;
+      const stored=reference(v)?{reference:v}:await invoke('security','storeSecret',{label:(label+path+'.parameters.'+name),value:v});parameters[name]={secretRef:stored.reference};schema[name]={...schema[name],type:'string',secret:true};changed=true;
      }
      if(changed)source={...item,parameters,[schemaKey]:schema};
     }
@@ -25,7 +25,7 @@
    if(/^(?:headers|headersJson|headerJson|body|requestBody)$/i.test(key)&&/^[\s]*[\[{]/.test(item)){let parsed;try{parsed=JSON.parse(item);}catch{return item;}return JSON.stringify(await visit(parsed,path,parent,key));}
    const publicFirebase=path.includes('.firebaseConfig.');
    const passwordStep=parent&&/password|passwd|api[_-]?key|access[_-]?token/i.test(String(parent.selector||parent.name||parent.field||''))&&['value','expected','text'].includes(key)&&/fill|input|type/i.test(String(parent.action||parent.type||''));
-   if(!publicFirebase&&(secretField.test(key)||(key==='value'&&secretField.test(parent?.key||parent?.name||''))||(key==='value'&&(parent?.secret===true||parent?.isSecret===true))||passwordStep||/^https?:\/\/[^/]*:[^/]*@/i.test(item))){const stored=await invoke('security','storeSecret',{label:(label+path).slice(0,120),value:item});return stored.reference;}
+   if(!publicFirebase&&(secretField.test(key)||(key==='value'&&secretField.test(parent?.key||parent?.name||''))||(key==='value'&&(parent?.secret===true||parent?.isSecret===true))||passwordStep||/^https?:\/\/[^/]*:[^/]*@/i.test(item))){const stored=await invoke('security','storeSecret',{label:(label+path),value:item});return stored.reference;}
    return item;
   }
   return visit(value);
@@ -39,7 +39,7 @@
   if(unavailable)throw Error('The saved sign-in for '+unavailable.label+' needs re-entry. Open Repair saved connection. Your other connections are available.');
   if(options.signal?.aborted)throw new DOMException('The request was cancelled.','AbortError');
   const requestId=crypto.randomUUID();
-  const payload={requestId,url:String(url),method:options.method||'GET',headers,timeoutMs:Number(options.timeout||30000),...(body!==undefined?{body}:{})};
+  const payload={requestId,url:String(url),method:options.method||'GET',headers,timeoutMs:Number(options.timeout??0),...(body!==undefined?{body}:{})};
   const pending=invoke('host','request',payload);let abort;
   try{const result=options.signal?await Promise.race([pending,new Promise((_,reject)=>{abort=()=>{void invoke('host','cancelRequest',{requestId}).catch(()=>{});reject(new DOMException('The request was cancelled.','AbortError'));};options.signal.addEventListener('abort',abort,{once:true});if(options.signal.aborted)abort();})]):await pending;return new Response([204,205,304].includes(result.status)?null:result.body,{status:result.status,statusText:result.statusText,headers:result.headers});}
   finally{if(abort)options.signal.removeEventListener('abort',abort);}
@@ -66,7 +66,7 @@
     }
    }
    if(Array.isArray(item)){const result=[];for(let i=0;i<item.length;i++)result.push(await walk(item[i],[...path,i],labels));return result;}
-   if(item&&typeof item==='object'){const result={},nextLabels=item.name?[...labels,String(item.name).slice(0,100)]:labels;for(const [field,child]of Object.entries(item))result[field]=await walk(child,[...path,field],nextLabels);return result;}
+   if(item&&typeof item==='object'){const result={},nextLabels=item.name?[...labels,String(item.name)]:labels;for(const [field,child]of Object.entries(item))result[field]=await walk(child,[...path,field],nextLabels);return result;}
    return item;
   }
   const result=await walk(value);
@@ -79,7 +79,7 @@
   if(!locations.length)throw Error('This connection changed. Refresh the list before repairing it.');
   let next='';
   if(retryOriginal)next=await protect(record.encrypted,record.label);
-  else if(!forget){if(typeof replacement!=='string'||!replacement.trim())throw Error('Enter the replacement credential, or choose Forget saved sign-in.');next=(await invoke('security','storeSecret',{label:record.label.slice(0,120),value:replacement})).reference;}
+  else if(!forget){if(typeof replacement!=='string'||!replacement.trim())throw Error('Enter the replacement credential, or choose Forget saved sign-in.');next=(await invoke('security','storeSecret',{label:record.label,value:replacement})).reference;}
   if(localStorage.getItem(record.storageKey)!==original)throw Error('This connection changed while it was being repaired. Try again; the newer settings were preserved.');
   for(const location of locations){if(location.length)setPath(value,location,next);else value=next;}localStorage.setItem(record.storageKey,JSON.stringify(value));record.resolvedAt=new Date().toISOString();saveRecovery(records);publishIssues();emit('lvx-credentials-migrated');return {repaired:true,forgotten:forget,updatedReferences:locations.length};
  }

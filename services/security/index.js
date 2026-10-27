@@ -7,9 +7,10 @@ const boundaries=require('./boundaries.cjs');
 const {inventory}=require('./inventory.cjs');
 const {scanSource,fingerprint,RULES}=require('./source-scanner.cjs');
 const {severityOf}=require('./severity.cjs');
+const {nonnegative,longTimeout,deadline}=require('../capacity.cjs');
 const hash=value=>crypto.createHash('sha256').update(value).digest('hex');
 function atomicWrite(file,value){fs.mkdirSync(path.dirname(file),{recursive:true,mode:0o700});const temp=file+'.'+crypto.randomUUID()+'.tmp';let fd;try{fd=fs.openSync(temp,'wx',0o600);fs.writeFileSync(fd,JSON.stringify(value,null,2));fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;fs.renameSync(temp,file);}finally{if(fd!==undefined)fs.closeSync(fd);if(fs.existsSync(temp))fs.unlinkSync(temp);}}
-function readState(file,fallback){if(!fs.existsSync(file))return fallback;try{if(fs.statSync(file).size>16*1024*1024)throw new Error('Too large');return JSON.parse(fs.readFileSync(file,'utf8'));}catch{throw new Error('Security state is corrupt; restore its backup before continuing');}}
+function readState(file,fallback){if(!fs.existsSync(file))return fallback;try{return JSON.parse(fs.readFileSync(file,'utf8'));}catch{throw new Error('Security state is corrupt; restore its backup before continuing');}}
 function createService({dataDir,workspaceRoot=null,safeStorage,emit=()=>{},fetch:fetchImpl=globalThis.fetch}={}){
   if(!dataDir)throw new Error('A private security data directory is required');
   dataDir=path.resolve(dataDir,'security');fs.mkdirSync(dataDir,{recursive:true});
@@ -61,18 +62,19 @@ function createService({dataDir,workspaceRoot=null,safeStorage,emit=()=>{},fetch
     if(['dockerfile','kubernetes'].includes(mode))target=boundaries.assertScopedPath(canonical(),target);
     else if(mode==='endpoint'){const url=new URL(target);if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw new Error('Use a credential-free HTTP(S) target');}
     else if(mode!=='docker-container')throw new Error('Unsupported infrastructure adapter mode');
+    const timeout=nonnegative(payload.timeoutMs??0,'Infrastructure timeout');
     payload.signal?.throwIfAborted();
     const result=await new Promise((resolve,reject)=>{
       const child=spawn(process.execPath,[manifest.entry],{windowsHide:true,detached:process.platform!=='win32',stdio:['pipe','pipe','pipe'],env:{...process.env,ELECTRON_RUN_AS_NODE:'1'},cwd:canonical()});let stdout='',stderr='',settled=false,terminating=false;
-      const finish=(error,value)=>{if(settled)return;settled=true;clearTimeout(timer);payload.signal?.removeEventListener('abort',abort);if(error)reject(error);else resolve(value);};
+      const finish=(error,value)=>{if(settled)return;settled=true;disposeTimer();payload.signal?.removeEventListener('abort',abort);if(error)reject(error);else resolve(value);};
       const terminate=error=>{if(terminating||settled)return;terminating=true;require('../process-control.cjs').stopProcessTree(child).then(()=>finish(error),finish);};
       const abort=()=>terminate(new Error('Infrastructure adapter cancelled'));
-      const timer=setTimeout(()=>terminate(new Error('Infrastructure adapter timed out')),20000);
+      const disposeTimer=timeout?longTimeout(()=>terminate(new Error('Infrastructure adapter timed out')),timeout):()=>{};
       payload.signal?.addEventListener('abort',abort,{once:true});if(payload.signal?.aborted)abort();
-      child.stdout.on('data',data=>{stdout+=data;if(stdout.length>8*1024*1024){terminate(new Error('Infrastructure adapter output exceeded the limit'));}});
-      child.stderr.on('data',data=>{stderr+=data;if(stderr.length>1024*1024){terminate(new Error('Infrastructure adapter error output exceeded the limit'));}});
+      child.stdout.on('data',data=>{stdout+=data;});
+      child.stderr.on('data',data=>{stderr+=data;});
       child.on('error',error=>finish(new Error(redact(error.message))));child.on('close',()=>{if(terminating)return;try{const value=JSON.parse(stdout);if(!Array.isArray(value.findings)||!Array.isArray(value.errors)||typeof value.coverage?.complete!=='boolean')throw new Error('Adapter result schema is invalid');finish(null,value);}catch{finish(new Error('Infrastructure adapter returned invalid structured evidence'));}});
-      child.stdin.on('error',error=>finish(new Error('Infrastructure adapter input failed')));child.stdin.end(JSON.stringify({mode,target}));
+      child.stdin.on('error',error=>terminate(new Error('Infrastructure adapter input failed')));child.stdin.end(JSON.stringify({mode,target}));
     });
     for(const finding of result.findings){finding.path=payload.target;finding.fingerprint=fingerprint(finding);}return result;
   };
@@ -83,19 +85,22 @@ function createService({dataDir,workspaceRoot=null,safeStorage,emit=()=>{},fetch
     if(result.coverage?.complete)result.status=result.summary.active?'FAILURE':'SUCCESS';else result.status='ERROR';
     return redact(result);
   };
-  const readInventory=payload=>{let format=payload.format,content=payload.content;if(payload.path){const file=boundaries.assertScopedPath(canonical(),payload.path);if(fs.statSync(file).size>32*1024*1024)throw new Error('Inventory file exceeds 32 MiB');content=fs.readFileSync(file,'utf8');if(!format){const name=path.basename(file).toLowerCase();format=name==='package-lock.json'?'package-lock':name==='pnpm-lock.yaml'?'pnpm':name==='yarn.lock'?'yarn':name==='poetry.lock'?'poetry':name==='uv.lock'?'uv':name.endsWith('.json')?'cyclonedx':'requirements';}}return inventory(content,format);};
+  const readInventory=payload=>{let format=payload.format,content=payload.content;if(payload.path){const file=boundaries.assertScopedPath(canonical(),payload.path);content=fs.readFileSync(file,'utf8');if(!format){const name=path.basename(file).toLowerCase();format=name==='package-lock.json'?'package-lock':name==='pnpm-lock.yaml'?'pnpm':name==='yarn.lock'?'yarn':name==='poetry.lock'?'poetry':name==='uv.lock'?'uv':name.endsWith('.json')?'cyclonedx':'requirements';}}return inventory(content,format);};
   async function dependencyScan(payload){
     const resolved=readInventory(payload),findings=[],lookups=[],errors=resolved.unresolved.map(item=>`${item.name}: ${item.reason}`);
     // Every resolved package gets explicit success/error evidence. Failures never erase successful findings.
     for(const pkg of resolved.packages){
       payload.signal?.throwIfAborted();
       try{
-        const response=await fetchImpl('https://api.osv.dev/v1/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({package:{name:pkg.name,ecosystem:pkg.ecosystem},version:pkg.version}),signal:payload.signal?AbortSignal.any([payload.signal,AbortSignal.timeout(10000)]):AbortSignal.timeout(10000)});
+        const requestDeadline=deadline(payload.timeoutMs??0,payload.signal);
+        try {
+        const response=await fetchImpl('https://api.osv.dev/v1/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({package:{name:pkg.name,ecosystem:pkg.ecosystem},version:pkg.version}),signal:requestDeadline.signal});
         if(!response.ok)throw new Error(`OSV HTTP ${response.status}`);const body=await response.json();if(!body||typeof body!=='object'||Array.isArray(body)||(body.vulns!==undefined&&!Array.isArray(body.vulns)))throw new Error('Invalid OSV response');
         if((body.vulns||[]).some(vuln=>!vuln||typeof vuln.id!=='string'||(vuln.references!==undefined&&!Array.isArray(vuln.references))))throw new Error('OSV finding schema is invalid');
         const packageFindings=[];
         for(const vuln of body.vulns||[]){const finding={ruleId:vuln.id,severity:severityOf(vuln),message:String(vuln.summary||vuln.id),package:pkg,path:payload.path||payload.format,line:1,scanner:'osv-v1',references:(vuln.references||[]).filter(ref=>/^https:\/\//.test(ref?.url||'')).map(ref=>ref.url)};finding.fingerprint=hash(`${vuln.id}\0${pkg.id}`);if(!packageFindings.some(item=>item.fingerprint===finding.fingerprint))packageFindings.push(finding);}
-        findings.push(...packageFindings);lookups.push({package:pkg.id,status:'SUCCESS',vulnerabilities:packageFindings.length});
+        for(const finding of packageFindings)findings.push(finding);lookups.push({package:pkg.id,status:'SUCCESS',vulnerabilities:packageFindings.length});
+        } finally { requestDeadline.dispose(); }
       }catch(error){payload.signal?.throwIfAborted();lookups.push({package:pkg.id,status:'ERROR',error:redact(error.message)});errors.push(`${pkg.id}: ${redact(error.message)}`);}
     }
     return {schemaVersion:1,findings,errors,inventory:resolved,coverage:{complete:!errors.length&&resolved.coverage.complete,total:resolved.coverage.total,queried:lookups.filter(item=>item.status==='SUCCESS').length,lookups,sourceSha256:resolved.sourceSha256,limitations:['OSV findings cover known reported vulnerabilities at query time, not all possible risks.']}};
@@ -108,12 +113,12 @@ function createService({dataDir,workspaceRoot=null,safeStorage,emit=()=>{},fetch
     if(action==='trust'){
       const key=workspaceKey();if(!key)throw new Error('Choose a workspace first');if(typeof payload.trusted!=='boolean')throw new Error('Explicit trust choice required');
       const record=structuredClone(trust.workspaces[key]||{trusted:false,imports:{}});
-      if(payload.importedWorkflowId){if(typeof payload.importedWorkflowId!=='string'||!/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,255}$/.test(payload.importedWorkflowId)||['__proto__','constructor','prototype'].includes(payload.importedWorkflowId))throw new Error('Invalid imported workflow identifier');if(payload.trusted)record.imports[payload.importedWorkflowId]={trustedAt:new Date().toISOString()};else delete record.imports[payload.importedWorkflowId];}
+      if(payload.importedWorkflowId){if(typeof payload.importedWorkflowId!=='string'||!/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/.test(payload.importedWorkflowId)||['__proto__','constructor','prototype'].includes(payload.importedWorkflowId))throw new Error('Invalid imported workflow identifier');if(payload.trusted)record.imports[payload.importedWorkflowId]={trustedAt:new Date().toISOString()};else delete record.imports[payload.importedWorkflowId];}
       else {record.trusted=payload.trusted;if(!record.trusted)record.imports={};}const next={...trust,workspaces:{...trust.workspaces,[key]:record}};atomicWrite(trustFile,next);trust=next;return {trusted:record.trusted,importedWorkflowId:payload.importedWorkflowId||null};
     }
     if(action==='storeSecret'){
-      requireEncryption();if(typeof payload.value!=='string'||!payload.value||payload.value.length>64*1024)throw new Error('Secret must contain 1–65536 characters');
-      if(typeof payload.label!=='string'||!payload.label.trim()||payload.label.length>120)throw new Error('Use a label of 1–120 characters');
+      requireEncryption();if(typeof payload.value!=='string'||!payload.value)throw new Error('Secret must be nonempty text');
+      if(typeof payload.label!=='string'||!payload.label.trim())throw new Error('Use a nonempty descriptive label');
       if(payload.value.length>=8&&payload.label.includes(payload.value))throw new Error('Use a descriptive label that does not contain the credential value');
       const reference='secret:'+crypto.randomUUID(),createdAt=new Date().toISOString();
       const next={...vault,secrets:[...vault.secrets,{reference,label:payload.label.trim(),ciphertext:safeStorage.encryptString(payload.value).toString('base64'),createdAt}]};atomicWrite(vaultFile,next);vault=next;knownSecrets.add(payload.value);return {reference,label:payload.label.trim(),createdAt};
@@ -129,8 +134,15 @@ function createService({dataDir,workspaceRoot=null,safeStorage,emit=()=>{},fetch
     if(action==='scan'){
       let result;
       if(payload.kind==='source'){
-        const files=payload.files||[{path:payload.path}];if(!Array.isArray(files)||files.length>500)throw new Error('Select 1–500 files per scan');
-        result=scanSource(files.map(file=>{if(file.content!==undefined)return file;const name=boundaries.assertScopedPath(canonical(),file.path);if(fs.statSync(name).size>2*1024*1024)return {...file,content:null};return {...file,content:fs.readFileSync(name,'utf8')};}));
+        const files=payload.files||[{path:payload.path}];if(!Array.isArray(files)||!files.length)throw new Error('Select at least one file per scan');
+        const findings=[],errors=[],coverage=[];
+        for (const file of files) {
+          await new Promise(resolve=>setImmediate(resolve)); payload.signal?.throwIfAborted();
+          const value=file.content!==undefined?file:{...file,content:await fs.promises.readFile(boundaries.assertScopedPath(canonical(),file.path),'utf8')};
+          const partial=scanSource([value]);
+          for(const finding of partial.findings)findings.push(finding);for(const error of partial.errors)errors.push(error);for(const item of partial.coverage.files)coverage.push(item);
+        }
+        result={schemaVersion:1,findings,errors,coverage:{complete:!errors.length,total:files.length,scanned:coverage.length,files:coverage,limitations:['Textual rules are not syntax-aware and may include false positives or miss vulnerabilities. A completed scan is not proof of security.']}};
       }else if(payload.kind==='dependencies')result=await dependencyScan(payload);
       else if(payload.kind==='infrastructure')result=await runAdapter(payload);
       else throw new Error('Choose source, dependencies or infrastructure scanning');
@@ -139,11 +151,11 @@ function createService({dataDir,workspaceRoot=null,safeStorage,emit=()=>{},fetch
     if(action==='suppressions')return suppressions.items.filter(item=>item.workspaceKey===workspaceKey()).map(({workspaceKey,...item})=>({...item,expired:Date.parse(item.expiresAt)<=Date.now()}));
     if(action==='saveSuppression'){
       assertTrusted(payload);if(!/^[a-f0-9]{64}$/.test(payload.fingerprint||''))throw new Error('A finding fingerprint is required');
-      if(typeof payload.reason!=='string'||payload.reason.trim().length<8||payload.reason.length>2000||typeof payload.reviewer!=='string'||payload.reviewer.trim().length<3||payload.reviewer.length>120)throw new Error('A review reason (8+ characters) and reviewer (3+ characters) are required');
-      const expires=Date.parse(payload.expiresAt);if(!Number.isFinite(expires)||expires<=Date.now()||expires>Date.now()+180*86400000)throw new Error('Suppression expiry must be in the next 180 days');
+      if(typeof payload.reason!=='string'||payload.reason.trim().length<8||typeof payload.reviewer!=='string'||payload.reviewer.trim().length<3)throw new Error('A review reason (8+ characters) and reviewer (3+ characters) are required');
+      const expires=Date.parse(payload.expiresAt);if(!Number.isFinite(expires)||expires<=Date.now())throw new Error('Suppression expiry must be a valid future date');
       const item={id:crypto.randomUUID(),workspaceKey:workspaceKey(),fingerprint:payload.fingerprint,reason:payload.reason.trim(),reviewer:payload.reviewer.trim(),expiresAt:new Date(expires).toISOString(),reviewedAt:new Date().toISOString()};const next={...suppressions,items:[...suppressions.items.filter(old=>old.workspaceKey!==item.workspaceKey||old.fingerprint!==item.fingerprint),item]};atomicWrite(suppressionFile,next);suppressions=next;return redact(item);
     }
-    if(action==='diagnostics')return redact({schemaVersion:1,workspaceSelected:!!canonical(),trust:!!(workspaceKey()&&trust.workspaces[workspaceKey()]?.trusted),credentials:credentialState(),secretCount:vault.secrets.length,adapters:adapters(),supportedRules:RULES,previewPolicy:boundaries.createPreviewPolicy().contentSecurityPolicy,limits:{sourceFiles:500,sourceFileBytes:2*1024*1024,inventoryBytes:32*1024*1024}});
+    if(action==='diagnostics')return redact({schemaVersion:1,workspaceSelected:!!canonical(),trust:!!(workspaceKey()&&trust.workspaces[workspaceKey()]?.trusted),credentials:credentialState(),secretCount:vault.secrets.length,adapters:adapters(),supportedRules:RULES,previewPolicy:boundaries.createPreviewPolicy().contentSecurityPolicy,limits:{sourceFiles:0,sourceFileBytes:0,inventoryBytes:0}});
     throw new Error('Unknown security action');
   }
   return {handle,resolveSecret,redact,assertTrusted,setWorkspace(root){workspaceRoot=root?fs.realpathSync(root):null;},close(){knownSecrets.clear();}};

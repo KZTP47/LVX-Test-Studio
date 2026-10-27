@@ -123,7 +123,7 @@ class IndexedDBVersionStorage {
   }
 
   async getStorageEstimate() {
-    if (this.native) { const usage = await this.nativeCall('artifacts'); return { usage:usage.totalBytes, quota:usage.quotaBytes, usageMB:(usage.totalBytes/1048576).toFixed(2), quotaMB:(usage.quotaBytes/1048576).toFixed(2), percentUsed:(100*usage.totalBytes/usage.quotaBytes).toFixed(1) }; }
+    if (this.native) { const usage = await this.nativeCall('artifacts'); return { usage:usage.totalBytes, quota:usage.quotaBytes, usageMB:(usage.totalBytes/1048576).toFixed(2), quotaMB:(usage.quotaBytes/1048576).toFixed(2), percentUsed:usage.quotaBytes?(100*usage.totalBytes/usage.quotaBytes).toFixed(1):null }; }
     if (navigator.storage && navigator.storage.estimate) {
       const estimate = await navigator.storage.estimate();
       return {
@@ -191,7 +191,7 @@ class IndexedDBVersionStorage {
       version.timestamp = version.timestamp || version.createdAt || version.dateCreated || new Date(0).toISOString();
       version.changeDescription = version.changeDescription || version.description || 'Imported version'; version.changedBy = version.changedBy || version.createdBy || 'local-user';
       const originalId = version.versionId || version.id;
-      let id = typeof originalId === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.:@-]{0,199}$/.test(originalId) ? originalId : `v-${(await digest({suiteId,version})).slice(0,48)}`;
+      let id = typeof originalId === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.:@-]*$/.test(originalId) ? originalId : `v-${(await digest({suiteId,version})).slice(0,48)}`;
       version.versionId=id;
       const previous=existing.get(id)||[...existing.values()].find(r=>r.value.suiteId===suiteId&&r.value.versionId===originalId);
       const semantic=v=>({suiteId:v.suiteId,versionId:v.versionId,timestamp:v.timestamp,suiteSnapshot:v.suiteSnapshot,changeDescription:v.changeDescription,changedBy:v.changedBy,version:v.version??null});
@@ -211,7 +211,6 @@ class IndexedDBVersionStorage {
 
 class VersionControlWithIndexedDB {
   constructor() {
-    this.MAX_VERSIONS_PER_SUITE = 100; // Can keep way more now!
     this.storage = new IndexedDBVersionStorage();
     this.initialized = false;
   }
@@ -259,10 +258,6 @@ class VersionControlWithIndexedDB {
 
     versions.push(newVersion);
 
-    if (versions.length > this.MAX_VERSIONS_PER_SUITE) {
-      versions.shift();
-    }
-
     if (this.initialized) {
       await this.storage.saveVersionHistory(suiteId, versions);
       if(this.storage.native)return newVersion.versionId;
@@ -307,7 +302,7 @@ class VersionControlWithIndexedDB {
         return {
           type: this.storage.native ? 'SQLite workspace' : 'IndexedDB',
           ...estimate,
-          isUnlimited: false
+          isUnlimited: estimate.quota === 0
         };
       }
     }
@@ -323,10 +318,10 @@ class VersionControlWithIndexedDB {
     return {
       type: 'localStorage',
       usage: totalSize,
-      quota: 10 * 1024 * 1024,
+      quota: null,
       usageMB: (totalSize / 1024 / 1024).toFixed(2),
-      quotaMB: '10',
-      percentUsed: ((totalSize / (10 * 1024 * 1024)) * 100).toFixed(1),
+      quotaMB: 'Unknown (browser managed)',
+      percentUsed: null,
       isUnlimited: false
     };
   }

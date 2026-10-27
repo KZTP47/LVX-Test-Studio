@@ -2,10 +2,10 @@
 const crypto = require('node:crypto');
 const { WorkspaceError } = require('./store.cjs');
 const DEFAULT_POLICIES = Object.freeze({
-  execution_history: { enabled: true, maxEntries: 500, maxAgeDays: 90, strategy: 'oldest-first' },
-  security_scans: { enabled: true, maxEntries: 50, maxAgeDays: 30, strategy: 'oldest-first' },
-  screenshots: { enabled: true, maxEntries: 100, maxAgeDays: 30, strategy: 'oldest-first' },
-  versions: { enabled: true, maxEntries: 20, maxAgeDays: 180, strategy: 'oldest-first' }
+  execution_history: { enabled: false, maxEntries: 0, maxAgeDays: 0, strategy: 'oldest-first' },
+  security_scans: { enabled: false, maxEntries: 0, maxAgeDays: 0, strategy: 'oldest-first' },
+  screenshots: { enabled: false, maxEntries: 0, maxAgeDays: 0, strategy: 'oldest-first' },
+  versions: { enabled: false, maxEntries: 0, maxAgeDays: 0, strategy: 'oldest-first' }
 });
 const COLLECTIONS = Object.freeze({ execution_history: ['runs', 'history', 'execution_history'], security_scans: ['security-history', 'security-results', 'security_scans'], screenshots: ['baselines', 'screenshots'], versions: ['versions'] });
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -13,18 +13,20 @@ const stable = value => Array.isArray(value) ? `[${value.map(stable).join(',')}]
 const hash = value => crypto.createHash('sha256').update(stable(value)).digest('hex');
 const fail = (code, message) => { throw new WorkspaceError(code, message); };
 function normalizePreferences(value = {}) {
-  const mode = value.mode || 'smart';
+  const mode = value.mode || 'unlimited';
   if (!['smart', 'custom', 'unlimited'].includes(mode)) fail('VALIDATION', 'Choose smart, custom or unlimited storage mode.');
-  const integer = (v, fallback, max) => { const n = v ?? fallback; if (!Number.isSafeInteger(n) || n < 1 || n > max) fail('VALIDATION', `Storage limits must be integers from 1 to ${max}.`); return n; };
+  const integer = (v, fallback) => { const n = v ?? fallback; if (!Number.isSafeInteger(n) || n < 0) fail('VALIDATION', 'Storage budgets must be nonnegative integers; zero disables a budget.'); return n; };
   const customPolicies = {};
   for (const key of Object.keys(value.customPolicies || {})) if (!Object.hasOwn(DEFAULT_POLICIES, key)) fail('VALIDATION', `Unsupported storage policy category: ${key}.`);
   for (const [name, defaults] of Object.entries(DEFAULT_POLICIES)) {
     const p = value.customPolicies?.[name] || {};
     if (p.enabled !== undefined && typeof p.enabled !== 'boolean') fail('VALIDATION', 'Policy enabled switches must be true or false.');
     if (p.strategy !== undefined && p.strategy !== 'oldest-first') fail('VALIDATION', 'The supported cleanup strategy is oldest-first.');
-    customPolicies[name] = { enabled: p.enabled !== false, maxEntries: integer(p.maxEntries, defaults.maxEntries, 1000000), maxAgeDays: integer(p.maxAgeDays, defaults.maxAgeDays, 36500), strategy: 'oldest-first' };
+    customPolicies[name] = { enabled: p.enabled ?? (Object.keys(p).length ? true : defaults.enabled), maxEntries: integer(p.maxEntries, defaults.maxEntries), maxAgeDays: integer(p.maxAgeDays, defaults.maxAgeDays), strategy: 'oldest-first' };
   }
-  return { mode, customPolicies, showWarningAt: integer(value.showWarningAt, 80, 95), lastCleanupDate: null, lastCleanupSummary: null };
+  const showWarningAt = integer(value.showWarningAt, 80);
+  if (showWarningAt > 100) fail('VALIDATION', 'Warning percentage must be between zero and 100.');
+  return { mode, customPolicies, showWarningAt, lastCleanupDate: null, lastCleanupSummary: null };
 }
 function createRetentionService({ store, workspaceRoot, dataDir, redact = v => v, emit = () => {}, now = () => Date.now() } = {}) {
   const previews = new Map();
@@ -55,7 +57,7 @@ function createRetentionService({ store, workspaceRoot, dataDir, redact = v => v
       for (const group of groups.values()) {
         let kept = 0; for (const entry of group.sort((a, b) => b.time - a.time || a.id.localeCompare(b.id) || String(a.itemId).localeCompare(String(b.itemId)))) {
           if (p.mode === 'unlimited' || !policy.enabled || entry.pinned || entry.active) { kept++; continue; }
-          const expired = now() - entry.time > policy.maxAgeDays * 86400000, overflow = kept >= policy.maxEntries;
+          const expired = policy.maxAgeDays > 0 && (now() - entry.time) / 86400000 > policy.maxAgeDays, overflow = policy.maxEntries > 0 && kept >= policy.maxEntries;
           if (expired || overflow) removed.push({ ...entry, reason: expired ? 'age' : 'count' }); else kept++;
         }
       }
@@ -99,13 +101,12 @@ function createRetentionService({ store, workspaceRoot, dataDir, redact = v => v
     // every native mirror without guessing which evidence was deleted.
     const effects=effectsState();
     if(deletedRunIds.length||changedBaselineArchives.length||deletedScreenshotFiles.length){
-      if(effects.value.pending.length>=1000)fail('EFFECT_QUEUE_FULL','Pending cleanup effects must be reconciled before another cleanup. No records were deleted.');
       const receipt={id:crypto.randomUUID(),workspaceRoot,createdAt:summary.completedAt,status:'pending',deletedCount:summary.deletedCount,deleteArtifactCount:summary.deleteArtifactCount,deletedRunIds:[...deletedRunIds],changedBaselineArchives:changedBaselineArchives.map(entry=>({id:entry.id})),deletedScreenshotFiles:clone(deletedScreenshotFiles)};
-      effects.value.pending.push(receipt);if(Buffer.byteLength(JSON.stringify(effects.value))>8*1048576)fail('EFFECT_QUEUE_FULL','Pending cleanup receipts exceed 8 MiB. Reconcile effects before continuing; no records were deleted.');
+      effects.value.pending.push(receipt);
       records.push({collection:'storage-settings',id:'retention-effects',value:effects.value,expectedRevision:effects.record?.revision??null});summary.effectReceiptId=receipt.id;summary.pendingEffectsCount=effects.value.pending.length;
     }
     const current = saved(); records.push({ collection: 'storage-settings', id: 'retention', value: { ...p.preferences, lastCleanupDate: summary.completedAt, lastCleanupSummary: { deletedCount: summary.deletedCount, deleteByCategory: summary.deleteByCategory, deleteArtifactCount:summary.deleteArtifactCount,deleteArtifactBytes:summary.deleteArtifactBytes,automatic } }, expectedRevision: current?.revision ?? null });
-    const result = store.transact(records, { expectedWorkspaceRevision: p.revision,deleteArtifactsForRuns:deletedRunIds,protectedArtifactIds:p.protectedArtifactIds,retentionCleanup:records.length>10000 }); emit({ domain: 'workspace', type: 'changed', ...result }); return { ...summary, revision: result.revision };
+    const result = store.transact(records, { expectedWorkspaceRevision: p.revision,deleteArtifactsForRuns:deletedRunIds,protectedArtifactIds:p.protectedArtifactIds }); emit({ domain: 'workspace', type: 'changed', ...result }); return { ...summary, revision: result.revision };
   }
   return {
     async handle(action, payload = {}) {
@@ -127,17 +128,14 @@ function createRetentionService({ store, workspaceRoot, dataDir, redact = v => v
         if(!receipt){if(effects.value.completed.some(entry=>entry.id===id))return {status:'SUCCESS',alreadyAcknowledged:true,id};fail('NOT_FOUND','Pending cleanup receipt was not found.');}
         if(receipt.workspaceRoot!==workspaceRoot)fail('WORKSPACE_CHANGED','Cleanup receipt belongs to another workspace. Its effects were preserved for review.');
         const supplied=payload.result||payload.nativeEffects||{},keys=['deletedNativeRuns','deletedBaselineFiles','absentBaselineFiles','warnings'],actual={},counts={};
-        for(const key of keys){if(supplied[key]!==undefined&&!Array.isArray(supplied[key]))fail('VALIDATION','Native cleanup results must contain lists.');const values=supplied[key]||[];if(values.some(value=>typeof value!=='string'))fail('VALIDATION','Native cleanup result entries must be text.');counts[key]=values.length;actual[key]=values.slice(0,100).map(value=>redact(value).slice(0,key==='warnings'?1000:500));}
+        for(const key of keys){if(supplied[key]!==undefined&&!Array.isArray(supplied[key]))fail('VALIDATION','Native cleanup results must contain lists.');const values=supplied[key]||[];if(values.some(value=>typeof value!=='string'))fail('VALIDATION','Native cleanup result entries must be text.');counts[key]=values.length;actual[key]=values.map(value=>redact(value));}
         const completed={id,workspaceRoot,completedAt:new Date(now()).toISOString(),status:counts.warnings?'completed-with-preserved-files':'completed',nativeEffects:actual,totalCounts:counts,truncated:keys.some(key=>counts[key]>actual[key].length)};
         effects.value.pending=effects.value.pending.filter(entry=>entry.id!==id);effects.value.completed.push(completed);
-        // Completed summaries have their own budget, so their growth cannot
-        // consume the pending queue's safety limit and block future cleanup.
-        while(effects.value.completed.length>100||Buffer.byteLength(JSON.stringify(effects.value.completed))>2*1048576){effects.value.completed.shift();effects.value.completedPrunedCount++;}
         const result=store.transact([{collection:'storage-settings',id:'retention-effects',value:effects.value,expectedRevision:effects.record.revision}]);emit({domain:'workspace',type:'changed',...result});return {status:'SUCCESS',id,completion:completed,revision:result.revision};
       }
       if (action === 'setPreferences' || action === 'restoreDefaults') { const next = normalizePreferences(action === 'restoreDefaults' ? {} : payload.preferences), prior = preferences(); next.lastCleanupDate = prior.lastCleanupDate; next.lastCleanupSummary = prior.lastCleanupSummary; const result = store.transact([{ collection: 'storage-settings', id: 'retention', value: next, expectedRevision: payload.expectedRevision ?? null }]); emit({ domain: 'workspace', type: 'changed', ...result }); return { preferences: next, revision: saved().revision }; }
-      if (action === 'previewCleanup') { const p = plan(), token = crypto.randomUUID(); if (previews.size >= 10) previews.delete(previews.keys().next().value); previews.set(token, { plan: p, expires: now() + 15 * 60000 }); return { ...publicPlan(p), token }; }
-      if (action === 'applyCleanup') { const entry = previews.get(payload.token); if (!entry || entry.expires < now()) fail('PREVIEW_REQUIRED', 'Preview storage cleanup again.'); if (payload.expectedWorkspaceRevision !== entry.plan.revision) fail('CONFLICT', 'Cleanup revision does not match its preview.'); const result = apply(entry.plan); previews.delete(payload.token); return result; }
+      if (action === 'previewCleanup') { const p = plan(), token = crypto.randomUUID(); previews.set(token, { plan: p }); return { ...publicPlan(p), token }; }
+      if (action === 'applyCleanup') { const entry = previews.get(payload.token); if (!entry) fail('PREVIEW_REQUIRED', 'Preview storage cleanup again.'); if (payload.expectedWorkspaceRevision !== entry.plan.revision) fail('CONFLICT', 'Cleanup revision does not match its preview.'); const result = apply(entry.plan); previews.delete(payload.token); return result; }
       if (action === 'autoCleanup') return apply(plan(), { automatic: true });
       fail('UNKNOWN_ACTION', `Unknown retention action: ${String(action)}`);
     },

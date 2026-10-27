@@ -73,7 +73,7 @@ class CICDConfiguration {
           'X-API-Key': config.apiKey,
           'Content-Type': 'application/json'
         },
-        timeout: 5000
+        timeout: 0
       });
 
       if (!response.ok) {

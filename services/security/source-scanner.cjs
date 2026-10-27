@@ -14,13 +14,14 @@ function scanSource(files){
   if(!Array.isArray(files)||!files.length)throw new Error('Choose at least one source file');
   const findings=[],errors=[],coverage=[];
   for(const file of files){
-    if(typeof file.content!=='string'||file.content.length>2*1024*1024){errors.push(`Source file unavailable or too large: ${file.path}`);continue;}
+    if(typeof file.content!=='string'){errors.push(`Source file unavailable: ${file.path}`);continue;}
     const language=file.language||(/\.py$/i.test(file.path)?'python':/\.robot$/i.test(file.path)?'robot':/\.[cm]?[jt]sx?$/i.test(file.path)?'javascript':null);
     if(!['javascript','python','robot'].includes(language)){errors.push(`Unsupported source language: ${file.path}`);continue;}
     const rules=RULES.filter(rule=>rule.language==='*'||rule.language===language);
-    coverage.push({path:file.path,language,rules:rules.map(rule=>rule.id),method:'bounded-text-heuristics'});
-    for(const rule of rules){rule.pattern.lastIndex=0;for(const match of file.content.matchAll(rule.pattern)){
-      const prefix=file.content.slice(0,match.index),line=prefix.split('\n').length,column=match.index-prefix.lastIndexOf('\n');
+    coverage.push({path:file.path,language,rules:rules.map(rule=>rule.id),method:'text-heuristics'});
+    for(const rule of rules){rule.pattern.lastIndex=0;let cursor=0,line=1,lastNewline=-1;for(const match of file.content.matchAll(rule.pattern)){
+      for(;cursor<match.index;cursor++)if(file.content.charCodeAt(cursor)===10){line++;lastNewline=cursor;}
+      const column=match.index-lastNewline;
       const finding={ruleId:rule.id,severity:rule.severity,message:rule.message,path:file.path,line,column,scanner:'source-heuristics-v1'};
       findings.push({...finding,fingerprint:fingerprint(finding)});
     }}

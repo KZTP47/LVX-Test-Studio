@@ -8,7 +8,7 @@ const records = (result) => Array.isArray(result) ? result : result?.records || 
 export function parseGraphProposal(text) {
   const source = String(text || '').trim();
   if (!source) throw Error('Paste a graph proposal or choose a completed agent reply.');
-  if(source.length>1048576)throw Error('The proposal is too large to review here. Split it into smaller graph changes.');
+
   const fences = [...source.matchAll(/```lvx-graph-patch\s*\n([\s\S]*?)```/g)];
   if (fences.length > 1) throw Error('This reply contains more than one proposal. Paste the one you want to review.');
   let parsed;

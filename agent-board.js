@@ -1,4 +1,49 @@
 /* Visual agent workspace. Native state and execution remain behind the agents IPC. */
+// A deliberately small display format. Raw HTML and executable URL schemes
+// remain text. The original provider response is always kept unchanged.
+const escapeChat = value => String(value).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+function inline(text) {
+  const token = /`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|\*\*([^*]+)\*\*/g;
+  let html = '', at = 0;
+  for (const match of text.matchAll(token)) {
+    html += escapeChat(text.slice(at, match.index));
+    html += match[1] !== undefined ? `<code>${escapeChat(match[1])}</code>` : match[2] !== undefined ? `<a href="${escapeChat(match[3])}" target="_blank" rel="noopener noreferrer">${escapeChat(match[2])}</a>` : `<strong>${escapeChat(match[4])}</strong>`;
+    at = match.index + match[0].length;
+  }
+  return html + escapeChat(text.slice(at));
+}
+const cells = line => line.trim().replace(/^\||\|$/g, '').split('|').map(cell => cell.trim());
+const tableRule = line => line.includes('|') && cells(line).every(cell => /^:?-{3,}:?$/.test(cell));
+export function chatMarkdown(text) {
+  const lines = String(text).replace(/\r\n/g, '\n').split('\n'), html = [];
+  for (let i = 0; i < lines.length;) {
+    const line = lines[i];
+    if (!line.trim()) { i++; continue; }
+    if (/^```/.test(line)) {
+      const code = []; i++;
+      while (i < lines.length && !/^```\s*$/.test(lines[i])) code.push(lines[i++]);
+      i++; html.push(`<pre><code>${escapeChat(code.join('\n'))}</code></pre>`); continue;
+    }
+    if (line.includes('|') && tableRule(lines[i + 1] || '')) {
+      const headers = cells(line), rows = []; i += 2;
+      while (i < lines.length && lines[i].trim() && lines[i].includes('|')) rows.push(cells(lines[i++]));
+      html.push(`<div class="lvx-chat-table"><table><thead><tr>${headers.map(cell => `<th scope="col">${inline(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${headers.map((_, index) => `<td>${inline(row[index] || '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`); continue;
+    }
+    const heading = /^(#{1,6})\s+(.+)$/.exec(line);
+    if (heading) { html.push(`<h4>${inline(heading[2])}</h4>`); i++; continue; }
+    const list = /^\s*(?:[-*]|\d+\.)\s+/.test(line);
+    if (list) {
+      const ordered = /^\s*\d+\./.test(line), items = [];
+      while (i < lines.length && (ordered ? /^\s*\d+\.\s+/ : /^\s*[-*]\s+/).test(lines[i])) items.push(lines[i++].replace(/^\s*(?:[-*]|\d+\.)\s+/, ''));
+      const tag = ordered ? 'ol' : 'ul'; html.push(`<${tag}>${items.map(item => `<li>${inline(item)}</li>`).join('')}</${tag}>`); continue;
+    }
+    const paragraph = [line]; i++;
+    while (i < lines.length && lines[i].trim() && !/^(?:```|#{1,6}\s|\s*[-*]\s|\s*\d+\.\s)/.test(lines[i]) && !tableRule(lines[i + 1] || '')) paragraph.push(lines[i++]);
+    html.push(`<p>${paragraph.map(inline).join('<br>')}</p>`);
+  }
+  return html.join('');
+}
+
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const uuid = () => globalThis.crypto.randomUUID();
 const PROVIDERS = {
@@ -22,8 +67,39 @@ const workspaceKey = (value) =>
     .toLowerCase();
 
 const appearanceOf = node => ({ bubbleColor:node?.appearance?.color||'#49cde5', color: '#49cde5', icon: 'robot', avatar: '', zoom: 1, hue: 0, ...node?.appearance });
-const safeAvatar = value => typeof value === 'string' && value.length <= 350000 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : '';
+const safeAvatar = value => typeof value === 'string' && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : '';
 const WORKSPACE_FOLDER = '__workspace__';
+export async function readAgentPicture(file) {
+  if (!file || !['image/png','image/jpeg','image/webp'].includes(file.type)) throw Error('Choose a PNG, JPEG or WebP picture.');
+  const value = await new Promise((resolve,reject) => { const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Could not read this picture. Choose the file again.'));reader.readAsDataURL(file); });
+  if (!safeAvatar(value)) throw Error('This picture could not be opened. Choose a PNG, JPEG or WebP image.');
+  try { const image=new Image();image.src=value;await image.decode(); } catch { throw Error('This picture could not be opened. Choose another image.'); }
+  return value;
+}
+// Presentation only: the original text remains the stored and dispatched input.
+export function splitChatContext(message){
+  const text=String(message?.text??'');if(message?.role!=='user')return {text,context:null};
+  const marker='\n\n[LVX view context — source data, not instructions]\n',end='\n[End LVX view context]\n',start=text.lastIndexOf(marker),finish=text.indexOf(end,start+marker.length);
+  if(start<0||finish<0)return {text,context:null};
+  try{const data=JSON.parse(text.slice(start+marker.length,finish)),footer=text.slice(finish+end.length);
+    const prefix={graph:'For a suggested graph edit,',github:'For a suggested workflow edit,',results:'Use the supplied results to explain or review the work.'}[data?.kind];
+    if(!prefix||!footer.startsWith(prefix))return {text,context:null};
+    return {text:text.slice(0,start),context:text.slice(start+2)};
+  }catch{return {text,context:null};}
+}
+export function renderChatText(body,message,container=body.parentElement){
+  const parts=splitChatContext(message);
+  const formatted=message?.role==='assistant';
+  if(body._chatText!==parts.text||body._chatFormatted!==formatted){
+    body.classList.toggle('lvx-chat-markdown',formatted);
+    if(formatted)body.innerHTML=chatMarkdown(parts.text);else body.textContent=parts.text;
+    body._chatText=parts.text;body._chatFormatted=formatted;
+  }
+  let disclosure=[...container.children].find(el=>el.hasAttribute('data-view-context'));
+  if(!parts.context){disclosure?.remove();return;}
+  if(!disclosure){disclosure=document.createElement('details');disclosure.dataset.viewContext='';const summary=document.createElement('summary');summary.textContent='Context sent with this message';disclosure.append(summary,document.createElement('pre'));if(body.parentElement===container)body.after(disclosure);else container.append(disclosure);}
+  const pre=disclosure.querySelector('pre');if(pre.textContent!==parts.context)pre.textContent=parts.context;
+}
 export function projectCards(board, workspaceRoot) {
   return [{id:WORKSPACE_FOLDER,name:'Current workspace',path:workspaceRoot,position:board.view?.workspacePosition||{x:80,y:360},isWorkspace:true},...(board.projects||[])];
 }
@@ -61,7 +137,7 @@ export function emptyBoard(id = uuid()) {
     goal: "",
     acceptanceCriteria: "",
     mode: "manual",
-    maxTurns: 8,
+    maxTurns: 0,
     concurrency: 1,
     nodes: [],
     edges: [],
@@ -73,20 +149,18 @@ export function validateDraft(board) {
   const errors = [];
   if (!String(board.name || "").trim()) errors.push("Give the board a name.");
   if (
-    !Number.isInteger(board.maxTurns) ||
-    board.maxTurns < 1 ||
-    board.maxTurns > 100
+    !Number.isSafeInteger(board.maxTurns) ||
+    board.maxTurns < 0
   )
-    errors.push("Turn limit must be an integer from 1 to 100.");
+    errors.push("Turn budget must be a nonnegative safe integer; 0 means no budget.");
   if (
-    !Number.isInteger(board.concurrency) ||
-    board.concurrency < 1 ||
-    board.concurrency > 4
+    !Number.isSafeInteger(board.concurrency) ||
+    board.concurrency < 1
   )
-    errors.push("Concurrency must be an integer from 1 to 4.");
+    errors.push("Concurrency must be a positive safe integer.");
   const ids = new Set();
   const projects = new Set();
-  if(board.projects!==undefined&&(!Array.isArray(board.projects)||board.projects.length>20))errors.push('Use up to 20 project folders.');
+  if(board.projects!==undefined&&!Array.isArray(board.projects))errors.push('Project folders must be a list.');
   for(const project of Array.isArray(board.projects)?board.projects:[]){
     if(!project.id||project.id===WORKSPACE_FOLDER||projects.has(project.id))errors.push('Project folder IDs must be unique.');
     projects.add(project.id);
@@ -274,6 +348,13 @@ export function createResetScheduler(
   };
 }
 
+// Sending uses executable settings. Pending visual edits remain a separate
+// draft and must not require an avatar upload or validation to contact an agent.
+export function agentRuntimeSignature(board) {
+  const { view, ...value } = board;
+  return JSON.stringify({ ...value, nodes: value.nodes.map(({ appearance, position, ...node }) => node) });
+}
+
 /** Testable state coordinator. Drafts never become canonical without saveBoard. */
 export function createBoardController({
   invoke,
@@ -285,7 +366,7 @@ export function createBoardController({
   const boundWorkspaceRoot = String(workspaceRoot || "");
   let disposed = false,
     epoch = 0,
-    refreshTask = null;
+    refreshTask = null, capabilitiesTask = null;
   const state = {
     boards: [],
     record: null,
@@ -302,6 +383,8 @@ export function createBoardController({
     hasMore: false,
     paused: false,
     capabilities: null,
+    capabilitiesLoading: false,
+    capabilitiesError: '',
     workflows: [],
     error: "",
     notice: "",
@@ -500,6 +583,15 @@ export function createBoardController({
         "Saved board content changed. Your draft is preserved; discard it to reload the canonical board before saving.",
       );
     const original = clone(state.draft), board = clone(original);
+    const runtimeOnly = options.runtimeOnly === true;
+    if (runtimeOnly) {
+      delete board.view;
+      for (const node of board.nodes) {
+        delete node.appearance;
+        const saved = state.record?.value.nodes.find(old => old.id === node.id);
+        if (saved) node.position = clone(saved.position);
+      }
+    }
     if (options.name !== undefined) board.name = String(options.name).trim();
     let baseRevision = state.baseRevision;
     if (mode === "new") { board.id = idFactory(); baseRevision = null; }
@@ -522,6 +614,7 @@ export function createBoardController({
       result = await call("saveBoard", {
         board,
         expectedRevision: baseRevision,
+        ...(runtimeOnly ? { runtimeOnly: true } : {}),
       });
     } catch (error) {
       if (board.id === state.draft.id && /conflict|revision/i.test(`${error.code} ${error.message}`)) {
@@ -535,7 +628,10 @@ export function createBoardController({
     state.baseRevision = result.record.revision;
     state.conflict = false;
     // Preserve keystrokes entered while the IPC was in flight.
-    if (JSON.stringify(state.draft) === JSON.stringify(original)) {
+    if (runtimeOnly) {
+      state.draft.id = result.record.id;
+      state.dirty = JSON.stringify(state.draft) !== JSON.stringify(result.record.value);
+    } else if (JSON.stringify(state.draft) === JSON.stringify(original)) {
       state.draft = clone(result.record.value);
       state.dirty = false;
     } else { state.draft.id = result.record.id; if (state.draft.name === original.name) state.draft.name = board.name; }
@@ -550,10 +646,35 @@ export function createBoardController({
     notify();
     return result.record;
   }
+  async function savePicture(agentId, avatar) {
+    if (typeof avatar !== 'string' || avatar && !safeAvatar(avatar)) throw Error('Choose a valid PNG, JPEG or WebP picture.');
+    const node = state.draft.nodes.find(n => n.id === agentId);
+    if (!node) throw Error('Choose an agent before changing its picture.');
+    if (!state.record || !state.record.value.nodes.some(n => n.id === agentId)) {
+      edit(board => { const target=board.nodes.find(n=>n.id===agentId);target.appearance={...appearanceOf(target),avatar}; });
+      state.notice='Picture updated in this draft. Save the board to keep it.';notify();return {saved:false};
+    }
+    if (state.conflict) throw Error('This board changed in another window. Refresh the agents before changing the picture.');
+    const boardId=state.record.id,token=epoch;
+    let result;
+    try { result=await call('savePicture',{boardId,agentId,avatar,expectedRevision:state.baseRevision}); }
+    catch(error){if(error.code==='CONFLICT'){state.conflict=true;notify();}throw error;}
+    if(token!==epoch||state.draft.id!==boardId)return {saved:true};
+    if(state.record.revision>result.record.revision){await refresh();return {saved:true};}
+    const target=state.draft.nodes.find(n=>n.id===agentId);
+    if(target)target.appearance={...appearanceOf(target),avatar};
+    state.record=result.record;state.baseRevision=result.record.revision;state.conflict=false;
+    // Keep unrelated local settings as a draft; choosing a picture must not save them.
+    if(!state.dirty)state.draft=clone(result.record.value);
+    state.dirty=JSON.stringify(state.draft)!==JSON.stringify(result.record.value);
+    state.boards=state.boards.map(record=>record.id===boardId?result.record:record);
+    state.notice=avatar?'Picture saved on this board.':'Picture removed from this board.';notify();return {saved:true};
+  }
   async function ensureSaved() {
+    if (state.record && agentRuntimeSignature(state.draft) === agentRuntimeSignature(state.record.value)) return state.record.id;
     if (state.dirty || !state.record) {
       if (requestSave && !state.record) { if (!await requestSave()) throw Error("Save cancelled. Your draft is unchanged; no message or run was started."); }
-      else await save();
+      else await save({ runtimeOnly: !!state.record });
     }
     return state.record.id;
   }
@@ -602,38 +723,52 @@ export function createBoardController({
         ? state.record.id
         : await ensureSaved();
     const result = await call(action, { boardId, ...payload });
+    if(action==='newSession'){sendAttempt=null;goalAttempt=null;}
     await refresh({ all: true });
     return result;
   }
-  async function newSession(agentId) {
+  async function newSession(agentId, expectedGeneration) {
     if (!state.record) await ensureSaved();
     await refresh({ all: true });
     const session = state.sessions.find((s) => s.agentId === agentId);
     if (!session)
       throw Error("Save this new agent before starting its conversation.");
-    return action("newSession", {
+    if(expectedGeneration!==undefined&&session.generation!==expectedGeneration)throw Object.assign(Error('This chat changed in another window. Your message is still here. Check the conversation and try again.'),{code:'CONFLICT'});
+    const result=await action("newSession", {
       agentId,
       expectedGeneration: session.generation,
     });
+    return result;
   }
-  async function capabilities() {
-    state.capabilities = await call("capabilities");
-    notify();
-    return state.capabilities;
+  function capabilities({refresh=true}={}) {
+    if(capabilitiesTask)return capabilitiesTask;
+    state.capabilitiesLoading=true;state.capabilitiesError='';notify();
+    capabilitiesTask=call('capabilities',{refresh}).then(result=>{
+      state.capabilities=result;return result;
+    },error=>{if(!disposed)state.capabilitiesError=error.message;throw error;}).finally(()=>{
+      capabilitiesTask=null;if(!disposed){state.capabilitiesLoading=false;notify();}
+    });
+    return capabilitiesTask;
   }
   async function exportBoard() {
     if (!state.record) throw Error("Save this board before exporting history.");
     return call("exportBoard", { boardId: state.record.id });
   }
-  async function initialize() {
-    const results = await Promise.allSettled([
-      listBoards(),
-      capabilities(),
-      call("listWorkflows").then((result) => {
+  async function initialize({background=false}={}) {
+    const boards=listBoards();
+    const discovery=capabilities({refresh:false});
+    const workflows=call("listWorkflows").then((result) => {
         state.workflows = result.records || [];
         notify();
-      }),
-    ]);
+      });
+    if(background){
+      // Provider processes and optional catalogs never own the board's mutation
+      // lock. A missing or slow CLI must not delay opening/editing a board.
+      void discovery.catch(()=>{});
+      void workflows.catch(error=>{if(!disposed)fail(error);});
+      await boards;return;
+    }
+    const results = await Promise.allSettled([boards,discovery,workflows]);
     const errors = results
       .filter((r) => r.status === "rejected")
       .map((r) => r.reason.message);
@@ -648,6 +783,7 @@ export function createBoardController({
     task,
     edit,
     save,
+    savePicture,
     send,
     runGoal,
     action,
@@ -751,11 +887,11 @@ export function mountAgentBoard(
         ],
       )}</div>
       <div class="ab-form-grid">${area("Project goal", "board-goal", 'placeholder="What should the agents accomplish?"')}${area("Acceptance criteria", "board-criteria", 'placeholder="What evidence would demonstrate a good result?"')}</div>
-      <div class="ab-toolbar">${field("Maximum turns per goal run", "board-turns", "number", 'min="1" max="100"')}${field("Concurrent agents", "board-concurrency", "number", 'min="1" max="4"')}${select("Linked checks workflow", "board-workflow", [["", "No linked checks"]])}</div>
-      <p class="ab-help">Run goal shares your goal and acceptance criteria with the selected starters and linked recipients. Full assistant replies follow enabled arrows within the turn limit. Manual chat sends your message unchanged without automatic goal context; linked checks run only when you choose Run checks.</p>
+      <div class="ab-toolbar">${field("Turn budget (0 = no limit)", "board-turns", "number", 'min="0"')}${field("Concurrent agents", "board-concurrency", "number", 'min="1"')}${select("Linked checks workflow", "board-workflow", [["", "No linked checks"]])}</div>
+      <p class="ab-help">Run goal shares your goal and acceptance criteria with the selected starters and linked recipients. A zero turn budget follows each route to completion without replaying its ancestors. Set a positive budget to permit repeated cyclic collaboration. Manual chat sends your message unchanged without automatic goal context; linked checks run only when you choose Run checks.</p>
     </details>
     <div class="ab-toolbar ab-run-tools">${select("Start goal with", "goal-starter", [["", "All agents"]])}${button("goal", "Run goal", "play", 'class="ab-run"')}${button("pause", "Pause queue", "pause")}${button("resume", "Resume queue", "play")}${button("stop", "Stop runs", "stop", 'class="ab-danger"')}${button("checks", "Run checks", "check")}${button("refresh", "Refresh history", "refresh")}</div>
-    <div class="ab-collaboration"><label>Chat delivery <select name="chat-routing"><option value="single">Only the agent I message</option><option value="linked">Collaborate along connected arrows</option></select></label><p data-ab="routing-help">Chat sends to one agent. Choose collaboration to forward completed replies to linked agents, within the turn limit.</p><details><summary>Messages between agents <span data-ab="peer-count">0</span></summary><div data-ab="peer-feed" aria-live="polite"></div></details></div><p class="ab-run-status" data-ab="run-status">No run yet. Transport and linked check results appear separately.</p>
+    <div class="ab-collaboration"><label>Chat delivery <select name="chat-routing"><option value="single">Only the agent I message</option><option value="linked">Collaborate along connected arrows</option></select></label><p data-ab="routing-help">Chat sends to one agent. Choose collaboration to forward completed replies to linked agents, within your chosen turn budget.</p><details><summary>Messages between agents <span data-ab="peer-count">0</span></summary><div data-ab="peer-feed" aria-live="polite"></div></details></div><p class="ab-run-status" data-ab="run-status">No run yet. Transport and linked check results appear separately.</p>
     <p class="ab-help">Drag empty board space to pan. Ctrl+wheel zooms. Connected agents receive full replies; use Run checks to test their work.</p>
     <div class="ab-workspace">
       <section class="ab-map" aria-label="Agent canvas and connections">
@@ -773,7 +909,7 @@ export function mountAgentBoard(
           <div data-ab="agent-editor" hidden>
             <div class="ab-form-grid">${field("Agent name", "agent-name")}${select("Provider", "agent-provider", Object.entries(PROVIDERS))}</div>
             <fieldset class="ab-folder-assignments"><legend>Folders this agent can work in</legend><div data-ab="agent-folders"></div><div class="ab-folder-connect-tools">${select("Connect a workspace", "folder-to-connect", [["", "Current workspace"]])}${button("agent-folder-add", "Add workspace connection", "plus")}${button("agent-folder-browse", "Browse another folder", "folder")}</div></fieldset>${select('Active folder for this chat','agent-project',[['','Current workspace']])}<p class="ab-help" data-ab="agent-folder-hint"></p><p class="ab-help">Connections give this agent access to several folders. The active folder is where this chat works now. Changing it keeps each folder’s earlier native chat ready to resume. Remove disconnects only this agent; files and chat history stay saved.</p>
-            <details class="ab-appearance" open><summary>How this agent looks</summary><div class="ab-form-grid">${field("Node color", "agent-color", "color")}${field("Chat bubble color", "agent-bubble-color", "color")}${select("Fallback icon", "agent-icon", [["robot","Robot"],["code","Code"],["shield","Shield"],["book","Book"],["target","Target"],["network","Network"]])}${field("Picture zoom", "agent-picture-zoom", "range", 'min="1" max="3" step="0.1"')}${field("Picture hue", "agent-picture-hue", "range", 'min="0" max="360" step="1"')}</div><label class="ab-field">Profile picture from this computer<input name="agent-picture" type="file" accept="image/png,image/jpeg,image/webp"></label>${button("clear-picture", "Use fallback icon", "robot")}<p class="ab-help">PNG, JPEG or WebP, up to 256 KB. Pictures are saved with this board.</p></details>
+            <details class="ab-appearance" open><summary>How this agent looks</summary><div class="ab-form-grid">${field("Node color", "agent-color", "color")}${field("Chat bubble color", "agent-bubble-color", "color")}${select("Fallback icon", "agent-icon", [["robot","Robot"],["code","Code"],["shield","Shield"],["book","Book"],["target","Target"],["network","Network"]])}${field("Picture zoom", "agent-picture-zoom", "number", 'min="0.1" step="0.1"')}${field("Picture hue", "agent-picture-hue", "range", 'min="0" max="360" step="1"')}</div><label class="ab-field">Profile picture from this computer<input name="agent-picture" type="file" accept="image/png,image/jpeg,image/webp"></label><div class="ab-picture-feedback"><span data-ab="picture-preview" aria-label="Profile picture preview"></span><p data-ab="picture-status" role="status"></p></div>${button("clear-picture", "Use fallback icon", "robot")}<p class="ab-help">PNG, JPEG or WebP. On saved boards, choosing or removing a picture saves it immediately.</p></details>
             <p class="ab-provider-hint" data-ab="provider-hint"></p>
             <details><summary>Model, instructions and permissions</summary><div class="ab-form-grid">${field("Model (blank = provider default)", "agent-model")}${field("Effort (blank = provider default)", "agent-effort")}${select("Native permissions", "agent-permission", [["native", "Provider native policy"]])}</div>${area("Optional instructions sent with this agent", "agent-instructions", 'placeholder="Leave blank to use the native agent without added instructions."')}<p class="ab-help">These are your explicit instructions. The board adds no hidden role or planning prompt. Native permission requests can block a turn; read the chat evidence to recover.</p></details>
             <div data-ab="api-fields" hidden><div class="ab-form-grid">${select(
@@ -785,7 +921,7 @@ export function mountAgentBoard(
                 ["anthropic", "Anthropic"],
                 ["google", "Google"],
               ],
-            )}${field("API model", "api-model")}${field("Custom endpoint", "api-endpoint", "url")}${field("API key (leave blank to retain saved key)", "api-key", "password", 'autocomplete="new-password" data-sensitive="true"')}</div><p class="ab-help">API use has separate billing. Credentials are protected by the desktop credential store before saving. API context uses this agent’s conversation history.</p></div>
+            )}${field("API model", "api-model")}${field("Output token budget (0 = provider default; Anthropic requires a budget)", "api-max-tokens", "number", 'min="0"')}${field("Request deadline in milliseconds (0 = none)", "api-timeout", "number", 'min="0"')}${field("Custom endpoint", "api-endpoint", "url")}${field("API key (leave blank to retain saved key)", "api-key", "password", 'autocomplete="new-password" data-sensitive="true"')}</div><p class="ab-help">API use has separate billing. Credentials are protected by the desktop credential store before saving. API context uses this agent’s conversation history.</p></div>
             <div class="ab-toolbar">${field("Position X", "agent-x", "number", 'step="10"')}${field("Position Y", "agent-y", "number", 'step="10"')}${button("remove-agent", "Remove selected agent", "trash")}</div>
           </div>
           <section class="ab-project-editor"><h3>Project folders</h3>${select('Folder on board','project-selection',[[WORKSPACE_FOLDER,'Current workspace']])}${field('Folder name','project-name')}${field('Folder path','project-path','text','readonly')}
@@ -823,6 +959,7 @@ export function mountAgentBoard(
     rendering = false;
   let fullscreenPlaceholder = null, fullscreenFocus = null, panelDrag = null, panelZ = 1;
   const chatDrafts = new Map();
+  const picturePending=new Set(),pictureErrors=new Map();
   let chatEnteredFullscreen = false, closeImportDialog = null;
   let maximizedChatId = '', chatFocusReturn = null;
   const folderStatuses=new Map();let selectedProjectId=WORKSPACE_FOLDER,tasksMount=null,tasksKey='',tasksEpoch=0;
@@ -846,7 +983,7 @@ export function mountAgentBoard(
     const dialog = document.createElement('dialog');
     dialog.className = 'ab-save-dialog';
     dialog.setAttribute('aria-labelledby', 'ab-save-title');
-    dialog.innerHTML = `<form><h2 id="ab-save-title">Save board</h2><label>Board name<input name="save-name" required maxlength="200" autocomplete="off"></label><label>How to save<select name="save-mode"><option value="new">Save as a new board</option><option value="overwrite">Overwrite an existing board</option></select></label><label data-save-target>Board to overwrite<select name="save-target"></select></label><p data-save-help></p><label data-save-confirm><input type="checkbox" name="save-confirm"> I want to overwrite this board’s saved settings and layout.</label><p data-save-error role="alert"></p><footer><button type="button" data-save-cancel>Cancel</button><button type="submit" data-save-submit>Save new board</button></footer></form>`;
+    dialog.innerHTML = `<form><h2 id="ab-save-title">Save board</h2><label>Board name<input name="save-name" required  autocomplete="off"></label><label>How to save<select name="save-mode"><option value="new">Save as a new board</option><option value="overwrite">Overwrite an existing board</option></select></label><label data-save-target>Board to overwrite<select name="save-target"></select></label><p data-save-help></p><label data-save-confirm><input type="checkbox" name="save-confirm"> I want to overwrite this board’s saved settings and layout.</label><p data-save-error role="alert"></p><footer><button type="button" data-save-cancel>Cancel</button><button type="submit" data-save-submit>Save new board</button></footer></form>`;
     const form = dialog.querySelector('form'), name = form.elements.namedItem('save-name'), mode = form.elements.namedItem('save-mode'), target = form.elements.namedItem('save-target'), confirm = form.elements.namedItem('save-confirm');
     const records = state.boards.map(clone);
     name.value = state.draft.name === 'Untitled agent board' ? '' : state.draft.name;
@@ -893,7 +1030,8 @@ export function mountAgentBoard(
       },
     },
   );
-  const run = (fn) => controller.task(fn).catch(() => {});
+  let importRecovery = null;
+  const run = (fn, accept) => controller.task(async()=>{await accept?.();return fn();}).catch(error => {importRecovery={error,fn};render();});
   const tell = (text) => {
     state.notice = text;
     announce(text);
@@ -950,6 +1088,17 @@ export function mountAgentBoard(
       const node = board.nodes.find((n) => n.id === id);
       if (node) change(node);
     });
+  }
+  async function changePicture(agentId,file) {
+    const boardId=state.draft.id,key=boardId+':'+agentId;
+    picturePending.add(key);pictureErrors.delete(key);render();
+    try {
+      const avatar=file?await readAgentPicture(file):'';
+      if(state.draft.id!==boardId)return;
+      await controller.savePicture(agentId,avatar);
+      if(state.selectedAgentId===agentId)f('agent-picture').value='';
+    } catch(error){pictureErrors.set(key,'Picture not saved. '+error.message);throw error;}
+    finally{picturePending.delete(key);render();}
   }
   function sessionFor(id) {
     return state.sessions.find((s) => s.agentId === id);
@@ -1009,6 +1158,7 @@ export function mountAgentBoard(
             : state.notice);
       q("notice").classList.toggle("ab-error", !!state.error || state.conflict);
       q("notice").setAttribute("role", state.error ? "alert" : "status");
+      if(importRecovery&&state.error===importRecovery.error.message){const {error,fn}=importRecovery;window.LVXImportReviewRecovery?.append(q('notice'),error,()=>run(fn,error.acceptImportReview));}
       const changedBoard = eventBoard !== state.record?.id;
       if (changedBoard) {
         eventBoard = state.record?.id;
@@ -1115,6 +1265,12 @@ export function mountAgentBoard(
         setValue('agent-icon', appearance.icon);
         setValue('agent-picture-zoom', appearance.zoom);
         setValue('agent-picture-hue', appearance.hue);
+        const picture=safeAvatar(appearance.avatar),preview=q('picture-preview'),key=board.id+':'+node.id;
+        if(preview.dataset.image!==picture){preview.dataset.image=picture;preview.replaceChildren();if(picture){const image=document.createElement('img');image.src=picture;image.alt='Profile picture preview';preview.append(image);}else preview.innerHTML=icon(appearance.icon);}
+        const savedNode=state.record?.value.nodes.find(n=>n.id===node.id),saved=state.record?.id===board.id&&savedNode&&safeAvatar(savedNode.appearance?.avatar)===picture;
+        q('picture-status').textContent=picturePending.has(key)?'Saving picture…':pictureErrors.get(key)||(saved?(picture?'Picture saved on this board. Changes save automatically.':'No picture saved. Choosing a file saves it automatically.'):'Picture is part of this draft. Save the board to keep it.');
+        f('agent-picture').disabled=state.busy>0;
+        root.querySelector('[data-ab-action="clear-picture"]').disabled=state.busy>0;
         const capability = state.capabilities?.providers?.find(
           (p) => p.id === node.provider,
         );
@@ -1149,7 +1305,7 @@ export function mountAgentBoard(
           node.provider === "api" &&
           node.apiConfig?.provider !== "custom" &&
           !node.model.trim();
-        setValue("api-endpoint", node.apiConfig?.customEndpoint || "");
+        setValue("api-endpoint", node.apiConfig?.customEndpoint || ""); setValue("api-max-tokens",node.apiConfig?.maxTokens??0);setValue("api-timeout",node.apiConfig?.timeoutMs??0);
       } else editorAgent = "";
       renderCanvas();
       renderProjects();
@@ -1236,7 +1392,7 @@ export function mountAgentBoard(
       if (avatar.dataset.key !== avatarKey) {
         avatar.dataset.key = avatarKey;
         avatar.replaceChildren();
-        if (image) { const img = document.createElement('img'); img.src = image; img.alt = ''; img.style.transform = `scale(${Math.min(3,Math.max(1,Number(appearance.zoom)||1))})`; img.style.filter = `hue-rotate(${Math.min(360,Math.max(0,Number(appearance.hue)||0))}deg)`; avatar.append(img); }
+        if (image) { const img = document.createElement('img'); img.src = image; img.alt = ''; img.style.transform = `scale(${Number(appearance.zoom)||1})`; img.style.filter = `hue-rotate(${Math.min(360,Math.max(0,Number(appearance.hue)||0))}deg)`; avatar.append(img); }
         else avatar.innerHTML = icon(['robot','code','shield','book','target','network'].includes(appearance.icon) ? appearance.icon : 'robot');
       }
       element.querySelector("strong").textContent = node.name;
@@ -1414,8 +1570,8 @@ export function mountAgentBoard(
           const article = document.createElement('article'); article.className = 'ab-window-message'; article.dataset.messageId = message.id;article.dataset.role=message.role;const speaker=board.nodes.find(n=>n.id===(message.role==='peer'?message.from:node.id));article.style.setProperty('--bubble-color',appearanceOf(speaker).bubbleColor);
           const heading = document.createElement('strong'), body = document.createElement('pre');
           heading.textContent = `${friendlyMessageRoute(message,board.nodes)} · ${message.state || ''}`;
-          body.textContent = message.text;
           article.append(heading,body);
+          renderChatText(body,message);
           if(message.role==='assistant'&&message.state==='completed'){const review=document.createElement('button');review.type='button';review.dataset.abAction='import-tests';review.dataset.messageId=message.id;review.textContent='Review / import generated tests';article.append(review);}
           if (message.error) { const error = document.createElement('p'); error.textContent = message.error; article.append(error); }
           transcript.append(article);
@@ -1457,7 +1613,7 @@ export function mountAgentBoard(
     const {mountAgentTestImport}=await import('./agent-test-import.js');
     closeImportDialog=await mountAgentTestImport({root,controller,invoke,workspaceRoot,tell,messageId,state,onClose:()=>{closeImportDialog=null;}});
   }
-  function requestChatName(value){return new Promise(resolve=>{const d=document.createElement('dialog');d.className='ab-save-dialog';const form=document.createElement('form');form.method='dialog';const label=document.createElement('label');label.textContent='Chat name';const input=document.createElement('input');input.value=value;input.required=true;input.maxLength=300;label.append(input);const save=document.createElement('button');save.textContent='Save name';save.type='submit';const cancel=document.createElement('button');cancel.textContent='Cancel';cancel.type='button';const close=v=>{d.close();d.remove();resolve(v);};cancel.onclick=()=>close(null);form.onsubmit=e=>{e.preventDefault();if(input.value.trim())close(input.value.trim());};d.oncancel=e=>{e.preventDefault();close(null);};form.append(label,save,cancel);d.append(form);root.append(d);d.showModal();input.focus();});}
+  function requestChatName(value){return new Promise(resolve=>{const d=document.createElement('dialog');d.className='ab-save-dialog';const form=document.createElement('form');form.method='dialog';const label=document.createElement('label');label.textContent='Chat name';const input=document.createElement('input');input.value=value;input.required=true;label.append(input);const save=document.createElement('button');save.textContent='Save name';save.type='submit';const cancel=document.createElement('button');cancel.textContent='Cancel';cancel.type='button';const close=v=>{d.close();d.remove();resolve(v);};cancel.onclick=()=>close(null);form.onsubmit=e=>{e.preventDefault();if(input.value.trim())close(input.value.trim());};d.oncancel=e=>{e.preventDefault();close(null);};form.append(label,save,cancel);d.append(form);root.append(d);d.showModal();input.focus();});}
   function restoreMaximizedChat(){
     const panel=(state.draft.panels||[]).find(p=>p.maximized&&!p.minimized);
     if(!panel)return false;
@@ -1559,7 +1715,7 @@ export function mountAgentBoard(
       el.dataset.role = message.role;
       el.querySelector("header").textContent =
         `${friendlyMessageRoute(message, routeNodes)} · ${message.state || ""} · ${message.createdAt || ""}`;
-      el.querySelector(".ab-message-body").textContent = message.text;
+      renderChatText(el.querySelector(".ab-message-body"),message);
       const context = message.taskContext;
       const hasContext =
         context &&
@@ -1619,17 +1775,21 @@ export function mountAgentBoard(
     q("events").textContent = JSON.stringify(state.events, null, 2);
   }
   function renderCapabilities() {
-    const signature = JSON.stringify(state.capabilities);
+    const signature = JSON.stringify([state.capabilities,state.capabilitiesLoading,state.capabilitiesError]);
     if (signature === lastCapabilities) return;
     lastCapabilities = signature;
+    const control=root.querySelector('[data-ab-action="capabilities"]');
+    control.disabled=state.capabilitiesLoading;
     q("capabilities").innerHTML =
-      state.capabilities?.providers
+      (state.capabilitiesLoading?'<li role="status">Checking installed tools in the background. Board controls remain available.</li>':'')+
+      (state.capabilitiesError?'<li role="alert">'+esc(state.capabilitiesError)+'</li>':'')+
+      (state.capabilities?.providers
         ?.map(
           (p) =>
             `<li><strong>${esc(p.name || PROVIDERS[p.id] || p.id)}</strong> · ${p.installed ? (p.id === "api" ? "API route available; credentials unchecked" : "CLI detected") : "Unavailable"}${p.version ? " · " + esc(p.version) : ""}<br><span>${esc(p.login || "Native login not checked")}${p.error ? " · " + esc(p.error) : ""}</span><details><summary>Detected capabilities</summary><pre>${esc(JSON.stringify(p, null, 2))}</pre></details></li>`,
         )
         .join("") ||
-      "<li>Provider detection unavailable. Check connection to retry.</li>";
+      (state.capabilitiesLoading?'':"<li>Provider detection unavailable. Check connection to retry.</li>"));
   }
   function adjustView(change) {
     controller.edit((board) => {
@@ -1648,10 +1808,10 @@ export function mountAgentBoard(
       );
       return;
     }
-    const minX = Math.min(...nodes.map((n) => n.position.x)),
-      minY = Math.min(...nodes.map((n) => n.position.y)),
-      maxX = Math.max(...nodes.map((n) => n.position.x + 230)),
-      maxY = Math.max(...nodes.map((n) => n.position.y + n.height));
+    const minX = nodes.reduce((bound,n)=>Math.min(bound,n.position.x),Infinity),
+      minY = nodes.reduce((bound,n)=>Math.min(bound,n.position.y),Infinity),
+      maxX = nodes.reduce((bound,n)=>Math.max(bound,n.position.x + 230),-Infinity),
+      maxY = nodes.reduce((bound,n)=>Math.max(bound,n.position.y + n.height),-Infinity);
     const zoom = Math.min(
       1,
       Math.max(
@@ -1789,7 +1949,7 @@ export function mountAgentBoard(
         const result=await open({provider:node.provider,nodeName:node.name,nodeId:node.id,boardId:state.draft.id,workspaceRoot});
         // Diagnostics never resend a failed turn or overwrite the chat draft.
         if(!destroyed) {
-          await controller.capabilities();
+          void controller.capabilities().catch(()=>{});
           if(result?.action==='settings'){
             restoreMaximizedChat();controller.select(node.id);root.classList.add('ab-inspector-open');root.querySelector('.ab-list-editor').open=true;f('agent-name').focus({preventScroll:true});
           } else target.isConnected&&target.focus({preventScroll:true});
@@ -1814,7 +1974,7 @@ export function mountAgentBoard(
         controller.edit(board => { board.panels = (board.panels || []).filter(p => action !== 'chat-close' || p.agentId !== agentId); const panel = board.panels.find(p=>p.agentId===agentId); if (panel) panel.minimized=true; });
         break;
       }
-      case 'clear-picture': updateNode(node => { node.appearance = {...appearanceOf(node),avatar:''}; }); f('agent-picture').value = ''; break;
+      case 'clear-picture': await changePicture(state.selectedAgentId,null); break;
       case 'tidy': controller.edit(board => { board.nodes.forEach((node,index) => { node.position={x:50+(index%4)*330,y:50+Math.floor(index/4)*260}; });board.view||={zoom:1,panX:24,panY:24};board.view.workspacePosition={x:80,y:100+Math.max(1,Math.ceil(board.nodes.length/4))*260};(board.projects||[]).forEach((project,index)=>{project.position={x:380+(index%3)*300,y:board.view.workspacePosition.y+Math.floor(index/3)*220};}); }); fit(); break;
       case "edit-goal":
         root.querySelector(".ab-settings").open = true;
@@ -2052,6 +2212,10 @@ export function mountAgentBoard(
   const onClick = (event) => {
     const target = event.target.closest("[data-ab-action]");
     if (target) {
+      if(target.disabled)return;
+      if(target.dataset.abAction==='capabilities'){
+        void handleAction('capabilities',target).catch(()=>{});return;
+      }
       run(() => handleAction(target.dataset.abAction, target));
       return;
     }
@@ -2130,6 +2294,7 @@ export function mountAgentBoard(
         "api-model": "model",
         "api-endpoint": "customEndpoint",
         "api-key": "apiKey",
+        "api-max-tokens":"maxTokens", "api-timeout":"timeoutMs",
       }[name];
       if (key)
         updateNode((node) => {
@@ -2139,7 +2304,7 @@ export function mountAgentBoard(
             customEndpoint: "",
           };
           if (name !== "api-key" || input.value)
-            node.apiConfig[key] = input.value;
+            node.apiConfig[key] = ["maxTokens","timeoutMs"].includes(key) ? Number(input.value) : input.value;
         });
     }
   }
@@ -2151,16 +2316,9 @@ export function mountAgentBoard(
     if(event.target.name==='chat-routing'){renderChatWindows();return;}
     if(event.target.name==='project-selection'){selectedProjectId=event.target.value;render();return;}
     if (event.target.name === 'agent-picture') {
-      const file = event.target.files?.[0], agentId = state.selectedAgentId, boardId = state.draft.id;
+      const file = event.target.files?.[0], agentId = state.selectedAgentId;
       if (!file) return;
-      run(async () => {
-        if (!['image/png','image/jpeg','image/webp'].includes(file.type) || file.size > 256*1024) throw Error('Choose a PNG, JPEG or WebP picture no larger than 256 KB.');
-        const value = await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Picture could not be read.'));reader.readAsDataURL(file);});
-        const image = new Image(); image.src=value; await image.decode();
-        if (image.width>4096 || image.height>4096 || !safeAvatar(value)) throw Error('Choose a picture no larger than 4096 × 4096 pixels.');
-        if (state.draft.id!==boardId) return;
-        controller.edit(board => { const node=board.nodes.find(n=>n.id===agentId);if(node)node.appearance={...appearanceOf(node),avatar:value}; });
-      }); return;
+      run(()=>changePicture(agentId,file)); return;
     }
     if (event.target.dataset.edgeToggle) {
       const id = event.target.dataset.edgeToggle;
@@ -2206,7 +2364,7 @@ export function mountAgentBoard(
       if(['Enter',' '].includes(event.key)){event.preventDefault();selectedProjectId=folder.dataset.projectId;render();root.classList.add('ab-inspector-open');root.querySelector('.ab-list-editor').open=true;f('project-selection').focus();return;}
     }
     if (chat && event.target.tagName === 'TEXTAREA' && event.key==='Enter' && (event.ctrlKey||event.metaKey)) {event.preventDefault();chat.querySelector('form').requestSubmit();return;}
-    if (event.target.matches('.ab-resize-handle') && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) {event.preventDefault();controller.edit(board=>{const p=board.panels.find(p=>p.agentId===chat.dataset.chatAgent);if(p.maximized)return;p.width=Math.min(2400,Math.max(280,p.width+(event.key==='ArrowRight'?20:event.key==='ArrowLeft'?-20:0)));p.height=Math.min(2400,Math.max(240,p.height+(event.key==='ArrowDown'?20:event.key==='ArrowUp'?-20:0)));});return;}
+    if (event.target.matches('.ab-resize-handle') && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) {event.preventDefault();controller.edit(board=>{const p=board.panels.find(p=>p.agentId===chat.dataset.chatAgent);if(p.maximized)return;p.width=Math.max(1,p.width+(event.key==='ArrowRight'?20:event.key==='ArrowLeft'?-20:0));p.height=Math.max(1,p.height+(event.key==='ArrowDown'?20:event.key==='ArrowUp'?-20:0));});return;}
     const edge=event.target.closest('g[data-edge-id]');
     if(edge && ['Enter',' '].includes(event.key)){event.preventDefault();edge.dispatchEvent(new MouseEvent('click',{bubbles:true}));return;}
     if (
@@ -2285,7 +2443,7 @@ export function mountAgentBoard(
   const onPointerMove = (event) => {
     if(panelDrag){
       const dx=event.clientX-panelDrag.x,dy=event.clientY-panelDrag.y,el=panelDrag.element,s=panelDrag.start;
-      if(panelDrag.resize){const w=q('canvas').clientWidth-s.x,h=q('canvas').clientHeight-s.y;el.style.width=Math.max(Math.min(280,w),Math.min(2400,s.width+dx,w))+'px';el.style.height=Math.max(Math.min(240,h),Math.min(2400,s.height+dy,h))+'px';}
+      if(panelDrag.resize){const w=q('canvas').clientWidth-s.x,h=q('canvas').clientHeight-s.y;el.style.width=Math.max(Math.min(280,w),Math.min(s.width+dx,w))+'px';el.style.height=Math.max(Math.min(240,h),Math.min(s.height+dy,h))+'px';}
       else{el.style.left=Math.max(0,Math.min(q('canvas').clientWidth-el.offsetWidth,s.x+dx))+'px';el.style.top=Math.max(0,Math.min(q('canvas').clientHeight-el.offsetHeight,s.y+dy))+'px';}
       renderChatLinks();
       return;
@@ -2389,7 +2547,7 @@ export function mountAgentBoard(
   const activityClock=setInterval(()=>{if(destroyed)return;if(state.messages.some(m=>['queued','running'].includes(m.state)))void controller.refresh().catch(controller.fail);},1000);
   const chatViewportObserver=new ResizeObserver(()=>{for(const panel of state.draft.panels||[]){const el=q('chat-windows').querySelector('[data-chat-agent=\"'+CSS.escape(panel.agentId)+'\"]');if(el)layoutChatWindow(el,panel);}renderChatLinks();});chatViewportObserver.observe(q('canvas'));
   render();
-  const ready=run(async () => { await controller.initialize(); if (initialBoardId) await controller.load(initialBoardId);if(initialToolsOpen)await openTasks(); });
+  const ready=run(async () => { await controller.initialize({background:true}); if (initialBoardId) await controller.load(initialBoardId);if(initialToolsOpen)await openTasks(); });
   return {
     ready,
     loadBoard:id=>controller.task(()=>requestBoardTransition(()=>controller.load(id),'the selected board')),

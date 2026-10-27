@@ -40,7 +40,7 @@ async function createDriver(config) {
                 return route.abort('blockedbyclient');
             });
             if (context.routeWebSocket) await context.routeWebSocket('**/*', socket => socket.close());
-            page = await context.newPage(); page.setDefaultTimeout(5000);
+            page = await context.newPage(); page.setDefaultTimeout(0);
             if (config.websiteUrl) await page.goto(authorize(config.websiteUrl), { waitUntil: 'domcontentloaded' });
             else if (typeof (config.websiteHTML ?? config.websiteHtml) === 'string') await page.setContent(config.websiteHTML ?? config.websiteHtml);
             return page;
@@ -67,22 +67,22 @@ async function createDriver(config) {
         if (name === 'Select From List') return locator.selectOption(text);
         if (name === 'Check Checkbox') return locator.check();
         if (name === 'Uncheck Checkbox') return locator.uncheck();
-        const seconds = args[1] === undefined ? 5 : Number(args[1]);
-        if (!Number.isFinite(seconds) || seconds < 0 || seconds > 60) throw new Error('Wait timeout must be 0–60 seconds.');
-        return locator.waitFor({ state: name === 'Wait Until Element Is Visible' ? 'visible' : 'attached', timeout: Math.max(1, seconds * 1000) });
+        const seconds = args[1] === undefined ? 0 : Number(args[1]);
+        if (!Number.isFinite(seconds) || seconds < 0) throw new Error('Wait timeout must be nonnegative.');
+        return locator.waitFor({ state: name === 'Wait Until Element Is Visible' ? 'visible' : 'attached', timeout: seconds * 1000 });
     }
     const server = http.createServer(async (request, response) => {
         response.setHeader('Content-Type', 'application/json'); response.setHeader('Cache-Control', 'no-store');
         if (request.method !== 'POST' || request.url !== '/keyword' || request.headers.origin || request.headers.authorization !== `Bearer ${token}`) { response.writeHead(403); response.end('{"error":"Driver request denied"}'); return; }
         try {
             let bytes = 0, chunks = [];
-            for await (const chunk of request) { bytes += chunk.length; if (bytes > 1024 * 1024) throw new Error('Keyword payload exceeded 1 MiB.'); chunks.push(chunk); }
+            for await (const chunk of request) { bytes += chunk.length;  chunks.push(chunk); }
             const payload = JSON.parse(Buffer.concat(chunks).toString('utf8'));
             const result = await keyword(payload.name, payload.args || []);
             response.writeHead(200); response.end(JSON.stringify({ value: result ?? null }));
         } catch (error) { response.writeHead(400); response.end(JSON.stringify({ error: error.message })); }
     });
-    server.requestTimeout = 65000;
+    server.requestTimeout = 0;
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
     return { endpoint: `http://127.0.0.1:${server.address().port}/keyword`, token, async close() { await browser?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } };
 }

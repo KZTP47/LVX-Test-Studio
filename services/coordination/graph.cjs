@@ -37,7 +37,7 @@ function validate(workflow) {
   return result;
 }
 function applyOperations(workflow, operations) {
-  if (!Array.isArray(operations) || operations.length < 1 || operations.length > 200) fail('VALIDATION', 'Provide between 1 and 200 graph changes.');
+  if (!Array.isArray(operations) || operations.length < 1) fail('VALIDATION', 'Provide at least one graph change.');
   const next = copy(workflow), changes = [];
   for (const operation of operations) {
     noCredentials(operation);
@@ -118,7 +118,7 @@ function createGraphService({ workspace, getWorkspaceRoot, agents, execute, canc
     const result = { workflowId: record.id, revision: record.revision, hash: hash(record.value), workflow, selectedNodeIds,
       summary: { name: workflow.name || record.id, nodeCount: workflow.nodes.length, edgeCount: workflow.edges.length, validation: { valid: validation.valid, errors: validation.errors }, roots: workflow.nodes.filter(node => !workflow.edges.some(edge => edge.target === node.id)).map(node => node.id),
         nodes: workflow.nodes.map(node => ({ id: node.id, name: node.data?.name || node.id, type: GraphEngine.normalizeNodeType(node.type), upstream: workflow.edges.filter(edge => edge.target === node.id).map(edge => edge.source), downstream: workflow.edges.filter(edge => edge.source === node.id).map(edge => edge.target), selected: selectedNodeIds.includes(node.id) })),
-        latestRuns: recent.filter(run => run.value.workflowHash === hash(GraphEngine.validate(record.value, { strict: true }).workflow)).slice(-5).map(run => safeContext({ id: run.id, status: run.value.status, results: run.value.results }, redact)) },
+        latestRuns: recent.filter(run => run.value.workflowHash === hash(GraphEngine.validate(record.value, { strict: true }).workflow)).map(run => safeContext({ id: run.id, status: run.value.status, results: run.value.results }, redact)) },
       nodeCatalog: TYPES.map(type => ({ type, name: require('../machina-catalog.cjs').nodes.find(node => node.id === type)?.name || type, supports: 'inspect settings, dependencies, ports, execution and reviewed edits' })) };
     const cleaned = safeContext(result, redact);
     cleaned.packet = '[Saved LVX workflow graph]\n' + JSON.stringify(cleaned, null, 2);
@@ -160,7 +160,7 @@ function createGraphService({ workspace, getWorkspaceRoot, agents, execute, canc
     if (action === 'runGraphChecks') return runChecks(payload);
     if (action === 'cancelGraphChecks') { const entry = activeChecks.get(payload.runId); if (!entry || entry.binding !== binding) fail('NOT_FOUND', 'This graph check is no longer running.'); entry.controller.abort(); return { cancelled: true }; }
     if (action === 'analyzeGraph') {
-      if (typeof payload.instruction !== 'string' || !payload.instruction.trim() || payload.instruction.length > 128 * 1024) fail('VALIDATION', 'Describe what you want the agent to examine or improve.');
+      if (typeof payload.instruction !== 'string' || !payload.instruction.trim()) fail('VALIDATION', 'Describe what you want the agent to examine or improve.');
       const ctx = await context(payload), board = await read('agent-boards', payload.boardId, binding);
       if (!board?.value.nodes.some(node => node.id === payload.agentId)) fail('NOT_FOUND', 'Choose an agent from the saved board.');
       await assertAllowed(board.value, binding); stillBound(binding);
@@ -173,7 +173,7 @@ function createGraphService({ workspace, getWorkspaceRoot, agents, execute, canc
     if (action === 'previewGraphProposal') {
       const record = await graph(payload.workflowId, binding), proposal = payload.proposal;
       if (!proposal || proposal.baseRevision !== record.revision) fail('CONFLICT', 'The saved graph changed. Refresh its snapshot and ask for an updated proposal.');
-      if (typeof proposal.summary !== 'string' || !proposal.summary.trim() || proposal.summary.length > 20000) fail('VALIDATION', 'Give the proposed changes a short explanation.');
+      if (typeof proposal.summary !== 'string' || !proposal.summary.trim()) fail('VALIDATION', 'Give the proposed changes a short explanation.');
       const changed = applyOperations(record.value, proposal.operations), id = crypto.randomUUID();
       const value = { id, workflowId: record.id, baseRevision: record.revision, baseHash: hash(record.value), summary: proposal.summary, operations: copy(proposal.operations), status: 'preview', createdAt: new Date().toISOString(), afterHash: hash(changed.workflow) };
       stillBound(binding);

@@ -34,8 +34,10 @@ the unchanged complete assistant body and a visible sender/recipient header.
 No standing rules, synthetic roles, extra agent turns or provider defaults are
 added. In linked mode, completed assistant text is delivered only over enabled
 directed links. Ordinary delivery waits for an idle recipient. Per-board
-concurrency is 1–4, total native
-or API workers are capped at four, and each run has a 1–100 turn budget. Pausing
+concurrency is a user-selected positive integer without an application maximum.
+A turn budget of zero follows each route until its leaves, withholding automatic
+replays to ancestors so cycles finish naturally. A positive user-selected budget
+permits iterative cyclic delivery and has no application maximum. Pausing
 holds queued deliveries while an active turn finishes. Cancellation stops owned
 process trees, cancels pending messages and preserves current-generation partial
 output, protocol and diagnostics as cancelled evidence without routing it.
@@ -97,9 +99,12 @@ Acceptance metadata uses the latest run's original acceptance-criteria snapshot.
 
 Tests use labelled deterministic subprocess/API fixtures and real canonical SQLite
 storage. They do not authenticate providers, send paid model requests or assess
-model quality. Composed input is bounded at 8 MiB with an explicit error before
-launch if exceeded. Native output is bounded at 8 MiB and 20 minutes per turn;
-crossing either boundary produces an explicit limit/partial outcome. Provider-installed
+model quality. Composed input and native/API output have no local byte ceiling.
+Native turns and API requests have no deadline by default; optional authored
+transport deadlines and output budgets remain enforceable and cancellable.
+Unspecified API token budgets are omitted. Anthropic Messages requires an explicit
+positive output token budget; the agent API settings expose that provider requirement.
+Provider-installed
 tools, native permissions, account limits and CLI updates can still block actual
 work and are reported without silently creating a fresh conversation.
 

@@ -1,0 +1,624 @@
+{
+  "schemaVersion": 1,
+  "reviewed": [
+    {
+      "file": "apps/lvx-machina/ai-log-summary.test.js",
+      "sha256": "776bf5b784fee3b108ebe09338d05f82e2f69343e535647441b7e0531eb143b8",
+      "rule": "absolute-path",
+      "matchSha256": "decc707774c44f952034b5993e8e85d41c5f6d674dc7829dc5655f8b55ce69c2",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "apps/lvx-machina/ai-log-summary.test.js",
+      "sha256": "776bf5b784fee3b108ebe09338d05f82e2f69343e535647441b7e0531eb143b8",
+      "rule": "absolute-path",
+      "matchSha256": "58c0dcc28108258c490dcf9af73203db2f7b10ae62679bfa13aa05375d7aaeab",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "apps/lvx-machina/data-manager.test.js",
+      "sha256": "286ec1780c91ec463c2e1d7a502424809c0193a6a57195a1c8a7817269f52b77",
+      "rule": "email-address",
+      "matchSha256": "fb98d44ad7501a959f3f4f4a3f004fe2d9e581ea6207e218c4b02c08a4d75adf",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "apps/lvx-machina/data-manager.test.js",
+      "sha256": "286ec1780c91ec463c2e1d7a502424809c0193a6a57195a1c8a7817269f52b77",
+      "rule": "email-address",
+      "matchSha256": "cac74bf4c69eb259b3be6343a7594409cfc522e1bd5bfd3b5930931c38b20712",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "apps/lvx-machina/mock-builder.test.js",
+      "sha256": "3f9313cda439562c5203e26155b7f6873b14ca0a96b4fc3965d7de9ad807133d",
+      "rule": "email-address",
+      "matchSha256": "fb98d44ad7501a959f3f4f4a3f004fe2d9e581ea6207e218c4b02c08a4d75adf",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "apps/lvx-machina/mock-builder.test.js",
+      "sha256": "3f9313cda439562c5203e26155b7f6873b14ca0a96b4fc3965d7de9ad807133d",
+      "rule": "email-address",
+      "matchSha256": "cac74bf4c69eb259b3be6343a7594409cfc522e1bd5bfd3b5930931c38b20712",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "apps/lvx-machina/script.js",
+      "sha256": "d30a1514d736bf7aa7c1b5b2a48cd0d04ba3858b81b692f29247adaaef9ddae6",
+      "rule": "email-address",
+      "matchSha256": "cef3f389d20142f0ee6485f04f1633139c4af024569a666290c13e82dfe6f7f2",
+      "reason": "Inspected unchanged deliberately vulnerable demo shown in the Security Testing Center; database URL uses synthetic account text and an example domain."
+    },
+    {
+      "file": "apps/lvx-machina/security-testing.test.js",
+      "sha256": "438bf8ee3aa67bb6af4f6d30d0b8291a9496c285b50e88fa1ab50595990d1abc",
+      "rule": "email-address",
+      "matchSha256": "1a64b2b33de969713339ce9402a55b1227078d7851a1e264fe5fe56eabf2fffa",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "apps/lvx-machina/visual-editor.js",
+      "sha256": "7c4d14e92fa20787bdb99911f11f3f0184667c5c526356b4b8af75616d1a936f",
+      "rule": "absolute-path",
+      "matchSha256": "fc8cab0c8b258408e40a6126a43253a928000f563bb2a2fd6df3e9d403cd2631",
+      "reason": "Inspected unchanged generic log/export folder placeholder or escaped grammar text in app/editor code; no personal account or project path."
+    },
+    {
+      "file": "apps/lvx-machina/visual-editor.js",
+      "sha256": "7c4d14e92fa20787bdb99911f11f3f0184667c5c526356b4b8af75616d1a936f",
+      "rule": "absolute-path",
+      "matchSha256": "7fb894118bb226f88ce5ba2c0f150bcebf2b59afd62ae61ece5209ed9d2ade75",
+      "reason": "Inspected unchanged generic log/export folder placeholder or escaped grammar text in app/editor code; no personal account or project path."
+    },
+    {
+      "file": "apps/lvx-machina/visual-editor.js",
+      "sha256": "7c4d14e92fa20787bdb99911f11f3f0184667c5c526356b4b8af75616d1a936f",
+      "rule": "absolute-path",
+      "matchSha256": "e926f94b1a03e845c2cd9b0c042e7024b368557dee32dd42c5e7df19cab710fd",
+      "reason": "Inspected unchanged generic log/export folder placeholder or escaped grammar text in app/editor code; no personal account or project path."
+    },
+    {
+      "file": "apps/lvx-machina/visual-editor.test.js",
+      "sha256": "39a3eeeef4af8aa5495e0199bc9f9710f515bfc474a629c3e2135a82434f10de",
+      "rule": "absolute-path",
+      "matchSha256": "78b2e5e0bd855ba32b65189216b71d146d5953fec1c82058bfa44aa8984e2daa",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "assets/licenses/diff-LICENSE",
+      "sha256": "eda81a415869e67809f6a9f3fd6056062cb83a462118e07eec5e92b2e0c40ce9",
+      "rule": "email-address",
+      "matchSha256": "6745929765d332ec1aebc5cb828d9d0e2b91a2f5e62504785387cf7c843a3d11",
+      "reason": "Inspected unchanged required third-party licence/dependency attribution or package metadata; public upstream identity is intentionally preserved."
+    },
+    {
+      "file": "assets/licenses/yaml-LICENSE",
+      "sha256": "5bba27375d93e9119f76c1015f7672cf9ad5f70952296e0842fb2243d6376869",
+      "rule": "email-address",
+      "matchSha256": "77ae22ae1f20b65edb73b3fbbfac406010c0991c5bf5745754b42eeb37fd4483",
+      "reason": "Inspected unchanged required third-party licence/dependency attribution or package metadata; public upstream identity is intentionally preserved."
+    },
+    {
+      "file": "assets/vendor/monaco/vs/editor/editor.main.js",
+      "sha256": "610fbf15b039278df4c7f22182d21f53dfa1799908be54474ce625aa35413d34",
+      "rule": "absolute-path",
+      "matchSha256": "903326567d2f8caf29ab2e532bab21d812d3e422a19e98f172d4bd0746907dea",
+      "reason": "Inspected unchanged pinned upstream runtime/editor code and its virtual paths, compiler examples or public contributor attribution; not the local maintainer identity."
+    },
+    {
+      "file": "assets/vendor/pyodide/pyodide.asm.js",
+      "sha256": "71250bb1cf7216d1f848505f1056f351bd02187fbb112e966f6e9745465d0c4f",
+      "rule": "absolute-path",
+      "matchSha256": "4899316c3df8d4e171501719674377e217e901124b9c57cc56818f0a14418708",
+      "reason": "Inspected unchanged pinned upstream runtime/editor code and its virtual paths, compiler examples or public contributor attribution; not the local maintainer identity."
+    },
+    {
+      "file": "assets/vendor/pyodide/pyodide.js",
+      "sha256": "b67a1e4ed23ed8c3ee0b50f3b054f4fccf2cb9dda2f6db0cb69a531bd21107da",
+      "rule": "absolute-path",
+      "matchSha256": "b8df7225d2ddf4162ee3795350b798cf5dd4970febc5d9d808a4324c4ec21e14",
+      "reason": "Inspected unchanged pinned upstream runtime/editor code and its virtual paths, compiler examples or public contributor attribution; not the local maintainer identity."
+    },
+    {
+      "file": "assets/vendor/xlsx.full.min.js",
+      "sha256": "cc015130aa8521e7f088f88898eba949ccdcbfb38df0bd129b44b7273c3a6f41",
+      "rule": "absolute-path",
+      "matchSha256": "6a0d706fa28aaa9be94db1323fa1fe05ae508d9f7c335461337760b563e242bb",
+      "reason": "Inspected unchanged pinned upstream runtime/editor code and its virtual paths, compiler examples or public contributor attribution; not the local maintainer identity."
+    },
+    {
+      "file": "package-lock.json",
+      "sha256": "2771fa6fab66b18c097a2e4ad617061d4fcff33b519b41bd6862d02df52d6206",
+      "rule": "email-address",
+      "matchSha256": "b0373516d594ddd199b25c3655332b354837e065c5cc232f5043189897900ca7",
+      "reason": "Inspected unchanged required third-party licence/dependency attribution or package metadata; public upstream identity is intentionally preserved."
+    },
+    {
+      "file": "scripts/nexus-graph-e2e.cjs",
+      "sha256": "aaf559cf63401b9118da9447f3d14da75a0740abccb7ab4edc24bf652451cc91",
+      "rule": "absolute-path",
+      "matchSha256": "12904f742dee30520f1dbb7420929b21c40da29d7f59e31c9bdddbf961fecece",
+      "reason": "Inspected unchanged developer fixture, portable OS command path or public Git SSH URL syntax in verification tooling; no personal maintainer location or email."
+    },
+    {
+      "file": "scripts/nine-web-fixes-e2e.cjs",
+      "sha256": "85f1d25c5152a152b442b8fdcd94d902ccacd89533cf4576800ef3d85b9342c2",
+      "rule": "absolute-path",
+      "matchSha256": "2a57c493833d8c445169ffa00d3f9c4dee592c414bb95d4a41cc755ccf39a773",
+      "reason": "Inspected unchanged developer fixture, portable OS command path or public Git SSH URL syntax in verification tooling; no personal maintainer location or email."
+    },
+    {
+      "file": "scripts/roadmap-e2e.cjs",
+      "sha256": "216284e3db5921fcfa3c40c420de2b38db0cc60902d82f1a947b78068376f911",
+      "rule": "absolute-path",
+      "matchSha256": "6b07af4f2c674a91d66245647cdbe5b4f59cc8c2d039c63299149c49e2b65d51",
+      "reason": "Inspected unchanged developer fixture, portable OS command path or public Git SSH URL syntax in verification tooling; no personal maintainer location or email."
+    },
+    {
+      "file": "scripts/verify-public-files.cjs",
+      "sha256": "49d290a525f369a6ee9a1b86aea4d62ffc1815ae9715bc46b3875fe6a90da677",
+      "rule": "email-address",
+      "matchSha256": "3de132cd98be7bf26b6f08e81c31c799a891bc32046b61f0b6fe3671ca2e44b5",
+      "reason": "Inspected unchanged developer fixture, portable OS command path or public Git SSH URL syntax in verification tooling; no personal maintainer location or email."
+    },
+    {
+      "file": "scripts/verify-public-files.cjs",
+      "sha256": "49d290a525f369a6ee9a1b86aea4d62ffc1815ae9715bc46b3875fe6a90da677",
+      "rule": "email-address",
+      "matchSha256": "213bbb0ebe911cbedd231067ebccb403ecaa7aed311e34762996a035afc37110",
+      "reason": "Inspected unchanged developer fixture, portable OS command path or public Git SSH URL syntax in verification tooling; no personal maintainer location or email."
+    },
+    {
+      "file": "scripts/web-targets-e2e.cjs",
+      "sha256": "61499cd6c98a6bc35e3b03e08368a70decb1a26184f1ecba6c1a1af05988c44b",
+      "rule": "absolute-path",
+      "matchSha256": "2a57c493833d8c445169ffa00d3f9c4dee592c414bb95d4a41cc755ccf39a773",
+      "reason": "Inspected unchanged developer fixture, portable OS command path or public Git SSH URL syntax in verification tooling; no personal maintainer location or email."
+    },
+    {
+      "file": "scripts/windows-runtime-access.cjs",
+      "sha256": "2a04a6b8a7fb84b4e2444bbe6ab31f55374dbfa1356441fd3a1f5486f0f38be5",
+      "rule": "absolute-path",
+      "matchSha256": "4c754b6dc9cd24a7e1a0801560911fbf9a832bf0f5b3bcba0f3844a71356489c",
+      "reason": "Inspected unchanged developer fixture, portable OS command path or public Git SSH URL syntax in verification tooling; no personal maintainer location or email."
+    },
+    {
+      "file": "security-testing.test.js",
+      "sha256": "495cf05c39bcabae46b45252ebe7d0482bc9ce3f6a90a951ed293cbae185351d",
+      "rule": "email-address",
+      "matchSha256": "1a64b2b33de969713339ce9402a55b1227078d7851a1e264fe5fe56eabf2fffa",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "services/machina/process.cjs",
+      "sha256": "dafb9e528c45c3a387c22e845592f4adb0b6ea899e7757b0c6141dbc7f3f8855",
+      "rule": "absolute-path",
+      "matchSha256": "4c754b6dc9cd24a7e1a0801560911fbf9a832bf0f5b3bcba0f3844a71356489c",
+      "reason": "Inspected unchanged generic Windows OS fallback/command path or parser regular-expression text; needed for portable runtime behavior and contains no personal identity."
+    },
+    {
+      "file": "services/windows-shell.cjs",
+      "sha256": "c14f115cbceef40fdf8760f4fb5a54848c8255d9a2c907787a369e5d5e696b2e",
+      "rule": "absolute-path",
+      "matchSha256": "4c754b6dc9cd24a7e1a0801560911fbf9a832bf0f5b3bcba0f3844a71356489c",
+      "reason": "Inspected unchanged generic Windows OS fallback/command path or parser regular-expression text; needed for portable runtime behavior and contains no personal identity."
+    },
+    {
+      "file": "tests/agent-board.test.cjs",
+      "sha256": "81062fbb30fd6be2f7f741e3d6a08d0a5936b0385a02b8f34cd7c739697b0ef2",
+      "rule": "absolute-path",
+      "matchSha256": "05a4f28c49daeaa2be868f7dbb9b8a22ef21e4995d9f262e6481b6bfa08eca3f",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/agent-board.test.cjs",
+      "sha256": "81062fbb30fd6be2f7f741e3d6a08d0a5936b0385a02b8f34cd7c739697b0ef2",
+      "rule": "absolute-path",
+      "matchSha256": "d9d2e4d2f107bd947ffaa6d28afc7f5af639ff0d46833d04c1e87c747f14a428",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/agent-board.test.cjs",
+      "sha256": "81062fbb30fd6be2f7f741e3d6a08d0a5936b0385a02b8f34cd7c739697b0ef2",
+      "rule": "absolute-path",
+      "matchSha256": "15ae3f6435c4b759e3a11864ae077fcd96e66fcf9bb962f2d4e74e00952bbb95",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/agent-board.test.cjs",
+      "sha256": "81062fbb30fd6be2f7f741e3d6a08d0a5936b0385a02b8f34cd7c739697b0ef2",
+      "rule": "absolute-path",
+      "matchSha256": "5c0455a234a8a2982962d5930eaf18b5e908710a74561fc40de26cf748993a8b",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/agent-board.test.cjs",
+      "sha256": "81062fbb30fd6be2f7f741e3d6a08d0a5936b0385a02b8f34cd7c739697b0ef2",
+      "rule": "absolute-path",
+      "matchSha256": "fe681ac795853d44b95beb9016f5bc91d38d35f38139c5ad154a1cb60496dd0e",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/agent-board.test.cjs",
+      "sha256": "81062fbb30fd6be2f7f741e3d6a08d0a5936b0385a02b8f34cd7c739697b0ef2",
+      "rule": "absolute-path",
+      "matchSha256": "a58db8d44706dc3a1be99a5d5c0806f22587674f9e31acc0ef26f83a64b3cc9f",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/agent-board.test.cjs",
+      "sha256": "81062fbb30fd6be2f7f741e3d6a08d0a5936b0385a02b8f34cd7c739697b0ef2",
+      "rule": "absolute-path",
+      "matchSha256": "7a508a869cb9cd23b06fd39e9d206e80972069285fd82cf29f640d0430b5d3a6",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/agent-board.test.cjs",
+      "sha256": "81062fbb30fd6be2f7f741e3d6a08d0a5936b0385a02b8f34cd7c739697b0ef2",
+      "rule": "absolute-path",
+      "matchSha256": "44fef963d0ff8dcfabcad2e1c7a53207247477dc205d0d40951d6552a40bb610",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/agent-board.test.cjs",
+      "sha256": "81062fbb30fd6be2f7f741e3d6a08d0a5936b0385a02b8f34cd7c739697b0ef2",
+      "rule": "absolute-path",
+      "matchSha256": "166d2ee2240185f29bdc29aab9f4abdf74c5bdc244b5e37acf75eb37eae05343",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/agent-board.test.cjs",
+      "sha256": "81062fbb30fd6be2f7f741e3d6a08d0a5936b0385a02b8f34cd7c739697b0ef2",
+      "rule": "absolute-path",
+      "matchSha256": "b189221be628440eafab903df33b542e607e4ac030deb0ff64f34f9f064785a0",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/agent-board.test.cjs",
+      "sha256": "81062fbb30fd6be2f7f741e3d6a08d0a5936b0385a02b8f34cd7c739697b0ef2",
+      "rule": "absolute-path",
+      "matchSha256": "d0ef0cc85e83a65051f624dc299e87afeee5d1248ddf000a65044026863e8635",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/agent-board.test.cjs",
+      "sha256": "81062fbb30fd6be2f7f741e3d6a08d0a5936b0385a02b8f34cd7c739697b0ef2",
+      "rule": "absolute-path",
+      "matchSha256": "9405459386072d6a09f2b8c3f990c032e670243f3e580698faf8bd72e9ebeb49",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/agent-board.test.cjs",
+      "sha256": "81062fbb30fd6be2f7f741e3d6a08d0a5936b0385a02b8f34cd7c739697b0ef2",
+      "rule": "absolute-path",
+      "matchSha256": "a97bd6ff800f524eae7bde6520670eef4d15be26d177399a75e0dc459e9eaa8b",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/agent-projects.test.cjs",
+      "sha256": "b98ac719648e35c78ab8e4e3ef218dcc5798d97604ed08549a5cb01d3251320a",
+      "rule": "absolute-path",
+      "matchSha256": "98bdb8e33bff4bf70ea4c645f3844eff8591dcfc9e38d422f1f77d781e65735b",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/agent-projects.test.cjs",
+      "sha256": "b98ac719648e35c78ab8e4e3ef218dcc5798d97604ed08549a5cb01d3251320a",
+      "rule": "absolute-path",
+      "matchSha256": "7553c7c5066a8edc254f13d5b8e0e7ea370429ac4bf987976b405f6c2cbc2a48",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/agent-projects.test.cjs",
+      "sha256": "b98ac719648e35c78ab8e4e3ef218dcc5798d97604ed08549a5cb01d3251320a",
+      "rule": "absolute-path",
+      "matchSha256": "542268a27b28eafeed9ed0749912e2e834e169f0263460296386c079f9d759d2",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/api-atlas.test.cjs",
+      "sha256": "79d15cd93bbedeebb279e8ebcbdf1831a3ee11988126ee93d7e53fa2d30ad9ee",
+      "rule": "absolute-path",
+      "matchSha256": "d905bc287df4f1e4dba64839a97ac6748a29d7100af70ebe2e58baf378337dde",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/api-atlas.test.cjs",
+      "sha256": "79d15cd93bbedeebb279e8ebcbdf1831a3ee11988126ee93d7e53fa2d30ad9ee",
+      "rule": "absolute-path",
+      "matchSha256": "11722a25453694ffb98f9398fd5716d7bc916593d234be817503c8e5b2cfcf4a",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/api-atlas.test.cjs",
+      "sha256": "79d15cd93bbedeebb279e8ebcbdf1831a3ee11988126ee93d7e53fa2d30ad9ee",
+      "rule": "email-address",
+      "matchSha256": "153087ec43d805bdcd5b7a76036680db4a7b07276009487707b743a423978595",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/chat-api-import.test.cjs",
+      "sha256": "8f703e9612e461d0cadb38ddb8878c5c1307572d05b9b0ffd2389073bddf82c0",
+      "rule": "email-address",
+      "matchSha256": "2f13197004bc3a0075322474895c289e545af9d9a958d8c8d21559bdedcdabb1",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/execution.test.cjs",
+      "sha256": "5d387f36425a297fecaa451300a124aff615879f3cd880b7116561491c3ce762",
+      "rule": "absolute-path",
+      "matchSha256": "465e8d048888eb631ad860b15c44aa0e4e2c17094636dba2c76f2795de6ef098",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/execution.test.cjs",
+      "sha256": "5d387f36425a297fecaa451300a124aff615879f3cd880b7116561491c3ce762",
+      "rule": "absolute-path",
+      "matchSha256": "0d1a798f755ea6b531f4c30457bb4b78bdb1e2903194a5938ace0050aa3ca557",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/execution.test.cjs",
+      "sha256": "5d387f36425a297fecaa451300a124aff615879f3cd880b7116561491c3ce762",
+      "rule": "absolute-path",
+      "matchSha256": "168f1535baa9f4e7e62784f7e21bd8fc2c0f4b47a41e3522b833ab7afcdc195e",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/execution.test.cjs",
+      "sha256": "5d387f36425a297fecaa451300a124aff615879f3cd880b7116561491c3ce762",
+      "rule": "absolute-path",
+      "matchSha256": "43b384700b654415d0793290f3182335c8e89609ef1a140c16d65559d20e3cbf",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/github-editor-loading-ui.test.cjs",
+      "sha256": "e30347b5252afb61f54537388eba6262d05a644e16f3edd968eeea08887f69a7",
+      "rule": "absolute-path",
+      "matchSha256": "dba9b583f3a13fbc8ec6ee3e8d20fd27b740c1c91e8d68265416e1fc5c252e71",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/github-studio-remote.test.cjs",
+      "sha256": "f9f5598a1c07e35aaeef4d7200fe04820b5cbd2f33b3e9a79aeed1e0d1045601",
+      "rule": "absolute-path",
+      "matchSha256": "ce683b6294a3c0be9b16f612c16cb457187f027be50dd91ed935a807d6ec4532",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/github-studio-remote.test.cjs",
+      "sha256": "f9f5598a1c07e35aaeef4d7200fe04820b5cbd2f33b3e9a79aeed1e0d1045601",
+      "rule": "absolute-path",
+      "matchSha256": "532f333b23bf6760d892e5cdd8ed4d0999133c6808714ea0d1a59adf9aff40ad",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/github-studio-remote.test.cjs",
+      "sha256": "f9f5598a1c07e35aaeef4d7200fe04820b5cbd2f33b3e9a79aeed1e0d1045601",
+      "rule": "absolute-path",
+      "matchSha256": "1f1d49bd9221e50a493bf7a6187da5ee55fb867f0f5eae6d40830b1c3f30dec2",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/github-studio-test-source.test.cjs",
+      "sha256": "729012d7e66b574adb00d1e15b2fd0f66bc914a714b092868e637ef7299ce9a4",
+      "rule": "absolute-path",
+      "matchSha256": "4437f7a086b7dc70d687d99a8fb01802977d87747a3e5645f7d6614890aa6bb1",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/github-studio-test-source.test.cjs",
+      "sha256": "729012d7e66b574adb00d1e15b2fd0f66bc914a714b092868e637ef7299ce9a4",
+      "rule": "email-address",
+      "matchSha256": "9d7eecd5e5a46b549c50892dbe16787f247859ee19bd39879aebbf0fffacc26e",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/github-studio-test-source.test.cjs",
+      "sha256": "729012d7e66b574adb00d1e15b2fd0f66bc914a714b092868e637ef7299ce9a4",
+      "rule": "email-address",
+      "matchSha256": "ff5838ced1b334988e943d344371ade555c7304f1c74acd4821623ed30d7adf9",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/github-workflows-ui.test.cjs",
+      "sha256": "9c11ac3d71f82754348b0e04cddb7f53d1f6de802b629279997a5ddf5a289a6c",
+      "rule": "absolute-path",
+      "matchSha256": "dba9b583f3a13fbc8ec6ee3e8d20fd27b740c1c91e8d68265416e1fc5c252e71",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/github-workflows.test.cjs",
+      "sha256": "b3827306732de7899272a4476cb97135d75f23b957910c4194f34e170395e864",
+      "rule": "email-address",
+      "matchSha256": "04fae2f6b4533fe5411986ae3a45127dd3e94e26ad79c51c1427aed2d9eacd6b",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/graph-companions.test.cjs",
+      "sha256": "a1920456b792ba3de75fc1793a47530a069535f38da08d734e901c51b42b2c63",
+      "rule": "absolute-path",
+      "matchSha256": "a7e13705797fdd3ba31f68bb6754d6176bc37e6592ad0886b3cceaef0121b71f",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/graph-companions.test.cjs",
+      "sha256": "a1920456b792ba3de75fc1793a47530a069535f38da08d734e901c51b42b2c63",
+      "rule": "absolute-path",
+      "matchSha256": "2697e544719bfee9d33fc78575d0ec6319b35181651ce4c427e728bcf7e79f85",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/import-review-recovery.test.cjs",
+      "sha256": "e555346bd3203f47acc3fad2576643aaceed7ca75c3d29b066f36f59b0493d76",
+      "rule": "absolute-path",
+      "matchSha256": "dba9b583f3a13fbc8ec6ee3e8d20fd27b740c1c91e8d68265416e1fc5c252e71",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/machina-graph.test.cjs",
+      "sha256": "d135161364acdb9528ab274696b2e02bea81263a3a5387722a0f315076a27d19",
+      "rule": "absolute-path",
+      "matchSha256": "1e2f11ad6a2ef7a60fe320a51f2be91264ae0b2bd31c3f87291b67cffaeb8085",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/machina-graph.test.cjs",
+      "sha256": "d135161364acdb9528ab274696b2e02bea81263a3a5387722a0f315076a27d19",
+      "rule": "absolute-path",
+      "matchSha256": "828a0da1ce18d18c0a9c124118eeab887a9a073ba653cbae98613673f92e9b17",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/nexus-graph.test.cjs",
+      "sha256": "98169f01e7cfe60c38286a0b7ecc21bf4845e5a3a279fd81471e35556aed1ca3",
+      "rule": "absolute-path",
+      "matchSha256": "12904f742dee30520f1dbb7420929b21c40da29d7f59e31c9bdddbf961fecece",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/nine-review-fixes.test.cjs",
+      "sha256": "d76c758fdd690c4060c76c8b63dcc60b448c5c8ee05781cbe315e539a3a1d24f",
+      "rule": "absolute-path",
+      "matchSha256": "d7d82790973c1cf05cd1cf234e6c1e479738d4a43bc6f3f1cfa70814e03ee65e",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/nine-suite-fixes.test.cjs",
+      "sha256": "14a585aaacb402072a9be48c7badb36bb6691bf5181f110053b100701d1b3361",
+      "rule": "absolute-path",
+      "matchSha256": "be1936f2977011e877d40b5aef9f8dce4b320e71d0c3297f68b7eef2064177ba",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/roadmap-protection.test.cjs",
+      "sha256": "c435b5bacdd9a2618db84cbb1458336f86b351186ae33043f841c1fd38207ece",
+      "rule": "absolute-path",
+      "matchSha256": "50484976414d887ca903f1b5711157c4485cf405ea81969ee45c8c7d456e547c",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/roadmap-security.test.cjs",
+      "sha256": "486b56a0348ec5ed2532f847db00b0a480e2da760dc3d5e86a5659c79a661efc",
+      "rule": "absolute-path",
+      "matchSha256": "22e60e747d1ee577c2e1efc1519c09cabd48c093708c75d1d27a6c5f7bc1c238",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/roadmap-security.test.cjs",
+      "sha256": "486b56a0348ec5ed2532f847db00b0a480e2da760dc3d5e86a5659c79a661efc",
+      "rule": "absolute-path",
+      "matchSha256": "50484976414d887ca903f1b5711157c4485cf405ea81969ee45c8c7d456e547c",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/run-feedback.test.cjs",
+      "sha256": "a0b10d9ad3f998b87a5e6041dbbaba2621e31d64d8711fc24cce555c1392d7f9",
+      "rule": "absolute-path",
+      "matchSha256": "a473bf88063725a0632a5de54049fe3e4052e33815397d5727732807a61d7b91",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/run-feedback.test.cjs",
+      "sha256": "a0b10d9ad3f998b87a5e6041dbbaba2621e31d64d8711fc24cce555c1392d7f9",
+      "rule": "absolute-path",
+      "matchSha256": "51d6043cc736ce34e06c57972a07c28d9c6ff7ecaa6c4f9bdac889d43d078322",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/run-feedback.test.cjs",
+      "sha256": "a0b10d9ad3f998b87a5e6041dbbaba2621e31d64d8711fc24cce555c1392d7f9",
+      "rule": "absolute-path",
+      "matchSha256": "d33bed4b4e9ba7084a984c9931b5676c056121d8b27a1c0b1a53d6487703367f",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/runtime-setup.test.cjs",
+      "sha256": "0443960ac4713bc13294f98d0d6fff5491e3a269e5f16152fe57033fa6213f42",
+      "rule": "email-address",
+      "matchSha256": "4b810ad98f49591157e373eeb140ae0fbd408766af6668fe849c0cfe45636ea6",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/unlimited-github.test.cjs",
+      "sha256": "9c61978954e70a8c6bf6823c922e4ee783f93b845358fa37773b201366d0095f",
+      "rule": "absolute-path",
+      "matchSha256": "84c0d9028fe75c96914483f12b4154efa40fd0ac2b503bafdd2ab6d8fa937c81",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/web-target-policy.test.cjs",
+      "sha256": "527cd808bc3fd70c4ac48f523390ac7ad0ff9e0446e81ac50c2ef3cb10890c0f",
+      "rule": "absolute-path",
+      "matchSha256": "441fcec51ee5055c1ba16ba3865ee3fc00fa7e9044558bd9bd01d3b67d217319",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/web-targets.test.cjs",
+      "sha256": "b60bfb53997e20e4b19873eef59b7c6db46747cfb50f6ad6471da66822d1ebd1",
+      "rule": "absolute-path",
+      "matchSha256": "d8e8ba0528ce44b34cf108ae924f8ddade3652191841f6fcc81c83a7bbccc9f1",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/web-targets.test.cjs",
+      "sha256": "b60bfb53997e20e4b19873eef59b7c6db46747cfb50f6ad6471da66822d1ebd1",
+      "rule": "absolute-path",
+      "matchSha256": "9728cb113ccd078f9b48a85e9eb007de738139ebd8299bfd5912f39a3dd7cc64",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "tests/web-targets.test.cjs",
+      "sha256": "b60bfb53997e20e4b19873eef59b7c6db46747cfb50f6ad6471da66822d1ebd1",
+      "rule": "absolute-path",
+      "matchSha256": "0a2d0e91b517ee3feac96be08451040a004dd686953a0e0e8af50bd001388a0f",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace."
+    },
+    {
+      "file": "services/machina/process.cjs",
+      "sha256": "cbd7d9a786a0ff0980cd85584f48885a614fa1b7b03043ae3bda42b44c67221f",
+      "rule": "absolute-path",
+      "matchSha256": "4c754b6dc9cd24a7e1a0801560911fbf9a832bf0f5b3bcba0f3844a71356489c",
+      "reason": "Inspected unchanged generic Windows OS fallback/command path or parser regular-expression text; needed for portable runtime behavior and contains no personal identity. Equivalent Git LF-normalized bytes independently compared with the reviewed local CRLF file."
+    },
+    {
+      "file": "tests/chat-api-import.test.cjs",
+      "sha256": "3ad6d07e51608f27be549e4a3c2612a38b8b81aec4893f1ef1299cb6c1b367d1",
+      "rule": "email-address",
+      "matchSha256": "2f13197004bc3a0075322474895c289e545af9d9a958d8c8d21559bdedcdabb1",
+      "reason": "Inspected unchanged deliberate test input, invalid-path rejection case or parser/decorator fixture; contains generic synthetic data rather than a personal account or workspace. Equivalent Git LF-normalized bytes independently compared with the reviewed local CRLF file."
+    }
+  ],
+  "reviewedHistory": [
+    {
+      "commit": "bcd706d15108543594c050733e0cc7860301a22f",
+      "reason": "Existing commit independently reviewed by the full local publication audit; no real account secret confirmed. Private filenames and first-party home paths remain denied."
+    },
+    {
+      "commit": "7531de608bbe071ae12f8e09ed8ed4436b33e33c",
+      "reason": "Existing commit independently reviewed by the full local publication audit; no real account secret confirmed. Private filenames and first-party home paths remain denied."
+    },
+    {
+      "commit": "e8572596e6ae4a447086a5d6f79deb6c7353a0b9",
+      "reason": "Existing commit independently reviewed by the full local publication audit; no real account secret confirmed. Private filenames and first-party home paths remain denied."
+    },
+    {
+      "commit": "5b45e5ff12c9895750687c9f684ad133d748eb90",
+      "reason": "Existing commit independently reviewed by the full local publication audit; no real account secret confirmed. Private filenames and first-party home paths remain denied."
+    },
+    {
+      "commit": "d6cef7e035eb8e1b66d8cc69fbc9d1a7c62e2b5f",
+      "reason": "Existing commit independently reviewed by the full local publication audit; no real account secret confirmed. Private filenames and first-party home paths remain denied."
+    },
+    {
+      "commit": "63144f4297da10c105662c9200a2d681004470cc",
+      "reason": "Existing commit independently reviewed by the full local publication audit; no real account secret confirmed. Private filenames and first-party home paths remain denied."
+    }
+  ],
+  "historyNotes": [
+    "Four existing commits retain earlier personal author credits. The current ignore policy does not erase those GitHub objects.",
+    "Two existing commits retain an old AI Studio resource reference in the imported README. It is absent from the current file.",
+    "Review historical identity/resource references with the user before publication; this task does not rewrite history."
+  ]
+}

@@ -6,6 +6,15 @@ node_modules/
 /.external-tailwind.css
 
 # Local execution data, exports, evidence and caches
+.my_save_files/
+*.lvx.json
+pipeline_suites_export_*.json
+# Reviewed local-only privacy findings; preserve these files on this machine.
+AGENTS.md
+GATES*.md
+/docs/CAPACITY-CHANGES.md
+/scripts/import-connected-apis.cjs
+/scripts/inspect-connected-apis.cjs
 /output/
 /exports/
 /test-results/

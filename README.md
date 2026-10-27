@@ -24,6 +24,14 @@ To build the app from source, follow the [developer setup](docs/DEVELOPMENT.md#r
 
 Return to saved tests from **Test suites**. Use **Test editor** to return to the test you left open. You can also edit code or use an existing test project.
 
+## See APIs between services
+
+![API map showing imported repositories, declared services and external destinations, with connections from the Sock Shop frontend to catalogue, orders, carts and user](docs/images/api-service-connections.png)
+
+See how repositories connect to API services and external destinations. In this Sock Shop example, the frontend connects to the catalogue and orders services. The carts and user services appear as external destinations because their provider repositories have not been imported. Select a connection to inspect its source evidence. Configured URLs describe source configuration; they do not confirm live traffic.
+
+Import repositories in **GitHub Actions**, then open **APIs & contracts** and choose **Scan repository APIs**. Select a service connection or endpoint to create and rerun API and response contract tests. You can review imported Postman and Pact requests, add endpoint tests to a visual workflow, and inspect their results together. See the [API map guide](docs/API-ATLAS.md) for supported imports and discovery limits.
+
 ## Test an existing website
 
 Choose **Create Visual Web Test**, then choose where the website is:
@@ -42,9 +50,17 @@ Load the preview, add test steps, then choose **Run Live Test**. **Open interact
 
 Open **Workflows** to connect tasks. Place task boxes on the graph and draw connections to show what happens first. Select a box to configure it, then save and run.
 
-Choose **E2E browser → Headed (visible)** to watch LVX-managed browser tests, or **Headless (background)** to run without browser windows. The choice is saved with the graph. While tests run, nodes show **Running** in blue, **Passed** in green, and **Failed/Error** in red. Unrun and cancelled work never receives a passing state. The run monitor uses matching status rows; minimize it to watch the graph update.
+Choose **E2E browser → Headed (visible)** to watch LVX-managed browser tests, or **Headless (background)** to run without browser windows. The choice applies immediately to Run, Start runner and individual node runs, including saved suites and their data rows. It is remembered locally for this graph and project even without Save, and survives restarting the app. Graphs without their own choice use your last selection in that project. Save also includes the mode in the graph for sharing. The run monitor shows the actual browser mode used. While tests run, nodes show **Running** in blue, **Passed** in green, and **Failed/Error** in red. Unrun and cancelled work never receives a passing state. Minimize the monitor to watch the graph update.
 
 For example, fetch a Git repository, run its tests and collect the results. Each box shows its own outcome.
+
+## Edit GitHub workflows and repository tests
+
+Open **GitHub Actions** to import repositories and see their workflow graphs together. Each repository has its own YAML file selector. Select a job to read its steps, switch to **Job list**, refresh a snapshot or remove a repository from the view.
+
+In desktop, choose **Edit workflow & tests** to change jobs, steps, dependencies and triggers, inspect repository test suites and cases, and save source edits as local drafts. **Changes & publish** lets you stage complete files, review a unified diff, and publish one commit through a new branch and pull request, an attempted PR merge, or a direct commit. Branch protections and required checks still apply. **GitHub runs** shows results for the imported commit; matrix combinations and reusable workflow sources can be inspected separately.
+
+**Load example repositories** provides an offline desktop demo with workflows and linked tests. Its commits, pull requests and merges are simulated and saved in the selected project. Browser preview supports public workflow graphs; source editing and publishing require desktop. Private sign-in uses encrypted desktop credentials. [Read the GitHub Actions guide](docs/GITHUB-ACTIONS.md) for source formats, permissions and recovery.
 
 ## Work with AI agents
 
@@ -61,6 +77,8 @@ For work with several steps, open **Tasks & graph review** on the board. Follow 
 ![Multiple agent chats open on the board](docs/images/nexus-chats.png)
 
 AI features need a working account. Choose installed Codex, Claude Code or Gemini tools, or configure an API provider. Sign in using the provider's own tool. Your plan's limits or charges still apply.
+
+In GitHub Actions, visual workflows, results and reporting, use **Agents on this view** to place agents from a saved board. Click a character to chat, or use its gear to choose a workflow/job, change its picture or toggle roaming. Completed workflow and graph suggestions offer a preview before you apply a local draft. Graph edits support Undo; saving, running and publishing remain separate actions. See [graph companions](docs/GRAPH-COMPANIONS.md).
 
 Each open chat has a dotted line to its agent. Use **Maximize**, **Minimize** or the chat tabs to manage several chats. If a provider fails, choose **Repair connection** beside that agent or chat. It checks the installed tool and offers sign-in or setup actions without resending your message.
 

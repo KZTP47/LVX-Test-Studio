@@ -46,7 +46,7 @@
       if(s.action==='clear-test-data')return field('Variable to remove','variableName',s.variableName);
       if(s.action==='set-environment')return field('Environment variable','envName',s.envName)+field('Value; template variables allowed','envValue',s.envValue);
       if(s.action==='reset-environment')return `<label class="studio-field"><span><input type="checkbox" data-mock-field="resetAll" ${s.resetAll?'checked':''}> Reset all variables set in setup</span></label>`+field('Specific variable when reset-all is off','envName',s.envName);
-      if(s.action==='wait')return field('Delay in milliseconds','delayMs',s.delayMs,'number','min="0" max="300000"');
+      if(s.action==='wait')return field('Delay in milliseconds','delayMs',s.delayMs,'number','min="0"');
       if(s.action==='run-code')return `<p>Executable code is sent to the native engine and requires reviewed trust. It is never evaluated in this editor.</p>`+select('Language','language',s.language,[['python','Python'],['javascript','JavaScript']])+area('Native helper code','code',s.code);
       return '<p role="alert">This legacy custom action is unsupported. Replace it with a supported action before applying or executing this plan.</p>';}
     renderFiles(){const f=this.state.fileData;let preview='';try{preview=`${runtime.buildFileIterations(f,{randomFn:()=>0}).length} execution iteration(s)`;}catch(e){preview=e.message;}

@@ -94,7 +94,8 @@ if(scenario!=='truncated')emit({type:'result',status:scenario==='blocked'||scena
 
 test('schema rejects bad topology, unsupported guarantees, plaintext keys and invalid defaults', () => {
   const b = board(); assert.deepEqual(normalizeBoard(b), b);
-  for (const bad of [board({ edges: [{ id: 'e', source: 'a', target: 'missing' }] }), board({ maxTurns: 0 }), board({ concurrency: 5 }), board({ nodes: [b.nodes[0], b.nodes[0]] }), board({ nodes: [{ ...b.nodes[0], provider: 'gemini', permission: 'read-only' }] }), board({ nodes: [{ ...b.nodes[0], provider: 'api', apiConfig: { provider: 'openai', apiKey: 'plaintext' } }] })]) assert.throws(() => normalizeBoard(bad));
+  const unlimited = normalizeBoard(board({ maxTurns: 0, concurrency: 9 })); assert.equal(unlimited.maxTurns, 0); assert.equal(unlimited.concurrency, 9);
+  for (const bad of [board({ edges: [{ id: 'e', source: 'a', target: 'missing' }] }), board({ maxTurns: -1 }), board({ concurrency: 0 }), board({ nodes: [b.nodes[0], b.nodes[0]] }), board({ nodes: [{ ...b.nodes[0], provider: 'gemini', permission: 'read-only' }] }), board({ nodes: [{ ...b.nodes[0], provider: 'api', apiConfig: { provider: 'openai', apiKey: 'plaintext' } }] })]) assert.throws(() => normalizeBoard(bad));
 });
 
 test('native argv omits blank overrides, retains exact stdin and uses explicit bound resume', () => {
@@ -189,7 +190,7 @@ test('new generation fences late output and provider change requires explicit re
   const run = await h.service.handle('send', { boardId: 'board', agentId: 'a', text: 'old fixture', requestId: crypto.randomUUID() }); await delay(20);
   const session = await h.service.handle('newSession', { boardId: 'board', agentId: 'a', expectedGeneration: 1 }); assert.equal(session.generation, 2); resolveTurn({ status: 'completed', text: 'STALE SHOULD NEVER APPEAR', nativeSessionId: SID }); await delay(30);
   const snap = await h.service.handle('snapshot', { boardId: 'board' }); assert.equal(snap.sessions[0].generation, 2); assert.equal(snap.sessions[0].nativeSessionId, null); assert.ok(!snap.messages.some(m => m.text.includes('STALE'))); assert.equal(snap.runs.find(r => r.id === run.runId).status, 'cancelled');
-  await assert.rejects(h.service.handle('newSession', { boardId: 'board', agentId: 'a', expectedGeneration: 1 }), /generation changed/);
+  await assert.rejects(h.service.handle('newSession', { boardId: 'board', agentId: 'a', expectedGeneration: 1 }), {code:'CONFLICT'});
 });
 
 test('session mismatch and resume failures remain explicit, without fresh-session retry', async t => {
@@ -228,7 +229,8 @@ test('snapshot pages a monotonic board-local cursor without truncating messages;
   const uniqueRecords = [...new Map(all.map(v => [v.id || `event:${v.sequence}`, v])).values()];
   const seq = uniqueRecords.map(v => v.sequence); assert.equal(new Set(seq).size, seq.length); assert.ok(all.find(m => m.role === 'user').text.endsWith('long'.repeat(6000)));
   const exported = await h.service.handle('exportBoard', { boardId: 'board' }); assert.equal(exported.schemaVersion, 1); assert.equal(exported.messages.length, 2);
-  await assert.rejects(h.service.handle('snapshot', { boardId: 'board', limit: 501 }), /page size/);
+  assert.equal((await h.service.handle('snapshot', { boardId: 'board', limit: 501 })).messages.length, 2);
+  await assert.rejects(h.service.handle('snapshot', { boardId: 'board', limit: -1 }), /page size/);
 });
 
 test('API keeps exact current prompt and complete conversation history; refusal/limit separate from acceptance', async t => {
@@ -269,14 +271,14 @@ test('post-effect persistence failure quarantines agent, never launches next que
   h.workspace.handle = async (action, payload) => { if (action === 'transact' && failure && payload.records.some(r => r.collection === 'agent-messages' && r.value?.role === 'assistant')) throw Error('Fixture quota after provider effect'); return original(action, payload); };
   complete({ status: 'completed', text: 'fixture actual provider effect', nativeSessionId: SID }); await delay(40); failure = false;
   assert.equal(launches.length, 1); assert.ok(h.events.some(e => e.type === 'runtime-error'));
-  await assert.rejects(h.service.handle('send', { boardId: 'board', agentId: 'a', text: 'no silent retry', requestId: crypto.randomUUID() }), /could not persist/);
+  await assert.rejects(h.service.handle('send', { boardId: 'board', agentId: 'a', text: 'no silent retry', requestId: crypto.randomUUID() }), error=>error.code==='SESSION_RESET_REQUIRED'&&error.details.recovery.reason==='unsaved-reply');
   const reset = await h.service.handle('newSession', { boardId: 'board', agentId: 'a', expectedGeneration: 1 }); assert.equal(reset.generation, 2);
 });
 
 test('unproven prior native execution requires explicit reset; no automatic fresh launch', async t => {
   let launches = 0; const h = await setup(t, { nativeTransport: { probe: async () => ({}), execute: async () => { launches++; return { status: 'error', text: '', error: 'Fixture lost process before identity' }; } } });
   const one = await h.service.handle('send', { boardId: 'board', agentId: 'a', text: 'fixture', requestId: crypto.randomUUID() }); await settle(h.service, one.runId);
-  await assert.rejects(h.service.handle('send', { boardId: 'board', agentId: 'a', text: 'should require reset', requestId: crypto.randomUUID() }), /no proven session identity/); assert.equal(launches, 1);
+  await assert.rejects(h.service.handle('send', { boardId: 'board', agentId: 'a', text: 'should require reset', requestId: crypto.randomUUID() }), error=>error.code==='SESSION_RESET_REQUIRED'&&error.details.recovery.reason==='interrupted'); assert.equal(launches, 1);
 });
 
 test('native session binding is committed before completion; cancelled identity remains resumable', async t => {
@@ -321,15 +323,27 @@ test('imported foreign or unsigned native IDs cannot resume; explicit newSession
   const h = await setup(t, { realStore: true });
   const first = await h.service.handle('send', { boardId: 'board', agentId: 'a', text: 'fixture original', requestId: crypto.randomUUID() }); await settle(h.service, first.runId);
   const original = await h.workspace.handle('read', { collection: 'agent-sessions', id: 'board:a' });
-  for (const alteration of [{ workspaceRoot: path.join(h.temp, 'foreign-project') }, { nativeSessionId: OTHER }, { nativeSessionProof: undefined }]) {
+  const originalMessages=(await h.service.handle('snapshot',{boardId:'board',limit:0})).messages;
+  for (const [alteration,reason] of [[{ workspaceRoot: path.join(h.temp, 'foreign-project') },'project'], [{workingDirectory:path.join(h.temp,'other-folder')},'folder'], [{provider:'claude'},'agent'], [{ nativeSessionId: OTHER },'connection'], [{ nativeSessionProof: undefined },'connection']]) {
     const record = await h.workspace.handle('read', { collection: 'agent-sessions', id: 'board:a' });
     await h.workspace.handle('transact', { records: [{ collection: 'agent-sessions', id: record.id, expectedRevision: record.revision, value: { ...original.value, ...alteration } }] });
-    await assert.rejects(h.service.handle('send', { boardId: 'board', agentId: 'a', text: 'fixture import must block', requestId: crypto.randomUUID() }), /foreign|imported/);
+    const snapshot=await h.service.handle('snapshot',{boardId:'board',limit:0});
+    assert.equal(snapshot.sessions[0].recovery.reason,reason);assert.equal(snapshot.sessions[0].recovery.action,'newSession');assert.equal(snapshot.sessions[0].recovery.expectedGeneration,1);assert.match(snapshot.sessions[0].recovery.message,/Start a new chat.*earlier messages will stay saved/);assert.ok(!JSON.stringify(snapshot.sessions).includes('nativeSessionProof'));
+    await assert.rejects(h.service.handle('send', { boardId: 'board', agentId: 'a', text: 'fixture import must block', requestId: crypto.randomUUID() }),error=>error.code==='SESSION_MISMATCH'&&error.details.recovery.reason===reason&&error.message===snapshot.sessions[0].recovery.message);
   }
   assert.equal(h.calls.length, 1);
   await h.service.handle('newSession', { boardId: 'board', agentId: 'a', expectedGeneration: 1 });
+  const recovered=await h.service.handle('snapshot',{boardId:'board',limit:0});assert.equal(recovered.sessions[0].generation,2);assert.equal(recovered.sessions[0].recovery,undefined);assert.equal(recovered.sessions[0].nativeSessionId,null);assert.deepEqual(recovered.messages,originalMessages);assert.equal(recovered.sessions[0].conversations.length,2);
   const second = await h.service.handle('send', { boardId: 'board', agentId: 'a', text: 'fixture deliberately fresh', requestId: crypto.randomUUID() }); await settle(h.service, second.runId); assert.equal(h.calls[1].session.nativeSessionId, null);
   const exported = await h.service.handle('exportBoard', { boardId: 'board' }); assert.ok(!JSON.stringify(exported).includes('nativeSessionProof'));
+});
+
+test('a stale new-chat recovery cannot cancel work in a newer conversation',async t=>{
+  let finish,signal;const h=await setup(t,{nativeTransport:{probe:async()=>({}),execute:async args=>{signal=args.signal;return new Promise(resolve=>finish=resolve);}}});
+  await h.service.handle('newSession',{boardId:'board',agentId:'a',expectedGeneration:1});
+  const run=await h.service.handle('send',{boardId:'board',agentId:'a',text:'Newer work',requestId:crypto.randomUUID()});await delay(30);assert.ok(finish);
+  await assert.rejects(h.service.handle('newSession',{boardId:'board',agentId:'a',expectedGeneration:1}),{code:'CONFLICT'});assert.equal(signal.aborted,false);
+  finish({status:'completed',text:'Newer reply',nativeSessionId:SID});const snapshot=await settle(h.service,run.runId);assert.equal(snapshot.runs.find(r=>r.id===run.runId).status,'completed');
 });
 
 test('native provenance is scoped to app installation as well as complete session tuple', async t => {
@@ -385,7 +399,7 @@ test('modified canonical active message is preserved and completion is quarantin
   await h.workspace.handle('transact', { workspaceRoot: h.root, records: [{ collection: current.collection, id: current.id, expectedRevision: current.revision, value: { ...current.value, text: 'Foreign canonical replacement fixture' } }] });
   complete({ status: 'completed', nativeSessionId: SID, text: 'Must not attach to replacement' }); await delay(40);
   const s = await h.service.handle('snapshot', { boardId: 'board' }); assert.equal(s.messages.find(m => m.id === sent.message.id).text, 'Foreign canonical replacement fixture'); assert.equal(s.messages.filter(m => m.role === 'assistant').length, 0); assert.ok(h.events.some(e => e.type === 'runtime-error' && /replaced or modified/.test(e.error)));
-  await assert.rejects(h.service.handle('send', { boardId: 'board', agentId: 'a', text: 'fixture next', requestId: crypto.randomUUID() }), /could not persist/);
+  await assert.rejects(h.service.handle('send', { boardId: 'board', agentId: 'a', text: 'fixture next', requestId: crypto.randomUUID() }), error=>error.code==='SESSION_RESET_REQUIRED'&&error.details.recovery.reason==='unsaved-reply');
 });
 
 test('real native stop retains full cancelled partial output, protocol and stderr without peer routing', async t => {
@@ -518,11 +532,11 @@ test('task context and exact transport input are complete and redacted in board 
   assert.equal(JSON.stringify(exported).includes(marker), false); assert.ok(m.text.endsWith('end'.repeat(3000))); assert.equal(m.transportInput, taskInput(m.taskContext.goal, m.taskContext.acceptanceCriteria)); assert.deepEqual(exported.runs[0].taskContext, m.taskContext);
 });
 
-test('oversized composed context fails before provider dispatch without truncating stored context', async t => {
+test('composed context beyond the former byte ceiling dispatches in full', async t => {
   const goal = 'G'.repeat(4 * 1024 * 1024), acceptanceCriteria = 'C'.repeat(4 * 1024 * 1024);
   const h = await setup(t, { board: { goal, acceptanceCriteria } });
   const sent = await h.service.handle('runGoal', { boardId: 'board', requestId: crypto.randomUUID() }), s = await settle(h.service, sent.runId), input = s.messages.find(m => m.role === 'user');
-  assert.equal(h.calls.length, 0); assert.equal(s.runs[0].turns, 0); assert.equal(s.runs[0].status, 'error'); assert.equal(Object.hasOwn(input, 'transportInput'), false); assert.equal(input.text, goal); assert.deepEqual(input.taskContext, { goal, acceptanceCriteria }); assert.match(input.error, /Composed transport input.*no larger/);
+  assert.equal(h.calls.length, 1); assert.equal(s.runs[0].turns, 1); assert.equal(s.runs[0].status, 'completed'); assert.equal(input.transportInput, taskInput(goal, acceptanceCriteria)); assert.equal(h.calls[0].text, input.transportInput); assert.equal(input.text, goal); assert.deepEqual(input.taskContext, { goal, acceptanceCriteria });
 });
 
 test('appearance and chat windows round trip without changing native sessions or queued admissions', async t => {
@@ -547,7 +561,18 @@ test('appearance and chat windows round trip without changing native sessions or
   assert.deepEqual(exported.board.panels,value.panels);
 });
 
-test('appearance validation rejects executable, external, forged and oversized pictures and invalid windows', () => {
+test('dedicated picture persistence keeps canonical settings and conversations intact and rejects stale or invalid replacements',async t=>{
+ const h=await setup(t,{realStore:true});await h.service.handle('send',{boardId:'board',agentId:'a',text:'Fixture bind conversation',requestId:crypto.randomUUID()});await settle(h.service,(await h.service.handle('snapshot',{boardId:'board'})).runs[0].id);
+ const before=await h.service.handle('snapshot',{boardId:'board'}),avatar='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==';
+ const saved=await h.service.handle('savePicture',{boardId:'board',agentId:'a',avatar,expectedRevision:before.board.revision});
+ assert.equal(saved.record.value.nodes[0].appearance.avatar,avatar);assert.equal(saved.record.value.goal,before.board.value.goal);assert.equal(saved.record.value.nodes[0].instructions,before.board.value.nodes[0].instructions);
+ const after=await h.service.handle('snapshot',{boardId:'board'});assert.deepEqual(after.sessions,before.sessions);assert.deepEqual(after.messages,before.messages);assert.equal(h.calls.length,1);
+ await assert.rejects(h.service.handle('savePicture',{boardId:'board',agentId:'a',avatar:'',expectedRevision:before.board.revision}),/another window/);
+ for(const invalid of ['https://example.invalid/a.png','data:image/svg+xml;base64,PHN2Zz4=',null,undefined])await assert.rejects(h.service.handle('savePicture',{boardId:'board',agentId:'a',avatar:invalid,expectedRevision:saved.record.revision}),/picture|image/i);
+ assert.equal((await h.service.handle('getBoard',{boardId:'board'})).record.value.nodes[0].appearance.avatar,avatar);
+ const removed=await h.service.handle('savePicture',{boardId:'board',agentId:'a',avatar:'',expectedRevision:saved.record.revision});assert.equal(removed.record.value.nodes[0].appearance.avatar,'');assert.equal(h.calls.length,1);
+});
+test('appearance validation rejects executable, external, forged and malformed pictures and invalid windows', () => {
   const valid=board();
   const mutate=change=>{const value=structuredClone(valid);change(value);return ()=>normalizeBoard(value);};
   for(const avatar of ['https://example.invalid/picture.png','javascript:alert(1)','data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=','data:image/png;base64,PHN2Zz48L3N2Zz4=','data:image/png;base64,'+'A'.repeat(350001)]) assert.throws(mutate(b=>b.nodes[0].appearance={avatar}),/picture/i);

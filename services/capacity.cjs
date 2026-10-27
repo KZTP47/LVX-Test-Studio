@@ -1,0 +1,11 @@
+'use strict';
+// No application ceiling: zero disables optional budgets. Native timers still
+// have a finite interval, so long requested deadlines are scheduled in chunks.
+const {performance}=require('node:perf_hooks');
+const TIMER_INTERVAL=2**31-1;
+function nonnegative(value,label='Budget'){const n=Number(value);if(!['number','string'].includes(typeof value)||(typeof value==='string'&&!value.trim())||!Number.isSafeInteger(n)||n<0)throw Error(label+' must be a nonnegative safe integer (0 means no limit).');return n;}
+function positive(value,label='Count'){const n=nonnegative(value,label);if(n<1)throw Error(label+' must be a positive safe integer.');return n;}
+function longTimeout(callback,milliseconds){const duration=nonnegative(milliseconds,'Delay'),end=performance.now()+duration;let timer,disposed=false;const tick=()=>{if(disposed)return;const remaining=end-performance.now();if(remaining<=0){disposed=true;callback();}else timer=setTimeout(tick,Math.min(TIMER_INTERVAL,remaining));};timer=setTimeout(tick,Math.min(TIMER_INTERVAL,duration));return ()=>{disposed=true;clearTimeout(timer);};}
+function deadline(milliseconds=0,parent){const ms=nonnegative(milliseconds,'Timeout'),controller=new AbortController();let clear=()=>{};const abort=()=>controller.abort(parent?.reason);parent?.addEventListener('abort',abort,{once:true});if(parent?.aborted)abort();if(ms&&!controller.signal.aborted)clear=longTimeout(()=>controller.abort(new DOMException('Operation timed out.','TimeoutError')),ms);const dispose=()=>{clear();parent?.removeEventListener('abort',abort);};controller.signal.addEventListener('abort',dispose,{once:true});return {signal:controller.signal,dispose};}
+function wait(milliseconds,signal){const ms=nonnegative(milliseconds,'Delay');return new Promise((resolve,reject)=>{let clear=()=>{};const done=()=>{clear();signal?.removeEventListener('abort',cancel);resolve();},cancel=()=>{clear();signal?.removeEventListener('abort',cancel);reject(Object.assign(Error('Execution cancelled.'),{name:'AbortError'}));};if(signal?.aborted)return cancel();clear=longTimeout(done,ms);signal?.addEventListener('abort',cancel,{once:true});});}
+module.exports={nonnegative,positive,longTimeout,deadline,wait};

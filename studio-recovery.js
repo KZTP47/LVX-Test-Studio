@@ -1,7 +1,6 @@
 /* Explicit archive recovery remains usable when the project's SQLite cannot open. */
 (function (global) {
   'use strict';
-  const MAX_BYTES = 100 * 1024 * 1024;
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   const icon = name => global.LVXIcons?.svg(name) || '';
   function unwrap(result) {
@@ -23,7 +22,7 @@
     try { status = await call('status'); workspaceRoot = status.workspaceRoot; if (!workspaceRoot) throw new Error('Choose the workspace folder before restoring an archive.'); }
     catch (error) { message(error.message, true, true); return; }
     // The exact root is captured once. Host workspace checks reject stale forms.
-    body.innerHTML = `<p class="studio-path">Workspace: ${esc(workspaceRoot)}</p>${status.error ? `<details class="studio-evidence"><summary>Why the project could not open</summary><p>${esc(status.error.message)}</p></details>` : ''}<form data-recovery-form><section class="studio-section"><h3>Choose a saved archive</h3><p>Select an LVX project archive (.json), smaller than 100 MB. Validation checks its format, checksums, records and dependencies before anything changes.</p><label class="studio-field">Project archive<input type="file" name="recovery-archive" accept=".json,application/json" aria-describedby="recovery-file-help"></label><p id="recovery-file-help">Use an archive exported from Project &amp; backup. A damaged or incomplete file cannot be restored.</p><div class="studio-actions"><button type="submit" data-recovery-validate disabled>${icon('search')}Validate archive</button></div><div data-recovery-preview></div></section><section class="studio-section"><h3>Replace the damaged workspace</h3><p>Restore replaces all current project records and stored evidence with this archive. The original database and its journals are kept in the private project storage folder for recovery.</p><p>Credential values are excluded. Imported code must be reviewed before it can run. Restored schedules stay disabled until you enable them.</p><label><input type="checkbox" name="recovery-confirm" disabled> I understand this replaces the current project with the selected archive.</label><div class="studio-actions"><button type="button" data-recovery-restore class="studio-primary" disabled>${icon('refresh')}Restore project from archive</button></div></section></form><section class="studio-section" data-recovery-result hidden></section>`;
+    body.innerHTML = `<p class="studio-path">Workspace: ${esc(workspaceRoot)}</p>${status.error ? `<details class="studio-evidence"><summary>Why the project could not open</summary><p>${esc(status.error.message)}</p></details>` : ''}<form data-recovery-form><section class="studio-section"><h3>Choose a saved archive</h3><p>Select an LVX project archive (.json). Validation checks its format, checksums, records and dependencies before anything changes.</p><label class="studio-field">Project archive<input type="file" name="recovery-archive" accept=".json,application/json" aria-describedby="recovery-file-help"></label><p id="recovery-file-help">Use an archive exported from Project &amp; backup. A damaged or incomplete file cannot be restored.</p><div class="studio-actions"><button type="submit" data-recovery-validate disabled>${icon('search')}Validate archive</button></div><div data-recovery-preview></div></section><section class="studio-section"><h3>Replace the damaged workspace</h3><p>Restore replaces all current project records and stored evidence with this archive. The original database and its journals are kept in the private project storage folder for recovery.</p><p>Credential values are excluded. Imported code must be reviewed before it can run. Restored schedules stay disabled until you enable them.</p><label><input type="checkbox" name="recovery-confirm" disabled> I understand this replaces the current project with the selected archive.</label><div class="studio-actions"><button type="button" data-recovery-restore class="studio-primary" disabled>${icon('refresh')}Restore project from archive</button></div></section></form><section class="studio-section" data-recovery-result hidden></section>`;
     const form = body.querySelector('form'), fileInput = body.querySelector('[name="recovery-archive"]'), validateButton = body.querySelector('[data-recovery-validate]'), confirm = body.querySelector('[name="recovery-confirm"]'), restoreButton = body.querySelector('[data-recovery-restore]'), preview = body.querySelector('[data-recovery-preview]'), resultRegion = body.querySelector('[data-recovery-result]');
     function controls() {
       form.setAttribute('aria-busy', String(busy));
@@ -36,8 +35,7 @@
     function invalidate() { generation++; archive = null; valid = false; confirm.checked = false; preview.replaceChildren(); controls(); }
     fileInput.addEventListener('change', () => {
       selectedFile = fileInput.files?.[0] || null; invalidate();
-      if (selectedFile && selectedFile.size >= MAX_BYTES) { selectedFile = null; controls(); message('This archive is too large. Choose a JSON archive smaller than 100 MB.', true, true); }
-      else message(selectedFile ? `Selected ${selectedFile.name}. Validate it to see what will be restored.` : 'Choose a saved project archive.');
+      message(selectedFile ? `Selected ${selectedFile.name}. Validate it to see what will be restored.` : 'Choose a saved project archive.');
     });
     confirm.addEventListener('change', controls);
     form.addEventListener('submit', async event => {
@@ -49,7 +47,7 @@
         if (token !== generation || !form.isConnected) return;
         const errors = Array.isArray(validation?.errors) ? validation.errors : [];
         if (validation?.valid !== true) {
-          preview.innerHTML = `<h4 tabindex="-1">Archive needs attention</h4><ul>${(errors.length ? errors : ['The archive could not be verified.']).slice(0, 30).map(error => `<li>${esc(error)}</li>`).join('')}</ul><p>Choose a complete archive exported from LVX. Your original database has not been changed.</p>`;
+          preview.innerHTML = `<h4 tabindex="-1">Archive needs attention</h4><ul>${(errors.length ? errors : ['The archive could not be verified.']).map(error => `<li>${esc(error)}</li>`).join('')}</ul><p>Choose a complete archive exported from LVX. Your original database has not been changed.</p>`;
           message('Validation failed. Nothing has been restored.', true); preview.querySelector('h4').focus(); return;
         }
         if (!Number.isSafeInteger(validation.records) || validation.records < 0 || !Number.isSafeInteger(validation.artifacts) || validation.artifacts < 0) throw new Error('The archive preview is incomplete. Validate the file again.');

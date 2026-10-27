@@ -92,7 +92,7 @@ function createService({ dataDir, workspaceRoot = null, emit = () => {}, quotaBy
       }
       if(action.startsWith('retention:')){const name=action.slice('retention:'.length);return name==='reconcileEffects'?reconcileEffects():['applyCleanup','autoCleanup'].includes(name)?retain(name,payload):retentionService().handle(name,payload);}
       switch (action) {
-        case 'list': return db.list(payload.collection);
+        case 'list': return db.list(payload.collection,{boardId:payload.boardId});
         case 'read': return db.read(payload.collection, payload.id);
         case 'transact': return committed(db.transact(payload.records, { expectedWorkspaceRevision: payload.expectedWorkspaceRevision }));
         case 'backup': {

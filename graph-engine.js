@@ -7,6 +7,14 @@
  */
 
 class GraphEngine {
+    static async waitDelay(milliseconds,signal) {
+        let remaining=milliseconds;
+        while(remaining>0&&!signal?.aborted){
+            const interval=Math.min(2**31-1,remaining),started=Date.now();
+            await new Promise(resolve=>{const done=()=>{clearTimeout(timer);signal?.removeEventListener('abort',done);resolve();},timer=setTimeout(done,interval);signal?.addEventListener('abort',done,{once:true});if(signal?.aborted)done();});
+            remaining-=Math.max(1,Date.now()-started);
+        }
+    }
     static normalizeStatus(status) {
         const value = String(status || '').toUpperCase();
         if (['SUCCESS', 'PASS', 'PASSED'].includes(value)) return 'SUCCESS';
@@ -70,7 +78,7 @@ class GraphEngine {
         const outgoing=id=>copy.edges.filter(e=>e.source===id).map(e=>e.target);
         const scopeFor=runner=>{if(scopes.has(runner.id))return scopes.get(runner.id);const ids=new Set([runner.id]),distances=new Map([[runner.id,0]]),queue=[runner.id];while(queue.length){const id=queue.shift();if(id===runner.data.stopNodeId)continue;for(const next of outgoing(id))if(!ids.has(next)){ids.add(next);distances.set(next,distances.get(id)+1);queue.push(next);}}const result={ids,distances};scopes.set(runner.id,result);return result;};
         let allowed=null;
-        if(options.selectedNodeId||options.selectedNodeIds?.length){const selected=options.selectedNodeIds||[options.selectedNodeId];if(!Array.isArray(selected)||selected.some(id=>!copy.nodes.some(n=>n.id===id)))throw Error('Selected node does not exist.');allowed=new Set(selected);const visit=id=>copy.edges.filter(e=>e.target===id).forEach(e=>{if(!allowed.has(e.source)){allowed.add(e.source);visit(e.source);}});selected.forEach(visit);}
+        if(options.selectedNodeId||options.selectedNodeIds?.length){const selected=options.selectedNodeIds||[options.selectedNodeId];if(!Array.isArray(selected)||selected.some(id=>!copy.nodes.some(n=>n.id===id)))throw Error('Selected node does not exist.');allowed=new Set(selected);const incoming=new Map();for(const edge of copy.edges){if(!incoming.has(edge.target))incoming.set(edge.target,[]);incoming.get(edge.target).push(edge.source);}const pending=[...selected];while(pending.length)for(const source of incoming.get(pending.pop())||[])if(!allowed.has(source)){allowed.add(source);pending.push(source);}}
         else if(runners.length){const selected=options.runnerId?runners.filter(r=>r.id===options.runnerId):runners;if(!selected.length)throw Error('Selected runner does not exist.');allowed=new Set();for(const runner of selected)for(const id of scopeFor(runner).ids)allowed.add(id);}
         else if(options.runnerId)throw Error('Selected runner does not exist.');
         for(const node of copy.nodes){let nearest=null,distance=Infinity;for(const runner of runners){const d=scopeFor(runner).distances.get(node.id);if(d!=null&&d<distance){nearest=runner;distance=d;}}if(nearest){assignments[node.id]=nearest.id;const target=nearest.data.retryTargets?.find(t=>t.nodeId===node.id);if(target&&!node.retry&&!node.data.retry&&node.executionPolicy?.retryAttempts==null)node.retry={maxAttempts:Number(target.attempts)+1,backoffMs:Number(target.backoffMs??0)};}}
@@ -106,7 +114,7 @@ class GraphEngine {
         // reproducible without allowing unrelated branches to share evidence.
         let overallStatus = 'SUCCESS';
         const concurrency = Number(options.concurrency ?? graphPipeline.concurrency ?? 1);
-        if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 32) throw new Error('Concurrency must be an integer from 1 to 32.');
+        if (!Number.isInteger(concurrency) || concurrency < 1 || !Number.isSafeInteger(concurrency)) throw new Error('Concurrency must be an integer greater than zero.');
         const pending = sortedNodes.filter(node => !context.results[node.id]), active = new Map(), locks = new Set();
         let halted = false;
         const notify = () => options.onState?.({ results: context.results, artifacts: context.artifacts });
@@ -121,7 +129,7 @@ class GraphEngine {
                 // Execute Node
                 const retry = node.retry || node.data?.retry || (node.executionPolicy?.retryAttempts!=null?{maxAttempts:Number(node.executionPolicy.retryAttempts)+1}:{});
                 const maxAttempts = Number(retry.maxAttempts ?? 1), backoffMs = Number(retry.backoffMs ?? 0);
-                if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 21 || !Number.isFinite(backoffMs) || backoffMs < 0 || backoffMs > 60000) throw new Error('Retry policy must use 1–21 attempts and 0–60000ms backoff.');
+                if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || !Number.isSafeInteger(maxAttempts) || !Number.isFinite(backoffMs) || backoffMs < 0 || !Number.isSafeInteger(backoffMs)) throw new Error('Retry policy must use positive attempts and nonnegative millisecond backoff.');
                 const attempts = [];
                 let rawResult;
                 for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -133,7 +141,7 @@ class GraphEngine {
                     attempts.push({ attempt, startedAt, finishedAt: new Date().toISOString(), ...rawResult });
                     context.results[node.id] = { ...rawResult, attempts: [...attempts] }; notify();
                     if (rawResult.status === 'SUCCESS' || rawResult.status === 'CANCELLED' || options.signal?.aborted) break;
-                    if (attempt < maxAttempts && backoffMs) await new Promise(resolve => { const timer = setTimeout(done, Math.min(60000, backoffMs * 2 ** (attempt - 1))); function done() { clearTimeout(timer); options.signal?.removeEventListener('abort', done); resolve(); } options.signal?.addEventListener('abort', done, { once: true }); });
+                    if (attempt < maxAttempts && backoffMs) { const remaining=backoffMs*2**(attempt-1); if(!Number.isSafeInteger(remaining))throw Error('Retry delay exceeds the platform numeric range.'); await GraphEngine.waitDelay(remaining,options.signal); }
                 }
                 const result = { ...rawResult, status: GraphEngine.normalizeStatus(rawResult?.status) };
                 for (const [key, port] of Object.entries(result.status==='CANCELLED'?{}:node.outputs || node.data?.outputs || {})) {
@@ -196,7 +204,7 @@ class GraphEngine {
     }
 
     _getTopologicalSort(nodes, edges) {
-        const inDegree = new Map();
+        const inDegree = new Map(), nodeById=new Map(nodes.map(node=>[node.id,node]));
         const adj = new Map();
 
         nodes.forEach(node => {
@@ -221,9 +229,9 @@ class GraphEngine {
         });
 
         const sorted = [];
-        while (queue.length > 0) {
-            const u = queue.shift();
-            const nodeNode = nodes.find(n => n.id === u);
+        for(let cursor=0;cursor<queue.length;cursor++) {
+            const u = queue[cursor];
+            const nodeNode = nodeById.get(u);
             if (nodeNode) sorted.push(nodeNode);
 
             const neighbors = adj.get(u) || [];
@@ -243,11 +251,9 @@ class GraphEngine {
 
     _resolveInputs(node, edges, context) {
         // Only connected ancestors supply inputs; unrelated branches cannot satisfy a gate.
-        const ancestors = new Set();
-        const visit = id => edges.filter(e => e.target === id).forEach(e => {
-            if (!ancestors.has(e.source)) { ancestors.add(e.source); visit(e.source); }
-        });
-        visit(node.id);
+        const ancestors = new Set(), incoming=new Map(), pending=[node.id];
+        for(const edge of edges){if(!incoming.has(edge.target))incoming.set(edge.target,[]);incoming.get(edge.target).push(edge.source);}
+        while(pending.length)for(const source of incoming.get(pending.pop())||[])if(!ancestors.has(source)){ancestors.add(source);pending.push(source);}
         const inputs = {};
         const producers = {};
         const portEdges = edges.filter(edge => edge.target === node.id && (edge.output || edge.input));
@@ -284,17 +290,20 @@ class GraphEngine {
 
     static validate(workflow, { strict = false } = {}) {
         if (!workflow || typeof workflow !== 'object' || Array.isArray(workflow)) return {valid:false,errors:['Choose a workflow containing nodes and connections.'],warnings:[],workflow:{schemaVersion:1,nodes:[],edges:[]}};
-        const migrated = JSON.parse(JSON.stringify(workflow || {})), errors = [];
+        let migrated;
+        try { migrated = structuredClone(workflow); }
+        catch { return {valid:false,errors:['Workflow must contain serializable data.'],warnings:[],workflow:{schemaVersion:1,nodes:[],edges:[]}}; }
+        const errors = [];
         const warnings = GraphEngine.normalizeRunnerReferences(migrated);
         if (migrated.schemaVersion != null && migrated.schemaVersion !== 1) errors.push('Unsupported workflow schema version.');
         migrated.schemaVersion = 1;
         if (!Array.isArray(migrated.nodes) || !migrated.nodes.length) errors.push('Add at least one workflow step.');
         if (!Array.isArray(migrated.edges)) errors.push('Workflow connections must be an array.');
         const concurrency=Number(migrated.concurrency??1);
-        if(!Number.isInteger(concurrency)||concurrency<1||concurrency>32)errors.push('Concurrency must be an integer from 1 to 32.');
+        if(!Number.isInteger(concurrency)||concurrency<1||!Number.isSafeInteger(concurrency))errors.push('Concurrency must be an integer greater than zero.');
         for (const node of Array.isArray(migrated.nodes) ? migrated.nodes : []) {
             if(!node || typeof node!=='object') {errors.push('Each step must contain a valid configuration.');continue;}
-            if(typeof node.id!=='string'||!node.id.trim()||node.id.length>128)errors.push('Step IDs must be nonempty strings of at most 128 characters.');
+            if(typeof node.id!=='string'||!node.id.trim())errors.push('Step IDs must be nonempty strings.');
             node.type = GraphEngine.normalizeNodeType(node.type || node.data?.type);
             if (!node.data || typeof node.data !== 'object' || Array.isArray(node.data)) errors.push(`Step ${node.id || '(unnamed)'} needs configuration.`);
             if (!GraphEngine.nodeTypes().includes(node.type)) errors.push(`Step ${node.id} has unsupported type ${node.type}.`);
@@ -304,11 +313,11 @@ class GraphEngine {
             if(node.type==='start-runner'){
                 if(node.data?.stopNodeId&&!migrated.nodes.some(n=>n.id===node.data.stopNodeId&&n.id!==node.id))errors.push(`Runner ${node.id} has an invalid stop boundary.`);
                 const targets=node.data?.retryTargets;
-                if(targets!=null&&(!Array.isArray(targets)||targets.some(t=>!t||typeof t.nodeId!=='string'||!migrated.nodes.some(n=>n?.id===t.nodeId&&n.id!==node.id)||typeof t.attempts==='boolean'||String(t.attempts).trim()===''||!Number.isInteger(Number(t.attempts))||Number(t.attempts)<0||Number(t.attempts)>20||!Number.isFinite(Number(t.backoffMs??0))||Number(t.backoffMs??0)<0||Number(t.backoffMs??0)>60000)||new Set(targets.map(t=>t?.nodeId)).size!==targets.length))errors.push(`Runner ${node.id}: choose each connected retry target once and use a whole number from 0 to 20 retries (0 means run once).`);
+                if(targets!=null&&(!Array.isArray(targets)||targets.some(t=>!t||typeof t.nodeId!=='string'||!migrated.nodes.some(n=>n?.id===t.nodeId&&n.id!==node.id)||typeof t.attempts==='boolean'||String(t.attempts).trim()===''||!Number.isInteger(Number(t.attempts))||Number(t.attempts)<0||!Number.isSafeInteger(Number(t.attempts))||!Number.isSafeInteger(Number(t.attempts)+1)||!Number.isFinite(Number(t.backoffMs??0))||Number(t.backoffMs??0)<0||!Number.isSafeInteger(Number(t.backoffMs??0)))||new Set(targets.map(t=>t?.nodeId)).size!==targets.length))errors.push(`Runner ${node.id}: choose each connected retry target once and use a whole number of nonnegative retries (0 means run once).`);
             }
             if(!['stop','continue'].includes(node.onFailure||node.data?.onFailure||'stop'))errors.push(`Step ${node.id} must stop or continue after failure.`);
             const retry=node.retry||node.data?.retry||(node.executionPolicy?.retryAttempts!=null?{maxAttempts:Number(node.executionPolicy.retryAttempts)+1}:{}),attempts=Number(retry.maxAttempts??1),backoff=Number(retry.backoffMs??0);
-            if(!Number.isInteger(attempts)||attempts<1||attempts>21||!Number.isFinite(backoff)||backoff<0||backoff>60000)errors.push(`Step ${node.id} needs 1–21 attempts and 0–60000ms retry backoff.`);
+            if(!Number.isInteger(attempts)||attempts<1||!Number.isSafeInteger(attempts)||!Number.isFinite(backoff)||backoff<0||!Number.isSafeInteger(backoff))errors.push(`Step ${node.id} needs positive attempts and nonnegative retry backoff.`);
             const resources=node.resources||node.data?.resources||[];
             if(!Array.isArray(resources)||resources.some(value=>typeof value!=='string'||!value.trim()))errors.push(`Step ${node.id} needs nonempty resource lock names.`);
         }

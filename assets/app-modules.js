@@ -66,7 +66,152 @@
 
 ;
 
-;/* module: graph-engine; source: graph-engine.js; sha256: df0d69820dfdd61839f84d08f502e12e257eb770dedc29ce000fb43a64b5d901 */
+;/* module: github-workflow-model; source: github-workflow-model.js; sha256: 606e8873655a6e040259a314b85170b018ecfdf483dc04eea52c419ad360db97 */
+/* Static GitHub Actions source models. Never execute imported workflow code. */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.LVXGitHubWorkflows = api;
+})(typeof window === 'object' ? window : globalThis, function () {
+  'use strict';
+  // Compatibility metadata: zero denotes no application capacity ceiling.
+  const LIMITS = Object.freeze({ repositories: 0, workflows: 0, sourceBytes: 0, snapshotBytes: 0, jobs: 0 });
+  const bytes = text => new TextEncoder().encode(text).length;
+  const object = value => value && typeof value === 'object' && !Array.isArray(value);
+  const expression = value => typeof value === 'string' && value.includes('${{');
+  function repositoryName(input) {
+    let name = String(input || '').trim();
+    if (/^https:\/\//i.test(name)) {
+      const url = new URL(name);
+      if (url.hostname !== 'github.com' || url.port || url.username || url.password || url.search || url.hash) throw Error('Use a github.com repository URL or owner/repository.');
+      name = url.pathname.replace(/^\/+|\/+$/g, '');
+    }
+    name = name.replace(/\.git$/, '');
+    if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,38})\/[a-zA-Z0-9_.-]{1,100}$/.test(name) || ['.', '..'].includes(name.split('/')[1])) throw Error('Enter a repository as owner/repository or https://github.com/owner/repository.');
+    return name;
+  }
+  function workflowGraph(source, parseDocument) {
+    if (typeof source !== 'string') throw Error('Workflow source must be text.');
+    const doc = parseDocument(source, { version: '1.2', uniqueKeys: true, stringKeys: true });
+    if (doc.errors.length) throw Error(doc.errors.map(error => error.message).join('\n'));
+    const data = doc.toJS({ maxAliasCount: -1 });
+    try { JSON.stringify(data); } catch { throw Error('Cyclic YAML aliases cannot be displayed. Inspect the workflow source.'); }
+    if (!object(data) || !object(data.jobs)) throw Error('This YAML needs a jobs mapping to display a GitHub Actions workflow.');
+    const entries = Object.entries(data.jobs);
+    const diagnostics = doc.warnings.map(warning => warning.message), nodes = [], edges = [];
+    for (const [id, value] of entries) {
+      if (!object(value)) { diagnostics.push('Job ' + id + ' must be a mapping.'); continue; }
+      let needs = value.needs == null ? [] : Array.isArray(value.needs) ? value.needs : [value.needs];
+      needs = [...new Set(needs.map(need => {
+        if (typeof need !== 'string') { diagnostics.push('Job ' + id + ' has a dependency that is not a job ID.'); return ''; }
+        if (expression(need)) { diagnostics.push('Job ' + id + ' has a dynamic dependency; its edge cannot be resolved statically.'); return ''; }
+        return need;
+      }).filter(Boolean))];
+      const steps = Array.isArray(value.steps) ? value.steps : [];
+      nodes.push({ id, name: String(value.name || id), needs, steps, value,
+        kind: value.uses ? 'Reusable workflow' : value.strategy?.matrix ? 'Matrix job' : 'Job',
+        test: steps.some(step => object(step) && /\b(playwright|vitest|jest|pytest|cypress)\b|\bdotnet\s+test\b/.test(String(step.run || ''))) });
+    }
+    const byId = new Map(nodes.map(node => [node.id, node])), indegree = new Map(nodes.map(node => [node.id, 0]));
+    for (const node of nodes) for (const need of node.needs) {
+      if (!byId.has(need)) diagnostics.push('Job ' + node.id + ' needs missing job ' + need + '.');
+      else { edges.push({ source: need, target: node.id }); indegree.set(node.id, indegree.get(node.id) + 1); }
+    }
+    const levels = new Map(nodes.map(node => [node.id, 0])), queue = nodes.filter(node => !indegree.get(node.id)).map(node => node.id), outgoing = new Map();
+    for (const edge of edges) { const list = outgoing.get(edge.source) || []; list.push(edge); outgoing.set(edge.source, list); }
+    for (let i = 0; i < queue.length; i++) for (const edge of outgoing.get(queue[i]) || []) {
+      levels.set(edge.target, Math.max(levels.get(edge.target), levels.get(edge.source) + 1));
+      indegree.set(edge.target, indegree.get(edge.target) - 1);
+      if (!indegree.get(edge.target)) queue.push(edge.target);
+    }
+    if (queue.length < nodes.length) {
+      diagnostics.push('Dependency cycle detected. Jobs in or downstream of the cycle are shown in the last column; this workflow cannot be ordered.');
+      const last = [...levels.values()].reduce((max, value) => Math.max(max, value), 0) + 1;
+      for (const node of nodes) if (indegree.get(node.id)) { levels.set(node.id, last); node.blocked = true; }
+    }
+    const rows = new Map();
+    for (const node of nodes) {
+      const level = levels.get(node.id), row = rows.get(level) || 0;
+      node.x = 28 + level * 282; node.y = 28 + row * 112; rows.set(level, row + 1);
+    }
+    const trigger = data.on;
+    const triggers = typeof trigger === 'string' ? [trigger] : Array.isArray(trigger) ? trigger.map(String) : object(trigger) ? Object.keys(trigger) : [];
+    return { name: String(data.name || 'Unnamed workflow'), triggers, nodes, edges, diagnostics,
+      width: nodes.reduce((max, node) => Math.max(max, node.x + 236), 500), height: nodes.reduce((max, node) => Math.max(max, node.y + 112), 150) };
+  }
+  async function importRepository({ repository, ref = '', token = '', request = fetch, signal }) {
+    const fullName = repositoryName(repository), base = 'https://api.github.com/repos/' + fullName;
+    ref = String(ref).trim();
+    if (/[\x00-\x1f\x7f]/.test(ref)) throw Error('Use a branch, tag or commit without control characters.');
+    if (token && !/^secret:[a-f0-9-]{36}$/.test(token)) throw Error('Use a protected desktop GitHub credential.');
+    const headers = { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(token ? { Authorization: 'Bearer ' + token } : {}) };
+    const get = async path => {
+      const response = await request(base + path, { headers, signal, redirect: 'error' });
+      if (!response.ok) {
+        const messages = { 401: 'GitHub rejected the sign-in. Replace the token and try again.', 403: 'GitHub denied access or its rate limit was reached. Check repository access or try again later.', 404: 'Repository or ref not found, or your sign-in cannot read it.', 429: 'GitHub rate limit reached. Try again later.' };
+        throw Error(messages[response.status] || 'GitHub request failed (HTTP ' + response.status + '). Try importing again.');
+      }
+      return response.json();
+    };
+    const metadata = await get(''), branch = ref || metadata.default_branch;
+    if (!branch) throw Error('This repository has no default branch or commits yet.');
+    const commit = await get('/commits/' + encodeURIComponent(branch));
+    if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(commit.sha || '') || !commit.commit?.tree?.sha) throw Error('GitHub did not return an immutable commit. Try again.');
+    const tree = async sha => {
+      const result = await get('/git/trees/' + encodeURIComponent(sha));
+      if (result.truncated || !Array.isArray(result.tree)) throw Error('GitHub returned an incomplete directory. No workflows were imported.');
+      return result.tree;
+    };
+    const root = await tree(commit.commit.tree.sha), github = root.find(entry => entry.path === '.github' && entry.type === 'tree');
+    let files = [];
+    if (github) {
+      const folder = (await tree(github.sha)).find(entry => entry.path === 'workflows' && entry.type === 'tree');
+      if (folder) files = (await tree(folder.sha)).filter(entry => entry.type === 'blob' && /\.ya?ml$/i.test(entry.path));
+    }
+    files.sort((a, b) => a.path.localeCompare(b.path));
+    const workflows = []; let total = 0;
+    // Bounded batches keep API pressure low; every file must succeed before the lane is saved.
+    for (let start = 0; start < files.length; start += 4) {
+      const batch = await Promise.all(files.slice(start, start + 4).map(async file => {
+        const blob = await get('/git/blobs/' + encodeURIComponent(file.sha));
+        if (blob.encoding !== 'base64' || typeof blob.content !== 'string') throw Error('GitHub returned unsupported or oversized source for ' + file.path + '.');
+        const binary = atob(blob.content.replace(/\s/g, ''));
+        const source = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(Uint8Array.from(binary, char => char.charCodeAt(0)));
+        return { path: '.github/workflows/' + file.path, sha: file.sha, source };
+      }));
+      for (const file of batch) workflows.push(file);
+    }
+    return { id: fullName.toLowerCase() + '@' + branch, fullName, ref: branch, commit: commit.sha, importedAt: new Date().toISOString(), workflows, selected: workflows[0]?.path || '', example: false };
+  }
+  function validateBoard(board) {
+    if (!object(board) || board.version !== 1 || !Array.isArray(board.repositories)) throw Error('Saved GitHub repository view has an unsupported format.');
+    const ids = new Set();
+    for (const repo of board.repositories) {
+      if (!object(repo) || typeof repo.id !== 'string' || ids.has(repo.id)) throw Error('Saved repository identities are invalid.');
+      ids.add(repo.id); repositoryName(repo.fullName);
+      if (typeof repo.ref !== 'string' || typeof repo.commit !== 'string' || !Array.isArray(repo.workflows)) throw Error('Saved repository source is invalid.');
+      const paths = new Set(); let total = 0;
+      for (const file of repo.workflows) {
+        if (!object(file) || !/^\.github\/workflows\/[^/\\]+\.ya?ml$/i.test(file.path) || paths.has(file.path) || typeof file.source !== 'string') throw Error('Saved workflow source is invalid.');
+        total += bytes(file.source); paths.add(file.path);
+      }
+      if ((repo.selected !== '' && !paths.has(repo.selected))) throw Error('Saved workflow selection or source size is invalid.');
+    }
+    return board;
+  }
+  function examples() {
+    const simple = 'name: Build and test\non: [push, pull_request]\njobs:\n  install:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm ci\n  test:\n    needs: install\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n  package:\n    needs: test\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm run build\n';
+    const parallel = 'name: Checkout verification\non: [push, workflow_dispatch]\njobs:\n  prepare:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n  unit:\n    needs: prepare\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        node: [20, 22]\n    steps:\n      - run: npx vitest run\n  browser:\n    needs: prepare\n    runs-on: ubuntu-latest\n    steps:\n      - run: npx playwright test\n  report:\n    needs: [unit, browser]\n    runs-on: ubuntu-latest\n    if: always()\n    steps:\n      - run: echo "Collect test reports"\n';
+    const release = 'name: Release review\non: workflow_dispatch\njobs:\n  verify:\n    uses: example/shared/.github/workflows/check.yml@main\n  release:\n    needs: verify\n    runs-on: ubuntu-latest\n    environment: production\n    steps:\n      - run: echo "Release approved"\n';
+    return ['web-client', 'checkout-api', 'shared-tools'].map((name, i) => ({ id: 'example:' + name, fullName: 'example/' + name, ref: 'main', commit: 'example snapshot', importedAt: '', example: true,
+      selected: '.github/workflows/ci.yml', workflows: [{ path: '.github/workflows/ci.yml', source: [simple, parallel, release][i] }, { path: '.github/workflows/release.yaml', source: release }] }));
+  }
+  return { LIMITS, repositoryName, workflowGraph, importRepository, validateBoard, examples };
+});
+
+;
+
+;/* module: graph-engine; source: graph-engine.js; sha256: 327acd89f00edf06a8761c5033bde10bc82aad8236c469b3ef13e83d750e34b2 */
 /**
  * GRAPH ENGINE
  * Handles execution of complex dependency graphs (DAGs).
@@ -76,6 +221,14 @@
  */
 
 class GraphEngine {
+    static async waitDelay(milliseconds,signal) {
+        let remaining=milliseconds;
+        while(remaining>0&&!signal?.aborted){
+            const interval=Math.min(2**31-1,remaining),started=Date.now();
+            await new Promise(resolve=>{const done=()=>{clearTimeout(timer);signal?.removeEventListener('abort',done);resolve();},timer=setTimeout(done,interval);signal?.addEventListener('abort',done,{once:true});if(signal?.aborted)done();});
+            remaining-=Math.max(1,Date.now()-started);
+        }
+    }
     static normalizeStatus(status) {
         const value = String(status || '').toUpperCase();
         if (['SUCCESS', 'PASS', 'PASSED'].includes(value)) return 'SUCCESS';
@@ -139,7 +292,7 @@ class GraphEngine {
         const outgoing=id=>copy.edges.filter(e=>e.source===id).map(e=>e.target);
         const scopeFor=runner=>{if(scopes.has(runner.id))return scopes.get(runner.id);const ids=new Set([runner.id]),distances=new Map([[runner.id,0]]),queue=[runner.id];while(queue.length){const id=queue.shift();if(id===runner.data.stopNodeId)continue;for(const next of outgoing(id))if(!ids.has(next)){ids.add(next);distances.set(next,distances.get(id)+1);queue.push(next);}}const result={ids,distances};scopes.set(runner.id,result);return result;};
         let allowed=null;
-        if(options.selectedNodeId||options.selectedNodeIds?.length){const selected=options.selectedNodeIds||[options.selectedNodeId];if(!Array.isArray(selected)||selected.some(id=>!copy.nodes.some(n=>n.id===id)))throw Error('Selected node does not exist.');allowed=new Set(selected);const visit=id=>copy.edges.filter(e=>e.target===id).forEach(e=>{if(!allowed.has(e.source)){allowed.add(e.source);visit(e.source);}});selected.forEach(visit);}
+        if(options.selectedNodeId||options.selectedNodeIds?.length){const selected=options.selectedNodeIds||[options.selectedNodeId];if(!Array.isArray(selected)||selected.some(id=>!copy.nodes.some(n=>n.id===id)))throw Error('Selected node does not exist.');allowed=new Set(selected);const incoming=new Map();for(const edge of copy.edges){if(!incoming.has(edge.target))incoming.set(edge.target,[]);incoming.get(edge.target).push(edge.source);}const pending=[...selected];while(pending.length)for(const source of incoming.get(pending.pop())||[])if(!allowed.has(source)){allowed.add(source);pending.push(source);}}
         else if(runners.length){const selected=options.runnerId?runners.filter(r=>r.id===options.runnerId):runners;if(!selected.length)throw Error('Selected runner does not exist.');allowed=new Set();for(const runner of selected)for(const id of scopeFor(runner).ids)allowed.add(id);}
         else if(options.runnerId)throw Error('Selected runner does not exist.');
         for(const node of copy.nodes){let nearest=null,distance=Infinity;for(const runner of runners){const d=scopeFor(runner).distances.get(node.id);if(d!=null&&d<distance){nearest=runner;distance=d;}}if(nearest){assignments[node.id]=nearest.id;const target=nearest.data.retryTargets?.find(t=>t.nodeId===node.id);if(target&&!node.retry&&!node.data.retry&&node.executionPolicy?.retryAttempts==null)node.retry={maxAttempts:Number(target.attempts)+1,backoffMs:Number(target.backoffMs??0)};}}
@@ -175,7 +328,7 @@ class GraphEngine {
         // reproducible without allowing unrelated branches to share evidence.
         let overallStatus = 'SUCCESS';
         const concurrency = Number(options.concurrency ?? graphPipeline.concurrency ?? 1);
-        if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 32) throw new Error('Concurrency must be an integer from 1 to 32.');
+        if (!Number.isInteger(concurrency) || concurrency < 1 || !Number.isSafeInteger(concurrency)) throw new Error('Concurrency must be an integer greater than zero.');
         const pending = sortedNodes.filter(node => !context.results[node.id]), active = new Map(), locks = new Set();
         let halted = false;
         const notify = () => options.onState?.({ results: context.results, artifacts: context.artifacts });
@@ -190,7 +343,7 @@ class GraphEngine {
                 // Execute Node
                 const retry = node.retry || node.data?.retry || (node.executionPolicy?.retryAttempts!=null?{maxAttempts:Number(node.executionPolicy.retryAttempts)+1}:{});
                 const maxAttempts = Number(retry.maxAttempts ?? 1), backoffMs = Number(retry.backoffMs ?? 0);
-                if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 21 || !Number.isFinite(backoffMs) || backoffMs < 0 || backoffMs > 60000) throw new Error('Retry policy must use 1–21 attempts and 0–60000ms backoff.');
+                if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || !Number.isSafeInteger(maxAttempts) || !Number.isFinite(backoffMs) || backoffMs < 0 || !Number.isSafeInteger(backoffMs)) throw new Error('Retry policy must use positive attempts and nonnegative millisecond backoff.');
                 const attempts = [];
                 let rawResult;
                 for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -202,7 +355,7 @@ class GraphEngine {
                     attempts.push({ attempt, startedAt, finishedAt: new Date().toISOString(), ...rawResult });
                     context.results[node.id] = { ...rawResult, attempts: [...attempts] }; notify();
                     if (rawResult.status === 'SUCCESS' || rawResult.status === 'CANCELLED' || options.signal?.aborted) break;
-                    if (attempt < maxAttempts && backoffMs) await new Promise(resolve => { const timer = setTimeout(done, Math.min(60000, backoffMs * 2 ** (attempt - 1))); function done() { clearTimeout(timer); options.signal?.removeEventListener('abort', done); resolve(); } options.signal?.addEventListener('abort', done, { once: true }); });
+                    if (attempt < maxAttempts && backoffMs) { const remaining=backoffMs*2**(attempt-1); if(!Number.isSafeInteger(remaining))throw Error('Retry delay exceeds the platform numeric range.'); await GraphEngine.waitDelay(remaining,options.signal); }
                 }
                 const result = { ...rawResult, status: GraphEngine.normalizeStatus(rawResult?.status) };
                 for (const [key, port] of Object.entries(result.status==='CANCELLED'?{}:node.outputs || node.data?.outputs || {})) {
@@ -265,7 +418,7 @@ class GraphEngine {
     }
 
     _getTopologicalSort(nodes, edges) {
-        const inDegree = new Map();
+        const inDegree = new Map(), nodeById=new Map(nodes.map(node=>[node.id,node]));
         const adj = new Map();
 
         nodes.forEach(node => {
@@ -290,9 +443,9 @@ class GraphEngine {
         });
 
         const sorted = [];
-        while (queue.length > 0) {
-            const u = queue.shift();
-            const nodeNode = nodes.find(n => n.id === u);
+        for(let cursor=0;cursor<queue.length;cursor++) {
+            const u = queue[cursor];
+            const nodeNode = nodeById.get(u);
             if (nodeNode) sorted.push(nodeNode);
 
             const neighbors = adj.get(u) || [];
@@ -312,11 +465,9 @@ class GraphEngine {
 
     _resolveInputs(node, edges, context) {
         // Only connected ancestors supply inputs; unrelated branches cannot satisfy a gate.
-        const ancestors = new Set();
-        const visit = id => edges.filter(e => e.target === id).forEach(e => {
-            if (!ancestors.has(e.source)) { ancestors.add(e.source); visit(e.source); }
-        });
-        visit(node.id);
+        const ancestors = new Set(), incoming=new Map(), pending=[node.id];
+        for(const edge of edges){if(!incoming.has(edge.target))incoming.set(edge.target,[]);incoming.get(edge.target).push(edge.source);}
+        while(pending.length)for(const source of incoming.get(pending.pop())||[])if(!ancestors.has(source)){ancestors.add(source);pending.push(source);}
         const inputs = {};
         const producers = {};
         const portEdges = edges.filter(edge => edge.target === node.id && (edge.output || edge.input));
@@ -353,17 +504,20 @@ class GraphEngine {
 
     static validate(workflow, { strict = false } = {}) {
         if (!workflow || typeof workflow !== 'object' || Array.isArray(workflow)) return {valid:false,errors:['Choose a workflow containing nodes and connections.'],warnings:[],workflow:{schemaVersion:1,nodes:[],edges:[]}};
-        const migrated = JSON.parse(JSON.stringify(workflow || {})), errors = [];
+        let migrated;
+        try { migrated = structuredClone(workflow); }
+        catch { return {valid:false,errors:['Workflow must contain serializable data.'],warnings:[],workflow:{schemaVersion:1,nodes:[],edges:[]}}; }
+        const errors = [];
         const warnings = GraphEngine.normalizeRunnerReferences(migrated);
         if (migrated.schemaVersion != null && migrated.schemaVersion !== 1) errors.push('Unsupported workflow schema version.');
         migrated.schemaVersion = 1;
         if (!Array.isArray(migrated.nodes) || !migrated.nodes.length) errors.push('Add at least one workflow step.');
         if (!Array.isArray(migrated.edges)) errors.push('Workflow connections must be an array.');
         const concurrency=Number(migrated.concurrency??1);
-        if(!Number.isInteger(concurrency)||concurrency<1||concurrency>32)errors.push('Concurrency must be an integer from 1 to 32.');
+        if(!Number.isInteger(concurrency)||concurrency<1||!Number.isSafeInteger(concurrency))errors.push('Concurrency must be an integer greater than zero.');
         for (const node of Array.isArray(migrated.nodes) ? migrated.nodes : []) {
             if(!node || typeof node!=='object') {errors.push('Each step must contain a valid configuration.');continue;}
-            if(typeof node.id!=='string'||!node.id.trim()||node.id.length>128)errors.push('Step IDs must be nonempty strings of at most 128 characters.');
+            if(typeof node.id!=='string'||!node.id.trim())errors.push('Step IDs must be nonempty strings.');
             node.type = GraphEngine.normalizeNodeType(node.type || node.data?.type);
             if (!node.data || typeof node.data !== 'object' || Array.isArray(node.data)) errors.push(`Step ${node.id || '(unnamed)'} needs configuration.`);
             if (!GraphEngine.nodeTypes().includes(node.type)) errors.push(`Step ${node.id} has unsupported type ${node.type}.`);
@@ -373,11 +527,11 @@ class GraphEngine {
             if(node.type==='start-runner'){
                 if(node.data?.stopNodeId&&!migrated.nodes.some(n=>n.id===node.data.stopNodeId&&n.id!==node.id))errors.push(`Runner ${node.id} has an invalid stop boundary.`);
                 const targets=node.data?.retryTargets;
-                if(targets!=null&&(!Array.isArray(targets)||targets.some(t=>!t||typeof t.nodeId!=='string'||!migrated.nodes.some(n=>n?.id===t.nodeId&&n.id!==node.id)||typeof t.attempts==='boolean'||String(t.attempts).trim()===''||!Number.isInteger(Number(t.attempts))||Number(t.attempts)<0||Number(t.attempts)>20||!Number.isFinite(Number(t.backoffMs??0))||Number(t.backoffMs??0)<0||Number(t.backoffMs??0)>60000)||new Set(targets.map(t=>t?.nodeId)).size!==targets.length))errors.push(`Runner ${node.id}: choose each connected retry target once and use a whole number from 0 to 20 retries (0 means run once).`);
+                if(targets!=null&&(!Array.isArray(targets)||targets.some(t=>!t||typeof t.nodeId!=='string'||!migrated.nodes.some(n=>n?.id===t.nodeId&&n.id!==node.id)||typeof t.attempts==='boolean'||String(t.attempts).trim()===''||!Number.isInteger(Number(t.attempts))||Number(t.attempts)<0||!Number.isSafeInteger(Number(t.attempts))||!Number.isSafeInteger(Number(t.attempts)+1)||!Number.isFinite(Number(t.backoffMs??0))||Number(t.backoffMs??0)<0||!Number.isSafeInteger(Number(t.backoffMs??0)))||new Set(targets.map(t=>t?.nodeId)).size!==targets.length))errors.push(`Runner ${node.id}: choose each connected retry target once and use a whole number of nonnegative retries (0 means run once).`);
             }
             if(!['stop','continue'].includes(node.onFailure||node.data?.onFailure||'stop'))errors.push(`Step ${node.id} must stop or continue after failure.`);
             const retry=node.retry||node.data?.retry||(node.executionPolicy?.retryAttempts!=null?{maxAttempts:Number(node.executionPolicy.retryAttempts)+1}:{}),attempts=Number(retry.maxAttempts??1),backoff=Number(retry.backoffMs??0);
-            if(!Number.isInteger(attempts)||attempts<1||attempts>21||!Number.isFinite(backoff)||backoff<0||backoff>60000)errors.push(`Step ${node.id} needs 1–21 attempts and 0–60000ms retry backoff.`);
+            if(!Number.isInteger(attempts)||attempts<1||!Number.isSafeInteger(attempts)||!Number.isFinite(backoff)||backoff<0||!Number.isSafeInteger(backoff))errors.push(`Step ${node.id} needs positive attempts and nonnegative retry backoff.`);
             const resources=node.resources||node.data?.resources||[];
             if(!Array.isArray(resources)||resources.some(value=>typeof value!=='string'||!value.trim()))errors.push(`Step ${node.id} needs nonempty resource lock names.`);
         }
@@ -392,7 +546,7 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
 
 ;
 
-;/* module: legacy-importer; source: legacy-importer.js; sha256: 8b4dbc5820aa2717fda7794754f1fc66c886b9c97f670ca1620a1b05a387deea */
+;/* module: legacy-importer; source: legacy-importer.js; sha256: b7b3dcffe72497e36fae3920fab49190f37067da27330353ce7d71f9e967c4a3 */
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.LegacyImporter=api;})(typeof globalThis==='object'?globalThis:this,function(){
   'use strict';
   const clone=value=>JSON.parse(JSON.stringify(value));
@@ -404,12 +558,12 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
     const parsed=typeof content==='string'?JSON.parse(content):clone(content);
     const result={sourceName,format:'unknown',suites:[],views:[],pipelines:[],versionHistories:{},extraRecords:[],warnings:[]};
     const seen=new Set();let depth=0;
-    function visit(value,level=0){if(level>12)throw Error('Legacy nesting exceeds 12 levels.');if(!object(value))return;if(seen.has(value))return;seen.add(value);
-      if(suite(value)){result.suites.push(value);return;}
-      for(const key of ['test_suites','suites','tests'])if(Array.isArray(value[key])){result.suites.push(...value[key].filter(object));if(result.format==='unknown')result.format=key==='test_suites'?'session-export':key==='suites'?'legacy-suite-bundle':'legacy-test-bundle';}
-      for(const key of ['views'])if(Array.isArray(value[key]))result.views.push(...value[key].filter(object));
-      for(const key of ['pipelines','workflows'])if(Array.isArray(value[key]))result.pipelines.push(...value[key].filter(object));
-      for(const key of ['version_histories','versionHistories','suite_versions'])if(object(value[key]))for(const [id,versions]of Object.entries(value[key]))if(Array.isArray(versions))result.versionHistories[id]=[...(result.versionHistories[id]||[]),...versions.filter(object)];
+    function visit(first){const pending=[first];while(pending.length){const value=pending.pop();if(!object(value)||seen.has(value))continue;seen.add(value);
+      if(suite(value)){result.suites.push(value);continue;}
+      for(const key of ['test_suites','suites','tests'])if(Array.isArray(value[key])){for(const item of value[key])if(object(item))result.suites.push(item);if(result.format==='unknown')result.format=key==='test_suites'?'session-export':key==='suites'?'legacy-suite-bundle':'legacy-test-bundle';}
+      if(Array.isArray(value.views))for(const item of value.views)if(object(item))result.views.push(item);
+      for(const key of ['pipelines','workflows'])if(Array.isArray(value[key]))for(const item of value[key])if(object(item))result.pipelines.push(item);
+      for(const key of ['version_histories','versionHistories','suite_versions'])if(object(value[key]))for(const [id,versions]of Object.entries(value[key]))if(Array.isArray(versions)){result.versionHistories[id]||=[];for(const version of versions)if(object(version))result.versionHistories[id].push(version);}
       const extraCollections={execution_history:'history',security_scans:'security-history',screenshots:'baselines',datasets:'datasets',unit_tests:'unit-tests',test_environments:'environments'};
       for(const [key,collection]of Object.entries(extraCollections))if(Array.isArray(value[key]))for(const record of value[key].filter(object))result.extraRecords.push({collection,value:clone(record)});
       const configKeys=['notification_integrations','execution_config','storage_config','sharing_backend_config','cicd_backend_config','lvx_storage_preferences','storagePreferences'];
@@ -417,8 +571,8 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
       if(value.execution_mode!==undefined&&!Object.hasOwn(value,'execution_config')){result.extraRecords.push({collection:'legacy-config',value:{id:'execution_config',key:'execution_config',value:{mode:value.execution_mode},applyRequired:true}});result.warnings.push('The exported execution_mode is retained as a configuration draft; review engine settings before applying it.');}
       if(value.storage_type!==undefined&&!Object.hasOwn(value,'storage_config')){result.extraRecords.push({collection:'legacy-config',value:{id:'storage_config',key:'storage_config',value:{type:value.storage_type},applyRequired:true}});result.warnings.push('The exported storage_type is retained as a draft. Connection details absent from the export must be re-entered.');}
       for(const key of Object.keys(value))if(/config|preferences|environment|integration/i.test(key)&&!configKeys.includes(key)&&!['test_environments','execution_mode','storage_type'].includes(key))result.warnings.push(`Unsupported setting ${key} was not activated or imported. Export or re-enter it separately.`);
-      for(const key of ['appState','data','session','bundle','payload','state'])if(object(value[key])){visit(value[key],level+1);depth++;}
-    }
+      for(const key of ['state','payload','bundle','session','data','appState'])if(object(value[key])){pending.push(value[key]);depth++;}
+    }}
     if(Array.isArray(parsed)){result.format='suite-array';result.suites=parsed.filter(object);}else if(suite(parsed)){result.format='single-suite';result.suites=[parsed];}else visit(parsed);
     if(depth)result.format='app-state-backup';
     if(!result.suites.length&&!result.views.length&&!result.pipelines.length&&!result.extraRecords.length&&!Object.keys(result.versionHistories).length)throw Error(`"${sourceName}" contains no supported suites, views or workflows.`);
@@ -427,10 +581,10 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
   }
   function normalizeImport(payload,{existingRecords=[],idFactory=()=>globalThis.crypto.randomUUID()}={}) {
     const reserved=new Set(existingRecords.map(r=>`${r.collection}/${r.id}`)),records=[],warnings=[...(payload.warnings||[])],maps={suites:Object.create(null),views:Object.create(null),pipelines:Object.create(null),nodes:Object.create(null),extra:Object.create(null)},origins=new Map();
-    function id(collection,old){let candidate=String(old||'');if(!/^[a-zA-Z0-9][a-zA-Z0-9_.:@-]{0,199}$/.test(candidate)||reserved.has(`${collection}/${candidate}`)){do{candidate=`import-${idFactory()}`;}while(reserved.has(`${collection}/${candidate}`));}reserved.add(`${collection}/${candidate}`);return candidate;}
+    function id(collection,old){let candidate=String(old||'');if(!/^[a-zA-Z0-9][a-zA-Z0-9_.:@-]*$/.test(candidate)||reserved.has(`${collection}/${candidate}`)){do{candidate=`import-${idFactory()}`;}while(reserved.has(`${collection}/${candidate}`));}reserved.add(`${collection}/${candidate}`);return candidate;}
     // Each file is a separate import namespace, preventing accidental cross-file links.
     const groups=[['suites','suites'],['views','views'],['pipelines','workflows']];
-    for(const [kind,collection]of groups)for(const item of payload[kind]){const old=String(item.id||'');if(old&&Object.hasOwn(maps[kind],old))throw Error(`Duplicate ${kind} id in one import: ${old}`);const next=id(collection,old);if(old)Object.defineProperty(maps[kind],old,{value:next,enumerable:true});records.push({collection,id:next,expectedRevision:null,value:clone(item)});}
+    for(const [kind,collection]of groups)for(const item of payload[kind]){const old=String(item.id||'');if(old&&Object.hasOwn(maps[kind],old))throw Error(`Duplicate ${kind} id in one import: ${old}`);const next=id(collection,old);if(old)Object.defineProperty(maps[kind],old,{value:next,enumerable:true});const record={collection,id:next,expectedRevision:null,value:clone(item)};records.push(record);origins.set(record,item.id||null);}
     for(const entry of payload.extraRecords||[]){const old=String(entry.value.id||''),next=id(entry.collection,old);if(!maps.extra[entry.collection])maps.extra[entry.collection]=Object.create(null);if(old&&maps.extra[entry.collection][old])throw Error(`Duplicate ${entry.collection} id in one import.`);if(old)maps.extra[entry.collection][old]=next;const record={collection:entry.collection,id:next,expectedRevision:null,value:clone(entry.value)};records.push(record);origins.set(record,old);}
     const remap=(value,key='',nodeMap={})=>{
       if(Array.isArray(value))return value.map(v=>remap(v,key,nodeMap));
@@ -448,7 +602,7 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
       if(Array.isArray(nodes)){const used=new Set();for(const node of nodes){const old=String(node.id||'');if(!old||used.has(old))throw Error('Workflow nodes need unique identifiers.');used.add(old);nodeMap[old]=`node-${idFactory()}`;}maps.nodes[record.id]=nodeMap;}
       record.value=remap(record.value,'',nodeMap);record.value.id=record.id;
       const newNodes=record.value.nodes||record.value.graph?.nodes;if(Array.isArray(newNodes))for(const node of newNodes){node.originalNodeId=node.originalNodeId||node.id;node.id=nodeMap[node.id]||node.id;}
-      record.value.importedFrom={sourceName:payload.sourceName,originalId:origins.has(record)?origins.get(record):(payload[record.collection==='workflows'?'pipelines':record.collection]||[]).find(x=>(maps[record.collection==='workflows'?'pipelines':record.collection]?.[String(x.id)]||'')===record.id)?.id||null};
+      record.value.importedFrom={sourceName:payload.sourceName,originalId:origins.get(record)??null};
       // Trust is deliberately not inherited from old renderer data.
       record.value.requiresTrustReview=true;delete record.value.trusted;delete record.value.trust;
     }
@@ -463,9 +617,10 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
     }
     return {records,maps,warnings,counts:{suites:payload.suites.length,views:payload.views.length,workflows:payload.pipelines.length,histories:Object.keys(payload.versionHistories).length,extraRecords:(payload.extraRecords||[]).length},sourceName:payload.sourceName};
   }
-  function collectLegacyImportFiles(directoryPath,{maxFiles=500,maxDepth=12}={}) {
+  function collectLegacyImportFiles(directoryPath,{maxFiles=0,maxDepth=0}={}) {
+    for(const budget of [maxFiles,maxDepth])if(!Number.isSafeInteger(budget)||budget<0)throw Error('Legacy import budgets must be nonnegative integers; zero disables a budget.');
     if(typeof require!=='function')throw Error('Folder import requires the native workspace service.');const fs=require('node:fs'),path=require('node:path');const root=path.resolve(directoryPath);if(fs.lstatSync(root).isSymbolicLink())throw Error('Symbolic link import roots are not allowed.');const results=[];
-    function walk(dir,depth){if(depth>maxDepth)throw Error('Legacy folder nesting limit exceeded.');for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const full=path.join(dir,entry.name);if(entry.isSymbolicLink())throw Error('Symbolic links are not allowed in legacy imports.');if(entry.isDirectory())walk(full,depth+1);else if(entry.isFile()&&/\.json$/i.test(entry.name)){if(results.length>=maxFiles)throw Error('Legacy folder file limit exceeded.');results.push({path:full,fileName:entry.name,relativePath:path.relative(root,full)});}}}walk(root,0);return results.sort((a,b)=>a.relativePath.localeCompare(b.relativePath));
+    const pending=[{dir:root,depth:0}];while(pending.length){const {dir,depth}=pending.pop();if(maxDepth>0&&depth>maxDepth)throw Error('The selected legacy folder depth budget was reached.');for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const full=path.join(dir,entry.name);if(entry.isSymbolicLink())throw Error('Symbolic links are not allowed in legacy imports.');if(entry.isDirectory())pending.push({dir:full,depth:depth+1});else if(entry.isFile()&&/\.json$/i.test(entry.name)){if(maxFiles>0&&results.length>=maxFiles)throw Error('The selected legacy folder file budget was reached.');results.push({path:full,fileName:entry.name,relativePath:path.relative(root,full)});}}}return results.sort((a,b)=>a.relativePath.localeCompare(b.relativePath));
   }
   function reconcileFolderReferences(records,reports) {
     const maps={suites:Object.create(null),views:Object.create(null),pipelines:Object.create(null)},ambiguous={suites:new Set(),views:new Set(),pipelines:new Set()};
@@ -481,7 +636,7 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
 
 ;
 
-;/* module: mock-runtime; source: mock-runtime.js; sha256: f039493b8ea715f78441b649323c59fd28d9ae0d080baf159b0d9ab2b51716f4 */
+;/* module: mock-runtime; source: mock-runtime.js; sha256: 867d89a707d2931883a3a9c83f6c89d65991fa2719d467b393ce014f28cdc1c2 */
 (function(root, factory) {
   const api = factory(root); if (typeof module === 'object' && module.exports) module.exports = api;
   root.mockRuntime = api;
@@ -489,7 +644,7 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
   'use strict';
   const own = (o,k) => Object.prototype.hasOwnProperty.call(o || {}, k);
   const forbidden = new Set(['__proto__','prototype','constructor']);
-  function variable(value) { if (typeof value !== 'string' || value.length>200 || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value) || forbidden.has(value)) throw Error('Use a valid variable name of up to 200 characters.'); return value; }
+  function variable(value) { if (typeof value !== 'string' || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value) || forbidden.has(value)) throw Error('Use a valid variable name .'); return value; }
   const templates = Object.freeze({
     'api-response': '{\n  "status": 200,\n  "body": {"user_id":"{{random_id}}","email":"{{random_email}}","token":"{{random_token}}"}\n}',
     'database-record': '{\n  "id":"{{random_id}}","email":"{{random_email}}","name":"{{random_name}}","role":"user"\n}',
@@ -531,7 +686,6 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
   }
   function normalizeFileData(file={}) {
     const headers=Array.isArray(file.headers)?file.headers.map(String):[], rows=Array.isArray(file.rows)?file.rows:[];
-    if(headers.length>500 || rows.length>10000)throw Error('Fixture files support up to 500 columns and 10,000 rows.');
     if(new Set(headers).size!==headers.length || headers.some(h=>!h||forbidden.has(h)))throw Error('Column headers must be unique and nonempty.');
     if(rows.some(r=>!r||Array.isArray(r)||typeof r!=='object'))throw Error('Each data row must be an object.');
     const usageMode=file.usageMode||'per-row'; if(!['all','per-row','selected','sample'].includes(usageMode))throw Error('Unknown file usage mode.');
@@ -558,7 +712,7 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
     return {...state,mocks,setupSteps:normalizeSteps(state.setupSteps),teardownSteps:normalizeSteps(state.teardownSteps),fileData:normalizeFileData(state.fileData)};
   }
   function validateSteps(steps,mocks) {
-    for(const s of steps) {if(!actions.includes(s.action))throw Error(`Unsupported setup/teardown action: ${s.action}. Free-text notes are not executable.`);if(s.action==='create-test-data'){variable(s.variableName);if(!mocks.some(m=>m.id===s.mockId))throw Error('Choose an existing mock for create-test-data.');}if(s.action==='clear-test-data')variable(s.variableName);if(s.action==='set-environment')variable(s.envName);if(s.action==='reset-environment'&&!s.resetAll)variable(s.envName);if(s.action==='wait'&&(!Number.isSafeInteger(Number(s.delayMs))||Number(s.delayMs)<0||Number(s.delayMs)>300000))throw Error('Wait must be 0–300,000 milliseconds.');if(s.action==='run-code'&&(!['python','javascript'].includes(s.language)||!String(s.code||'').trim()))throw Error('Run-code needs Python or JavaScript and a nonempty snippet.');}
+    for(const s of steps) {if(!actions.includes(s.action))throw Error(`Unsupported setup/teardown action: ${s.action}. Free-text notes are not executable.`);if(s.action==='create-test-data'){variable(s.variableName);if(!mocks.some(m=>m.id===s.mockId))throw Error('Choose an existing mock for create-test-data.');}if(s.action==='clear-test-data')variable(s.variableName);if(s.action==='set-environment')variable(s.envName);if(s.action==='reset-environment'&&!s.resetAll)variable(s.envName);if(s.action==='wait'&&(!Number.isSafeInteger(Number(s.delayMs))||Number(s.delayMs)<0))throw Error('Wait must be 0–300,000 milliseconds.');if(s.action==='run-code'&&(!['python','javascript'].includes(s.language)||!String(s.code||'').trim()))throw Error('Run-code needs Python or JavaScript and a nonempty snippet.');}
   }
   function buildSuiteExecutionPlan(suite,inputs={},options={}) {
     const state=normalizeState(suite?.mock_builder||suite?.mockBuilder||{});validateSteps([...state.setupSteps,...state.teardownSteps],state.mocks);
@@ -568,7 +722,16 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
     const iterations=buildFileIterations(state.fileData,options).map(i=>({...i,contextVariables:{...baseContextVariables,...i.variables}}));
     return {version:1,state,inputs:flattenInputContext(inputs),baseContextVariables,setupSteps:state.setupSteps,teardownSteps:state.teardownSteps,beforeDelayMs:state.setupSteps.filter(s=>s.action==='wait').reduce((n,s)=>n+Number(s.delayMs),0),afterDelayMs:state.teardownSteps.filter(s=>s.action==='wait').reduce((n,s)=>n+Number(s.delayMs),0),iterations,hasFileIterations:iterations.length>0};
   }
-  function delay(ms,signal) {return new Promise((resolve,reject)=>{if(signal?.aborted)return reject(Error('Execution cancelled.'));const done=()=>{signal?.removeEventListener('abort',abort);resolve();};const timer=setTimeout(done,ms);const abort=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);reject(Error('Execution cancelled.'));};signal?.addEventListener('abort',abort,{once:true});});}
+  function delay(ms,signal) {
+    if (!Number.isSafeInteger(ms) || ms < 0) return Promise.reject(Error('Wait must be a nonnegative safe integer.'));
+    return new Promise((resolve,reject)=>{
+      let timer,remaining=ms,last=Date.now();
+      const done=()=>{signal?.removeEventListener('abort',abort);resolve();};
+      const abort=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);reject(Error('Execution cancelled.'));};
+      const tick=()=>{const now=Date.now();remaining-=Math.max(0,now-last);last=now;if(remaining<=0)done();else timer=setTimeout(tick,Math.min(2147483647,remaining));};
+      if(signal?.aborted)return abort();signal?.addEventListener('abort',abort,{once:true});timer=setTimeout(tick,Math.min(2147483647,remaining));
+    });
+  }
   async function executeSuitePlan(plan,options={}) {
     // Revalidate the plan at its native boundary: renderer-supplied plans are untrusted.
     const safe=buildSuiteExecutionPlan({mock_builder:plan.state},plan.inputs,options),results=[];
@@ -587,10 +750,8 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
       if(error)throw error;results.push({iteration:iteration.rowNumber,result,effects,finalContext:{...context}});
     }return {status:results.some(r=>r.result&&['FAILURE','FAILED','ERROR','CANCELLED','TIMEOUT'].includes(r.result.status))?'FAILED':'SUCCESS',results};
   }
-  const MAX_FILE_BYTES=10*1024*1024;
   function fileType(name){const extension=/\.([^.]+)$/.exec(String(name))?.[1].toLowerCase();if(!['csv','tsv','json','txt','xls','xlsx'].includes(extension))throw Error('Choose a CSV, TSV, Excel (.xlsx or .xls), JSON or TXT file.');return extension;}
   function structuredRows(rows){
-    if(rows.length>10000)throw Error('Fixture files support up to 500 columns and 10,000 rows.');
     const objects=rows.map(row=>Array.isArray(row)?Object.fromEntries(row.map((value,i)=>[`column_${i+1}`,value])):row&&typeof row==='object'?row:{value:row==null?'':String(row)});
     const headers=[...new Set(objects.flatMap(row=>Object.keys(row)))];
     return {headers,rows:objects.map(row=>Object.fromEntries(headers.map(header=>[header,row[header]??''])))};
@@ -600,17 +761,16 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
     const ole=[0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1],zip=bytes[0]===0x50&&bytes[1]===0x4b&&bytes[2]===3&&bytes[3]===4;
     const binary=ole.every((v,i)=>bytes[i]===v)||(bytes[0]===9&&[0,2,4,8].includes(bytes[1])),xml=/urn:schemas-microsoft-com:office:spreadsheet/i.test(new TextDecoder().decode(bytes.subarray(0,8192)));
     if(!zip&&!binary&&!xml)throw Error('Excel file is malformed or is not a supported XLS/XLSX workbook.');
-    let book;try{book=xlsx.read(bytes,{type:'array',sheetRows:10002,cellFormula:false,cellHTML:false,cellText:false});}catch(error){throw Error('Excel file could not be read: '+error.message);}
+    let book;try{book=xlsx.read(bytes,{type:'array',cellFormula:false,cellHTML:false,cellText:false});}catch(error){throw Error('Excel file could not be read: '+error.message);}
     const sheetName=book.SheetNames?.[0],sheet=book.Sheets?.[sheetName];if(!sheet)throw Error('Excel workbook needs a worksheet.');
     const ref=sheet['!fullref']||sheet['!ref'];if(!ref)throw Error('Excel must have a header row and at least one data row.');
-    const range=xlsx.utils.decode_range(ref);if(range.e.c-range.s.c+1>500||range.e.r-range.s.r>10000)throw Error('Fixture files support up to 500 columns and 10,000 rows.');
     const matrix=xlsx.utils.sheet_to_json(sheet,{header:1,raw:true,defval:'',blankrows:false});if(matrix.length<2)throw Error('Excel must have a header row and at least one data row.');
     const headers=matrix.shift().map(value=>String(value??'')),rows=matrix.map(row=>Object.fromEntries(headers.map((header,i)=>[header,row[i]??''])));
     return normalizeFileData({fileName:name,fileType:'excel',sheetName,headers,rows});
   }
   function parseDataFile(input,name='data.csv',options={}) {
     const type=fileType(name),bytes=typeof input==='string'?new TextEncoder().encode(input):input instanceof ArrayBuffer?new Uint8Array(input):ArrayBuffer.isView(input)?new Uint8Array(input.buffer,input.byteOffset,input.byteLength):null;
-    if(!bytes)throw Error('Data file content must be text or bytes.');if(bytes.byteLength>MAX_FILE_BYTES)throw Error('Data file exceeds 10 MB.');
+    if(!bytes)throw Error('Data file content must be text or bytes.');
     if(type==='xls'||type==='xlsx')return parseExcel(bytes,name,options);
     let text=typeof input==='string'?input:new TextDecoder('utf-8',{fatal:true}).decode(bytes);text=text.replace(/^\uFEFF/,'');
     if(type==='json'){let parsed;try{parsed=JSON.parse(text);}catch(error){throw Error('JSON is not valid: '+error.message);}const rows=Array.isArray(parsed)?parsed:parsed&&Array.isArray(parsed.data)?parsed.data:parsed&&Array.isArray(parsed.rows)?parsed.rows:parsed&&typeof parsed==='object'?[parsed]:null;if(!rows)throw Error('JSON must contain an object, an array, or a data/rows array.');return normalizeFileData({fileName:name,fileType:'json',...structuredRows(rows)});}
@@ -618,7 +778,7 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
     const separator=/\.tsv$/i.test(name)?'\t':',';let field='',row=[],records=[],quoted=false,closed=false;
     const push=()=>{row.push(field);field='';closed=false;};for(let i=0;i<text.length;i++){const c=text[i];if(quoted){if(c==='"'&&text[i+1]==='"'){field+='"';i++;}else if(c==='"'){quoted=false;closed=true;}else field+=c;}else if(c===separator){push();}else if(c==='\r'||c==='\n'){push();records.push(row);row=[];if(c==='\r'&&text[i+1]==='\n')i++;}else if(c==='"'&&!field&&!closed)quoted=true;else{if(closed)throw Error('Invalid CSV after closing quote.');field+=c;}}if(quoted)throw Error('Unclosed CSV quote.');if(field||row.length||closed){push();records.push(row);}const headers=(records.shift()||[]).map((h,i)=>i===0?h.replace(/^\uFEFF/,''):h);const rows=records.map((cells,i)=>{if(cells.length!==headers.length)throw Error(`Row ${i+2} has ${cells.length} columns; expected ${headers.length}.`);return Object.fromEntries(headers.map((h,j)=>[h,cells[j]]));});return normalizeFileData({fileName:name,fileType:separator==='\t'?'tsv':'csv',headers,rows});
   }
-  async function readDataFile(file,options={}){if(!file)throw Error('Choose a data file first.');const type=fileType(file.name);if(file.size>MAX_FILE_BYTES)throw Error('Data file exceeds 10 MB.');if(typeof file.arrayBuffer==='function')return parseDataFile(await file.arrayBuffer(),file.name,options);if(type==='xls'||type==='xlsx')throw Error('This file picker cannot read binary workbooks. Reopen Studio and try again.');return parseDataFile(await file.text(),file.name,options);}
+  async function readDataFile(file,options={}){if(!file)throw Error('Choose a data file first.');const type=fileType(file.name);if(typeof file.arrayBuffer==='function')return parseDataFile(await file.arrayBuffer(),file.name,options);if(type==='xls'||type==='xlsx')throw Error('This file picker cannot read binary workbooks. Reopen Studio and try again.');return parseDataFile(await file.text(),file.name,options);}
   return {templates,builtIns,actions,normalizeState,normalizeFileData,variable,getBuiltInValue,serializeVariableValue,resolveTemplateVariables,buildMockValue,sanitizeVariableName,flattenInputContext,parseSelectedRowIndexes,getFileRowsForExecution,mapFileRowVariables,buildFileIterations,buildSuiteExecutionPlan,executeSuitePlan,delay,parseDataFile,readDataFile};
 });
 
@@ -683,7 +843,7 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
 
 ;
 
-;/* module: protected-config; source: protected-config.js; sha256: dab10f9a30f83d321004bb6d0bf4f7711498c8a98f43c98cf8762fbf34438cbb */
+;/* module: protected-config; source: protected-config.js; sha256: 38e797cbf8d91febaced04e94f31b9fda088a01509353d2338dea376d2d76ff8 */
 /** Encryption references stay in the renderer; only the main process resolves them. */
 (() => {
  const reference=value=>typeof value==='string'&&/^secret:[a-f0-9-]{36}$/.test(value);
@@ -700,7 +860,7 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
      for(const [name,v]of Object.entries(parameters))if(schema[name]?.secret===true||secretField.test(name)||reference(v)||reference(v?.secretRef)){
       if(v&&typeof v==='object'&&reference(v.secretRef)){schema[name]={...schema[name],type:'string',secret:true};changed=true;continue;}
       if(typeof v!=='string')throw Error('Secret parameter '+name+' must be a credential reference or text to encrypt.');
-      const stored=reference(v)?{reference:v}:await invoke('security','storeSecret',{label:(label+path+'.parameters.'+name).slice(0,120),value:v});parameters[name]={secretRef:stored.reference};schema[name]={...schema[name],type:'string',secret:true};changed=true;
+      const stored=reference(v)?{reference:v}:await invoke('security','storeSecret',{label:(label+path+'.parameters.'+name),value:v});parameters[name]={secretRef:stored.reference};schema[name]={...schema[name],type:'string',secret:true};changed=true;
      }
      if(changed)source={...item,parameters,[schemaKey]:schema};
     }
@@ -711,7 +871,7 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
    if(/^(?:headers|headersJson|headerJson|body|requestBody)$/i.test(key)&&/^[\s]*[\[{]/.test(item)){let parsed;try{parsed=JSON.parse(item);}catch{return item;}return JSON.stringify(await visit(parsed,path,parent,key));}
    const publicFirebase=path.includes('.firebaseConfig.');
    const passwordStep=parent&&/password|passwd|api[_-]?key|access[_-]?token/i.test(String(parent.selector||parent.name||parent.field||''))&&['value','expected','text'].includes(key)&&/fill|input|type/i.test(String(parent.action||parent.type||''));
-   if(!publicFirebase&&(secretField.test(key)||(key==='value'&&secretField.test(parent?.key||parent?.name||''))||(key==='value'&&(parent?.secret===true||parent?.isSecret===true))||passwordStep||/^https?:\/\/[^/]*:[^/]*@/i.test(item))){const stored=await invoke('security','storeSecret',{label:(label+path).slice(0,120),value:item});return stored.reference;}
+   if(!publicFirebase&&(secretField.test(key)||(key==='value'&&secretField.test(parent?.key||parent?.name||''))||(key==='value'&&(parent?.secret===true||parent?.isSecret===true))||passwordStep||/^https?:\/\/[^/]*:[^/]*@/i.test(item))){const stored=await invoke('security','storeSecret',{label:(label+path),value:item});return stored.reference;}
    return item;
   }
   return visit(value);
@@ -725,7 +885,7 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
   if(unavailable)throw Error('The saved sign-in for '+unavailable.label+' needs re-entry. Open Repair saved connection. Your other connections are available.');
   if(options.signal?.aborted)throw new DOMException('The request was cancelled.','AbortError');
   const requestId=crypto.randomUUID();
-  const payload={requestId,url:String(url),method:options.method||'GET',headers,timeoutMs:Number(options.timeout||30000),...(body!==undefined?{body}:{})};
+  const payload={requestId,url:String(url),method:options.method||'GET',headers,timeoutMs:Number(options.timeout??0),...(body!==undefined?{body}:{})};
   const pending=invoke('host','request',payload);let abort;
   try{const result=options.signal?await Promise.race([pending,new Promise((_,reject)=>{abort=()=>{void invoke('host','cancelRequest',{requestId}).catch(()=>{});reject(new DOMException('The request was cancelled.','AbortError'));};options.signal.addEventListener('abort',abort,{once:true});if(options.signal.aborted)abort();})]):await pending;return new Response([204,205,304].includes(result.status)?null:result.body,{status:result.status,statusText:result.statusText,headers:result.headers});}
   finally{if(abort)options.signal.removeEventListener('abort',abort);}
@@ -752,7 +912,7 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
     }
    }
    if(Array.isArray(item)){const result=[];for(let i=0;i<item.length;i++)result.push(await walk(item[i],[...path,i],labels));return result;}
-   if(item&&typeof item==='object'){const result={},nextLabels=item.name?[...labels,String(item.name).slice(0,100)]:labels;for(const [field,child]of Object.entries(item))result[field]=await walk(child,[...path,field],nextLabels);return result;}
+   if(item&&typeof item==='object'){const result={},nextLabels=item.name?[...labels,String(item.name)]:labels;for(const [field,child]of Object.entries(item))result[field]=await walk(child,[...path,field],nextLabels);return result;}
    return item;
   }
   const result=await walk(value);
@@ -765,7 +925,7 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
   if(!locations.length)throw Error('This connection changed. Refresh the list before repairing it.');
   let next='';
   if(retryOriginal)next=await protect(record.encrypted,record.label);
-  else if(!forget){if(typeof replacement!=='string'||!replacement.trim())throw Error('Enter the replacement credential, or choose Forget saved sign-in.');next=(await invoke('security','storeSecret',{label:record.label.slice(0,120),value:replacement})).reference;}
+  else if(!forget){if(typeof replacement!=='string'||!replacement.trim())throw Error('Enter the replacement credential, or choose Forget saved sign-in.');next=(await invoke('security','storeSecret',{label:record.label,value:replacement})).reference;}
   if(localStorage.getItem(record.storageKey)!==original)throw Error('This connection changed while it was being repaired. Try again; the newer settings were preserved.');
   for(const location of locations){if(location.length)setPath(value,location,next);else value=next;}localStorage.setItem(record.storageKey,JSON.stringify(value));record.resolvedAt=new Date().toISOString();saveRecovery(records);publishIssues();emit('lvx-credentials-migrated');return {repaired:true,forgotten:forget,updatedReferences:locations.length};
  }
@@ -783,14 +943,13 @@ if (typeof module !== 'undefined') module.exports = GraphEngine;
 
 ;
 
-;/* module: version-control; source: version-control.js; sha256: 9751480004995ddc2eb419cef7604bcca00c92afc0b8ba2e75bb4d74f78cce41 */
+;/* module: version-control; source: version-control.js; sha256: 91acba7bb64049e2d6db2cb276553a85289f0f31356648d99645398488bb057d */
 // ============================================
 // VERSION CONTROL SYSTEM
 // ============================================
 
 class VersionControl {
   constructor() {
-    this.MAX_VERSIONS_PER_SUITE = 50;
     this.pending = Promise.resolve();
   }
 
@@ -822,10 +981,6 @@ class VersionControl {
     }
 
     versions.push(newVersion);
-
-    if (versions.length > this.MAX_VERSIONS_PER_SUITE) {
-      versions.shift();
-    }
 
     localStorage.setItem(`suite_versions_${suiteId}`, JSON.stringify(versions));
     return newVersion.versionId;
@@ -1321,7 +1476,7 @@ for (const action of ['openVersionHistory', 'selectVersion', 'restoreSelectedVer
 
 ;
 
-;/* module: data-manager; source: data-manager.js; sha256: bdb77b995b78849f41ab7466207945be4d8a6e6c74138c9ec4ff750de6501bae */
+;/* module: data-manager; source: data-manager.js; sha256: 1d177895ce8241f1e2312db3e05e7687b22a662c3db38ad3743bb236e8d89fc7 */
 class DataManager {
     constructor() {
         this.STORAGE_KEY = 'test_data_sets';
@@ -1436,11 +1591,11 @@ class DataManager {
         return this.typedAction('maskDataset', { rows: dataset.data, columns, seed });
     }
 
-    async parseCSVFile(file, { maxRows = 100000 } = {}) {
-        if (!Number.isSafeInteger(maxRows) || maxRows < 1 || maxRows > 100000) throw new Error('CSV preview is limited to 100,000 rows. Use workspace validation for larger files.');
+    async parseCSVFile(file, { maxRows = 0 } = {}) {
+        if (!Number.isSafeInteger(maxRows) || maxRows < 0) throw new Error('Row budget must be a nonnegative safe integer; 0 means all rows.');
         if (typeof file.stream !== 'function') {
             const parsed = this.parseCSV(await file.text());
-            if (parsed.data.length > maxRows) throw new Error('This CSV is too large for the editor. Use streaming workspace validation.');
+            if (maxRows && parsed.data.length > maxRows) throw new Error('This CSV is too large for the editor. Use streaming workspace validation.');
             return parsed;
         }
         const reader = file.stream().getReader();
@@ -1449,7 +1604,6 @@ class DataManager {
         const data = [];
         const push = () => {
             row.push(field); field = ''; state = 'plain';
-            if (row.length > 500) throw new Error('CSV is limited to 500 columns.');
         };
         const record = () => {
             push();
@@ -1458,7 +1612,7 @@ class DataManager {
                 if (headers.some(h => !h.trim()) || new Set(headers).size !== headers.length) throw new Error('CSV headers must be nonempty and unique');
             } else {
                 if (row.length !== headers.length) throw new Error(`CSV row ${data.length + 2} has ${row.length} fields; expected ${headers.length}`);
-                if (data.length >= maxRows) throw new Error('This CSV is too large for the editor. Use streaming workspace validation.');
+                if (maxRows && data.length >= maxRows) throw new Error('This CSV is too large for the editor. Use streaming workspace validation.');
                 data.push(Object.fromEntries(headers.map((name, i) => [name, row[i]])));
             }
             row = []; touched = false;
@@ -1475,7 +1629,6 @@ class DataManager {
                 else if (state === 'closed') throw new Error('Malformed CSV quoted field');
                 else if (c === '"') { if (field !== '') throw new Error('Malformed CSV quoted field'); state = 'quoted'; }
                 else field += c;
-                if (field.length > 1024 * 1024) throw new Error('CSV field exceeds one million characters.');
             }
         };
         try {
@@ -1531,6 +1684,7 @@ class DataManager {
     // Generate test data using faker patterns
     generateFakerData(pattern, count) {
         // Patterns like: {{firstName}}, {{email}}, {{number:1:100}}
+        if (!Number.isSafeInteger(count) || count < 1) throw new Error('Row count must be a positive safe integer.');
         const data = [];
         for (let i = 0; i < count; i++) {
             const row = { index: i + 1 };
@@ -1647,11 +1801,14 @@ function renderDataSetsList() {
 }
 
 // Select data set for viewing
-function selectDataSetForView(dataSetId) {
+function selectDataSetForView(dataSetId, page = 0) {
     selectedDataSetId = dataSetId;
     const dataSet = window.dataManager.getDataSet(dataSetId);
 
     if (!dataSet) return;
+    const pageSize = 200, pages = Math.max(1, Math.ceil(dataSet.data.length / pageSize));
+    page = Number.isSafeInteger(page) ? Math.max(0, Math.min(page, pages - 1)) : 0;
+    const rowStart = page * pageSize;
 
     const container = document.getElementById('data-set-details');
     container.innerHTML = `
@@ -1686,15 +1843,19 @@ function selectDataSetForView(dataSetId) {
             </tr>
           </thead>
           <tbody>
-            ${dataSet.data.slice(0, 200).map((row, index) => `
+            ${dataSet.data.slice(rowStart, rowStart + pageSize).map((row, index) => `
               <tr class='border-b aero-divider hover:bg-blue-50'>
-                <td class='p-2 aero-text-muted'>${index + 1}</td>
+                <td class='p-2 aero-text-muted'>${rowStart + index + 1}</td>
                 ${dataSet.headers.map(h => `<td class='p-2'>${dataHTML(row[h])}</td>`).join('')}
               </tr>
             `).join('')}
           </tbody>
         </table>
-        ${dataSet.data.length > 200 ? '<p class="text-sm aero-text-muted">Showing the first 200 rows. Export CSV to inspect every row, or use workspace validation for a complete typed report.</p>' : ''}
+        <div class='flex gap-2 items-center mt-2'>
+          <button class='aero-button-secondary' onclick='selectDataSetForView(${dataArgument(dataSetId)}, ${page - 1})' ${page === 0 ? 'disabled' : ''}>Previous rows</button>
+          <span>Page ${page + 1} of ${pages}; all ${dataSet.data.length} rows are available.</span>
+          <button class='aero-button-secondary' onclick='selectDataSetForView(${dataArgument(dataSetId)}, ${page + 1})' ${page + 1 >= pages ? 'disabled' : ''}>Next rows</button>
+        </div>
       </div>
     </div>
 
@@ -1944,8 +2105,8 @@ function generateAndSaveDataSet() {
         return;
     }
 
-    if (rowCount < 1 || rowCount > 1000) {
-        window.showMessage('Row count must be between 1 and 1000', 'warning');
+    if (!Number.isSafeInteger(rowCount) || rowCount < 1) {
+        window.showMessage('Row count must be a positive safe integer', 'warning');
         return;
     }
 
@@ -2478,7 +2639,7 @@ window.updateEnvironmentDisplay = updateEnvironmentDisplay;
 
 ;
 
-;/* module: indexeddb-version-storage; source: indexeddb-version-storage.js; sha256: fad921f7177404b0ade18ae8342304a8926ee7b4d99bb3bdbce22cb1d09eecf5 */
+;/* module: indexeddb-version-storage; source: indexeddb-version-storage.js; sha256: 95eb92855a6c0d1bcfd347e501eed16f40cc29d767b79c80e62c04e8159cbdf8 */
 // ============================================
 // INDEXEDDB VERSION STORAGE ADAPTER
 // ============================================
@@ -2604,7 +2765,7 @@ class IndexedDBVersionStorage {
   }
 
   async getStorageEstimate() {
-    if (this.native) { const usage = await this.nativeCall('artifacts'); return { usage:usage.totalBytes, quota:usage.quotaBytes, usageMB:(usage.totalBytes/1048576).toFixed(2), quotaMB:(usage.quotaBytes/1048576).toFixed(2), percentUsed:(100*usage.totalBytes/usage.quotaBytes).toFixed(1) }; }
+    if (this.native) { const usage = await this.nativeCall('artifacts'); return { usage:usage.totalBytes, quota:usage.quotaBytes, usageMB:(usage.totalBytes/1048576).toFixed(2), quotaMB:(usage.quotaBytes/1048576).toFixed(2), percentUsed:usage.quotaBytes?(100*usage.totalBytes/usage.quotaBytes).toFixed(1):null }; }
     if (navigator.storage && navigator.storage.estimate) {
       const estimate = await navigator.storage.estimate();
       return {
@@ -2672,7 +2833,7 @@ class IndexedDBVersionStorage {
       version.timestamp = version.timestamp || version.createdAt || version.dateCreated || new Date(0).toISOString();
       version.changeDescription = version.changeDescription || version.description || 'Imported version'; version.changedBy = version.changedBy || version.createdBy || 'local-user';
       const originalId = version.versionId || version.id;
-      let id = typeof originalId === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.:@-]{0,199}$/.test(originalId) ? originalId : `v-${(await digest({suiteId,version})).slice(0,48)}`;
+      let id = typeof originalId === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.:@-]*$/.test(originalId) ? originalId : `v-${(await digest({suiteId,version})).slice(0,48)}`;
       version.versionId=id;
       const previous=existing.get(id)||[...existing.values()].find(r=>r.value.suiteId===suiteId&&r.value.versionId===originalId);
       const semantic=v=>({suiteId:v.suiteId,versionId:v.versionId,timestamp:v.timestamp,suiteSnapshot:v.suiteSnapshot,changeDescription:v.changeDescription,changedBy:v.changedBy,version:v.version??null});
@@ -2692,7 +2853,6 @@ class IndexedDBVersionStorage {
 
 class VersionControlWithIndexedDB {
   constructor() {
-    this.MAX_VERSIONS_PER_SUITE = 100; // Can keep way more now!
     this.storage = new IndexedDBVersionStorage();
     this.initialized = false;
   }
@@ -2740,10 +2900,6 @@ class VersionControlWithIndexedDB {
 
     versions.push(newVersion);
 
-    if (versions.length > this.MAX_VERSIONS_PER_SUITE) {
-      versions.shift();
-    }
-
     if (this.initialized) {
       await this.storage.saveVersionHistory(suiteId, versions);
       if(this.storage.native)return newVersion.versionId;
@@ -2788,7 +2944,7 @@ class VersionControlWithIndexedDB {
         return {
           type: this.storage.native ? 'SQLite workspace' : 'IndexedDB',
           ...estimate,
-          isUnlimited: false
+          isUnlimited: estimate.quota === 0
         };
       }
     }
@@ -2804,10 +2960,10 @@ class VersionControlWithIndexedDB {
     return {
       type: 'localStorage',
       usage: totalSize,
-      quota: 10 * 1024 * 1024,
+      quota: null,
       usageMB: (totalSize / 1024 / 1024).toFixed(2),
-      quotaMB: '10',
-      percentUsed: ((totalSize / (10 * 1024 * 1024)) * 100).toFixed(1),
+      quotaMB: 'Unknown (browser managed)',
+      percentUsed: null,
       isUnlimited: false
     };
   }
@@ -2885,7 +3041,7 @@ window.checkIndexedDBStorage = async function() {
 
 ;
 
-;/* module: machina-retention; source: machina-retention.js; sha256: e0acb0c0e2227964b25ad12ce6e72ba06c5e404194ec1d2e667f254d2f2868c8 */
+;/* module: machina-retention; source: machina-retention.js; sha256: 8afa22f24ef7a5d51ddb23afee58e97ee2fd5f1c9c23eff52328f0f0ba57a902 */
 (function (root, factory) { const api = factory(); if (typeof module === 'object' && module.exports) module.exports = api; root.LVXRetention = api; })(typeof globalThis === 'object' ? globalThis : this, function () {
   'use strict';
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2903,15 +3059,15 @@ window.checkIndexedDBStorage = async function() {
     }
     async function refresh() {
       const [saved, status] = await Promise.all([invoke('getPreferences'), invoke('status')]); if (disposed) return; revision = saved.revision; const p = saved.preferences;
-      container.querySelector('[data-storage-settings]').innerHTML = `<div class="studio-form-grid"><label class="studio-field">Cleanup mode<select name="storage-mode">${[['smart', 'Smart defaults'], ['custom', 'Custom limits'], ['unlimited', 'Unlimited — retain all managed categories']].map(([v, l]) => `<option value="${v}" ${p.mode === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label class="studio-field">Warn when workspace quota reaches (%)<input name="warning-threshold" type="number" min="1" max="95" value="${p.showWarningAt}"></label></div><p>Smart mode uses the documented defaults below. Custom mode uses your saved switches and limits. Unlimited mode skips automatic and manual category deletion. Versions are limited per suite; other limits apply to the category. Active runs, pinned evidence and referenced records are protected.</p><div class="studio-form-grid">${Object.entries(p.customPolicies).map(([key, policy]) => `<section class="studio-section"><h3>${labels[key]}</h3><label class="studio-field"><span><input name="${key}-enabled" type="checkbox" ${policy.enabled ? 'checked' : ''}> Enable automatic cleanup</span></label><label class="studio-field">Maximum ${key === 'versions' ? 'versions per suite' : 'entries'}<input name="${key}-count" type="number" min="1" max="1000000" value="${policy.maxEntries}"></label><label class="studio-field">Maximum age in days<input name="${key}-days" type="number" min="1" max="36500" value="${policy.maxAgeDays}"></label><p>Strategy: remove oldest entries first.</p><small>Smart default: ${saved.defaults.customPolicies[key].maxEntries} entries / ${saved.defaults.customPolicies[key].maxAgeDays} days.</small></section>`).join('')}</div>`;
-      container.querySelector('[data-storage-summary]').innerHTML = `<p>${bytes(status.usage.totalBytes)} of ${bytes(status.usage.quotaBytes)} workspace quota (${status.percentUsed.toFixed(1)}%). ${status.warningThresholdExceeded ? '<strong role="alert">Storage warning threshold reached.</strong>' : 'Below the saved warning threshold.'}</p><table><thead><tr><th>Category</th><th>Entries</th><th>Stored payload</th></tr></thead><tbody>${Object.keys(labels).map(k => `<tr><th>${labels[k]}</th><td>${status.counts[k]}</td><td>${bytes(status.bytes[k])}</td></tr>`).join('')}</tbody></table><p>Last cleanup: ${esc(p.lastCleanupDate || 'Never')}. ${p.lastCleanupSummary ? `${p.lastCleanupSummary.deletedCount} entries and ${p.lastCleanupSummary.deleteArtifactCount||0} attached artifacts removed (${p.lastCleanupSummary.automatic ? 'automatic' : 'manual'}).` : ''}</p><p>Pending native cleanup receipts: ${status.pendingEffectsCount||0}. ${status.lastEffectCompletion?`Latest reconciliation: ${esc(status.lastEffectCompletion.status)} at ${esc(status.lastEffectCompletion.completedAt)}.`:''}</p>${button('retry','Retry pending native cleanup',status.pendingEffectsCount?'':'disabled')}${status.lastEffectCompletion?`<details><summary>Last native cleanup receipt</summary><pre>${esc(JSON.stringify(status.lastEffectCompletion,null,2))}</pre></details>`:''}${status.deferredForeignEffects?.length?`<section class="studio-section"><h3>Preserved cleanup receipts from another project</h3><p>${status.deferredForeignEffects.length} source receipt(s) were deferred without replay or a completed verdict.</p><ul>${status.deferredForeignEffects.map(entry=>`<li>${esc(entry.sourceWorkspaceRoot)} — ${esc(entry.reason)}</li>`).join('')}</ul>${button('inspect-foreign','Inspect preserved source receipts')}<pre data-foreign-effects></pre></section>`:''}<p>Last migration: ${status.lastImport ? `${esc(status.lastImport.committedAt || 'Recorded')} · ${esc((status.lastImport.sources||status.lastImport.sourceKeys||[]).join(', '))} · ${esc(JSON.stringify(status.lastImport.counts || {}))}` : 'No browser migration receipt recorded.'}</p><details><summary>Managed collections</summary><pre>${esc(JSON.stringify(status.supportedCollections, null, 2))}</pre></details>`;
+      container.querySelector('[data-storage-settings]').innerHTML = `<div class="studio-form-grid"><label class="studio-field">Cleanup mode<select name="storage-mode">${[['smart', 'Keep all by default'], ['custom', 'Custom limits'], ['unlimited', 'Unlimited — retain all managed categories']].map(([v, l]) => `<option value="${v}" ${p.mode === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label class="studio-field">Warn when workspace quota reaches (%)<input name="warning-threshold" type="number" min="0" max="100" value="${p.showWarningAt}"></label></div><p>Default policies keep all evidence. Zero disables a count or age budget. Custom mode uses your saved switches and limits. Unlimited mode skips automatic and manual category deletion. Versions are limited per suite; other limits apply to the category. Active runs, pinned evidence and referenced records are protected.</p><div class="studio-form-grid">${Object.entries(p.customPolicies).map(([key, policy]) => `<section class="studio-section"><h3>${labels[key]}</h3><label class="studio-field"><span><input name="${key}-enabled" type="checkbox" ${policy.enabled ? 'checked' : ''}> Enable automatic cleanup</span></label><label class="studio-field">Maximum ${key === 'versions' ? 'versions per suite' : 'entries'}<input name="${key}-count" type="number" min="0" value="${policy.maxEntries}"></label><label class="studio-field">Maximum age in days<input name="${key}-days" type="number" min="0" value="${policy.maxAgeDays}"></label><p>Strategy: remove oldest entries first.</p><small>Default budget: ${saved.defaults.customPolicies[key].maxEntries} entries / ${saved.defaults.customPolicies[key].maxAgeDays} days.</small></section>`).join('')}</div>`;
+      container.querySelector('[data-storage-summary]').innerHTML = `<p>${bytes(status.usage.totalBytes)} stored. ${status.usage.quotaBytes ? `Optional workspace quota: ${bytes(status.usage.quotaBytes)} (${status.percentUsed.toFixed(1)}%).` : 'No application storage quota.'} ${status.warningThresholdExceeded ? '<strong role="alert">Storage warning threshold reached.</strong>' : 'Below the saved warning threshold.'}</p><table><thead><tr><th>Category</th><th>Entries</th><th>Stored payload</th></tr></thead><tbody>${Object.keys(labels).map(k => `<tr><th>${labels[k]}</th><td>${status.counts[k]}</td><td>${bytes(status.bytes[k])}</td></tr>`).join('')}</tbody></table><p>Last cleanup: ${esc(p.lastCleanupDate || 'Never')}. ${p.lastCleanupSummary ? `${p.lastCleanupSummary.deletedCount} entries and ${p.lastCleanupSummary.deleteArtifactCount||0} attached artifacts removed (${p.lastCleanupSummary.automatic ? 'automatic' : 'manual'}).` : ''}</p><p>Pending native cleanup receipts: ${status.pendingEffectsCount||0}. ${status.lastEffectCompletion?`Latest reconciliation: ${esc(status.lastEffectCompletion.status)} at ${esc(status.lastEffectCompletion.completedAt)}.`:''}</p>${button('retry','Retry pending native cleanup',status.pendingEffectsCount?'':'disabled')}${status.lastEffectCompletion?`<details><summary>Last native cleanup receipt</summary><pre>${esc(JSON.stringify(status.lastEffectCompletion,null,2))}</pre></details>`:''}${status.deferredForeignEffects?.length?`<section class="studio-section"><h3>Preserved cleanup receipts from another project</h3><p>${status.deferredForeignEffects.length} source receipt(s) were deferred without replay or a completed verdict.</p><ul>${status.deferredForeignEffects.map(entry=>`<li>${esc(entry.sourceWorkspaceRoot)} — ${esc(entry.reason)}</li>`).join('')}</ul>${button('inspect-foreign','Inspect preserved source receipts')}<pre data-foreign-effects></pre></section>`:''}<p>Last migration: ${status.lastImport ? `${esc(status.lastImport.committedAt || 'Recorded')} · ${esc((status.lastImport.sources||status.lastImport.sourceKeys||[]).join(', '))} · ${esc(JSON.stringify(status.lastImport.counts || {}))}` : 'No browser migration receipt recorded.'}</p><details><summary>Managed collections</summary><pre>${esc(JSON.stringify(status.supportedCollections, null, 2))}</pre></details>`;
       modeVisibility();
     }
     async function clicked(event) {
       const target = event.target.closest('[data-storage-action]'); if (!target || !container.contains(target)) return; target.disabled = true;
       try {
         const action = target.dataset.storageAction;
-        if (action === 'save' || action === 'defaults') { await invoke(action === 'save' ? 'setPreferences' : 'restoreDefaults', { preferences: preferences(), expectedRevision: revision }); preview = null; await refresh(); notice(action === 'save' ? 'Storage policy saved. Automatic cleanup uses these limits on the next managed write.' : 'Smart storage defaults restored.'); }
+        if (action === 'save' || action === 'defaults') { await invoke(action === 'save' ? 'setPreferences' : 'restoreDefaults', { preferences: preferences(), expectedRevision: revision }); preview = null; await refresh(); notice(action === 'save' ? 'Storage policy saved. Automatic cleanup uses these limits on the next managed write.' : 'Unlimited storage defaults restored.'); }
         else if(action==='inspect-foreign'){const result=await invoke('deferredForeignEffects');if(disposed)return;container.querySelector('[data-foreign-effects]').textContent=JSON.stringify(result,null,2);notice('Source cleanup intent is preserved for inspection. No effects were replayed in this project.');}
         else if(action==='retry'){await invoke('reconcileEffects');await refresh();notice('Pending native cleanup effects reconciled. Review the latest completion receipt.');}
         else if (action === 'refresh') { await refresh(); notice('Storage usage and saved policy refreshed.'); }
@@ -2920,7 +3076,7 @@ window.checkIndexedDBStorage = async function() {
       } catch (error) { notice(error.message, true); } finally { if (!disposed && target.isConnected) target.disabled = target.dataset.storageAction === 'apply' ? !preview : false; }
     }
     const changed = event => { if (event.target.matches('input,select')) { preview = null; container.querySelector('[data-storage-action="apply"]').disabled = true; if(event.target.name==='storage-mode')modeVisibility(); } };
-    container.innerHTML = `<section class="studio-machina-data"><h2>Storage dashboard</h2><p>Manage durable execution history, security scans, visual baselines and suite versions. Session exports and native log-file limits have their own controls in Mocks & sessions.</p><p data-storage-notice role="status" aria-live="polite"></p><section class="studio-section"><h3>Workspace usage</h3><div data-storage-summary></div>${button('refresh', 'Refresh storage status')}</section><section class="studio-section"><h3>Persisted cleanup preferences</h3><div data-storage-settings></div><div class="studio-actions">${button('save', 'Save storage policy')}${button('defaults', 'Restore smart defaults')}</div></section><section class="studio-section"><h3>Review cleanup</h3><p>Preview uses the saved policy. A changed workspace invalidates the preview; nothing is deleted until the revision check passes.</p><div class="studio-actions">${button('preview', 'Preview category cleanup')}${button('apply', 'Apply previewed cleanup', 'disabled')}</div><pre data-storage-preview></pre></section></section>`;
+    container.innerHTML = `<section class="studio-machina-data"><h2>Storage dashboard</h2><p>Manage durable execution history, security scans, visual baselines and suite versions. Session exports and native log-file limits have their own controls in Mocks & sessions.</p><p data-storage-notice role="status" aria-live="polite"></p><section class="studio-section"><h3>Workspace usage</h3><div data-storage-summary></div>${button('refresh', 'Refresh storage status')}</section><section class="studio-section"><h3>Persisted cleanup preferences</h3><div data-storage-settings></div><div class="studio-actions">${button('save', 'Save storage policy')}${button('defaults', 'Restore unlimited defaults')}</div></section><section class="studio-section"><h3>Review cleanup</h3><p>Preview uses the saved policy. A changed workspace invalidates the preview; nothing is deleted until the revision check passes.</p><div class="studio-actions">${button('preview', 'Preview category cleanup')}${button('apply', 'Apply previewed cleanup', 'disabled')}</div><pre data-storage-preview></pre></section></section>`;
     container.addEventListener('click', clicked); container.addEventListener('change', changed);
     return { ready: refresh().catch(error => notice(error.message, true)), unmount() { disposed = true; container.removeEventListener('click', clicked); container.removeEventListener('change', changed); container.replaceChildren(); } };
   }
@@ -2929,7 +3085,7 @@ window.checkIndexedDBStorage = async function() {
 
 ;
 
-;/* module: mock-builder; source: mock-builder.js; sha256: 2da3f1ad7ddb9569f09334c6048dc48d7c872cce94acc26460a52ea7d942aa73 */
+;/* module: mock-builder; source: mock-builder.js; sha256: e59782054e05fcdc4f66ba4a53718b7567d898976a558caeded1391abc32ddc8 */
 (function(root,factory){const runtime=typeof module==='object'&&module.exports?require('./mock-runtime.js'):root.mockRuntime;const api=factory(root,runtime);if(typeof module==='object'&&module.exports)module.exports=api;root.MockBuilder=api.MockBuilder;root.openMockBuilder=api.openMockBuilder;root.closeMockBuilder=()=>api.active()?.close();})(typeof globalThis==='object'?globalThis:this,function(root,runtime){
   'use strict';
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -2978,7 +3134,7 @@ window.checkIndexedDBStorage = async function() {
       if(s.action==='clear-test-data')return field('Variable to remove','variableName',s.variableName);
       if(s.action==='set-environment')return field('Environment variable','envName',s.envName)+field('Value; template variables allowed','envValue',s.envValue);
       if(s.action==='reset-environment')return `<label class="studio-field"><span><input type="checkbox" data-mock-field="resetAll" ${s.resetAll?'checked':''}> Reset all variables set in setup</span></label>`+field('Specific variable when reset-all is off','envName',s.envName);
-      if(s.action==='wait')return field('Delay in milliseconds','delayMs',s.delayMs,'number','min="0" max="300000"');
+      if(s.action==='wait')return field('Delay in milliseconds','delayMs',s.delayMs,'number','min="0"');
       if(s.action==='run-code')return `<p>Executable code is sent to the native engine and requires reviewed trust. It is never evaluated in this editor.</p>`+select('Language','language',s.language,[['python','Python'],['javascript','JavaScript']])+area('Native helper code','code',s.code);
       return '<p role="alert">This legacy custom action is unsupported. Replace it with a supported action before applying or executing this plan.</p>';}
     renderFiles(){const f=this.state.fileData;let preview='';try{preview=`${runtime.buildFileIterations(f,{randomFn:()=>0}).length} execution iteration(s)`;}catch(e){preview=e.message;}
@@ -3790,7 +3946,7 @@ window.getMonacoInstance = getMonacoInstance;
 
 ;
 
-;/* module: pipeline-manager; source: pipeline-manager.js; sha256: 98d72389e9d3bc67815a1708e139a866cabb57b7048d83b840669107da84d645 */
+;/* module: pipeline-manager; source: pipeline-manager.js; sha256: 304e9ada0c2c3cbeda72a85cc5a8ed3368577c00c0f71922f7af50f0870a989b */
 
 /**
  * PIPELINE MANAGER
@@ -4836,7 +4992,6 @@ async function runGraphPipeline(pipeline, options = {}) {
                         const filePaths = await window.electronAPI.fileOps.listFiles(repoPath, 'js');
                         consoleOutput.innerHTML += `<span class="text-gray-400">    Found ${filePaths.length} JS files.</span><br>`;
 
-                        if (filePaths.length > 500) return { status: 'ERROR', message: 'Repository exceeds 500-file scan limit; select a smaller scan target.' };
                         for (const fp of filePaths) {
                             const content = await window.electronAPI.fileOps.readFile(fp);
                             codeToScan += `\n\n// FILE: ${fp.split(/[\\/]/).pop()}\n${content}`;
@@ -5003,11 +5158,11 @@ window.downloadPipelineLog = function () {
 
 ;
 
-;/* module: reporting-dashboard; source: reporting-dashboard.js; sha256: b0113f413aa9131e17c3eea1ca92cc9991ac1de01f543540c6badcf2fd41b40d */
+;/* module: reporting-dashboard; source: reporting-dashboard.js; sha256: d314ca5279c4e4a287b5019d6872782a8140b89378fef96578e6857d374d85d4 */
 class TestHistoryManager {
   constructor() {
     this.STORAGE_KEY = 'test_execution_history';
-    this.MAX_HISTORY_ENTRIES = 1000; // Keep last 1000 executions
+    this.MAX_HISTORY_ENTRIES = 0; // Preserve all executions by default.
   }
 
   // Record a test execution
@@ -5030,7 +5185,7 @@ class TestHistoryManager {
     history.push(record);
 
     // Keep only MAX_HISTORY_ENTRIES
-    if (history.length > this.MAX_HISTORY_ENTRIES) {
+    if (this.MAX_HISTORY_ENTRIES && history.length > this.MAX_HISTORY_ENTRIES) {
       history.splice(0, history.length - this.MAX_HISTORY_ENTRIES);
     }
 
@@ -5045,10 +5200,10 @@ class TestHistoryManager {
   }
 
   // Get history for specific suite
-  getSuiteHistory(suiteId, limit = 50) {
+  getSuiteHistory(suiteId, limit = 0) {
     return this.getHistory()
       .filter(r => r.suiteId === suiteId)
-      .slice(-limit);
+      .slice(limit ? -limit : 0);
   }
 
   // Get recent history
@@ -5122,7 +5277,7 @@ class TestHistoryManager {
           flakyTests.push({
             ...stats,
             flakinessScore: Math.min(failRate, 1 - failRate) * 2, // 0-1 scale
-            recentExecutions: stats.executions.slice(-10)
+            recentExecutions: stats.executions
           });
         }
       }
@@ -5167,7 +5322,7 @@ class TestHistoryManager {
   }
 
   // Get slowest tests
-  getSlowestTests(limit = 10, history = this.getHistory()) {
+  getSlowestTests(limit = 0, history = this.getHistory()) {
 
     // Group by suite and calculate average execution time
     const suiteAvgTimes = new Map();
@@ -5193,15 +5348,15 @@ class TestHistoryManager {
       suiteName: stats.suiteName,
       averageTime: Math.round(stats.totalTime / stats.executions.length),
       executionCount: stats.executions.length,
-      slowestTime: Math.max(...stats.executions.map(e => e.executionTime || 0))
+      slowestTime: stats.executions.reduce((max, e) => Math.max(max, e.executionTime || 0), 0)
     }));
 
     // Sort by average time
-    return avgTimes.sort((a, b) => b.averageTime - a.averageTime).slice(0, limit);
+    return avgTimes.sort((a, b) => b.averageTime - a.averageTime).slice(0, limit || undefined);
   }
 
   // Get most frequently run tests
-  getMostRunTests(limit = 10, history = this.getHistory()) {
+  getMostRunTests(limit = 0, history = this.getHistory()) {
     const suiteRunCounts = new Map();
 
     history.forEach(record => {
@@ -5223,7 +5378,7 @@ class TestHistoryManager {
 
     return Array.from(suiteRunCounts.values())
       .sort((a, b) => b.runCount - a.runCount)
-      .slice(0, limit);
+      .slice(0, limit || undefined);
   }
 
   // Clear old history
@@ -5263,9 +5418,11 @@ let suiteHistoryChart = null;
 function openReportingDashboard() {
   document.getElementById('reporting-dashboard-modal').classList.remove('hidden');
   refreshDashboard();
+  window.dispatchEvent(new CustomEvent('lvx-reporting-companions',{detail:{open:true}}));
 }
 
 function closeDashboard() {
+  window.dispatchEvent(new CustomEvent('lvx-reporting-companions',{detail:{open:false}}));
   document.getElementById('reporting-dashboard-modal').classList.add('hidden');
 
   // Destroy charts to prevent memory leaks
@@ -5292,7 +5449,7 @@ function refreshDashboard() {
   renderFlakyTests(history);
   renderSlowestTests(history);
   renderMostRunTests(history);
-  renderRecentExecutions(history.slice(-20).reverse());
+  renderRecentExecutions(history.slice().reverse());
 }
 
 // Render summary statistics
@@ -5570,7 +5727,7 @@ function renderSuiteHistoryChart(history) {
   }
 
   // Show last 20 executions
-  const recentHistory = history.slice(-20);
+  const recentHistory = history.slice();
 
   suiteHistoryChart = new Chart(ctx, {
     type: 'bar',
@@ -5676,7 +5833,7 @@ function refreshSecurityDashboard() {
   const counts = source.bySeverity || (typeof source.totalVulnerabilities === 'object' ? source.totalVulnerabilities : {});
   const stats = { ...source, bySeverity: counts, totalVulnerabilities: typeof source.totalVulnerabilities === 'number'
     ? source.totalVulnerabilities : Object.values(counts).reduce((total, n) => total + (Number(n) || 0), 0) };
-  const history = window.securityManager.getHistory(100);
+  const history = window.securityManager.getHistory();
   stats.unavailableScans = history.filter(scan => scan.status === 'ERROR' || scan.error).length;
 
   renderSecuritySummary(stats);
@@ -5757,27 +5914,17 @@ function renderSecurityTrendChart(history) {
     securityTrendChart.destroy();
   }
 
-  // Group by date (last 14 days)
+  // Keep every recorded date; chart layout may scroll without dropping history.
   const dailyData = new Map();
-  const now = new Date();
-
-  // Initialize last 14 days
-  for (let i = 13; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-    const dateStr = date.toISOString().split('T')[0];
-    dailyData.set(dateStr, { vulnerabilities: 0, scans: 0 });
+  for (const scan of history) {
+    const parsed = new Date(scan.timestamp);
+    if (!Number.isFinite(parsed.getTime())) continue;
+    const dateStr = parsed.toISOString().split('T')[0];
+    const data = dailyData.get(dateStr) || { vulnerabilities: 0, scans: 0 };
+    data.scans++; data.vulnerabilities += scan.summary?.total || 0; dailyData.set(dateStr, data);
   }
-
-  // Aggregate history
-  history.forEach(scan => {
-    const dateStr = new Date(scan.timestamp).toISOString().split('T')[0];
-    if (dailyData.has(dateStr)) {
-      const data = dailyData.get(dateStr);
-      data.scans++;
-      data.vulnerabilities += scan.summary?.total || 0;
-    }
-  });
+  const ordered = [...dailyData].sort(([a], [b]) => a.localeCompare(b));
+  dailyData.clear(); for (const [day, data] of ordered) dailyData.set(day, data);
 
   const labels = Array.from(dailyData.keys()).map(d =>
     new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -5864,7 +6011,7 @@ function renderTopVulnerabilities(history) {
   // Sort by count and take top 10
   const topVulns = Array.from(vulnCounts.values())
     .sort((a, b) => b.count - a.count)
-    .slice(0, 10);
+    .slice();
 
   if (topVulns.length === 0) {
     const unavailable = history.some(scan => (!Array.isArray(scan.vulnerabilities) || scan.vulnerabilities.length === 0) && (scan.summary?.total > 0 || Object.entries(scan.summary || {}).some(([key, count]) => ['critical', 'high', 'medium', 'low'].includes(key) && count > 0)));
@@ -5940,7 +6087,7 @@ window.refreshSecurityDashboard = refreshSecurityDashboard;
 
 ;
 
-;/* module: visual-editor; source: visual-editor.js; sha256: 3608029d1853290f9983f20d05a362568ebd6dcbcbc1a99475584b43f2a12174 */
+;/* module: visual-editor; source: visual-editor.js; sha256: c66cb9fc85a5db6cd154efcd870d3b892c04482db8f95f618f2ba00c643044bf */
 /** Complete Machina visual authoring; executable actions are delegated to native Studio services. */
 function renderNodeIcon(key, size = 16) {
  const names={'git':'branch','terminal':'code','zap':'bolt','clipboard-check':'check','code-review':'eye','message-circle':'file','rocket':'upload','web-audit':'globe','minimize':'minus'};
@@ -5967,7 +6114,7 @@ class VisualEditor {
         this.activeConnection = null; // { sourceNodeId, currentX, currentY }
         this.historyStack = [];
         this.redoStack = [];
-        this.historyLimit = 100;
+        this.historyLimit = 0;
         this.runResults = {};
         this._executionOwner = null;
 
@@ -6224,7 +6371,7 @@ class VisualEditor {
         }
 
         this.historyStack.push(snapshot);
-        if (this.historyStack.length > this.historyLimit) {
+        if (this.historyLimit > 0 && this.historyStack.length > this.historyLimit) {
             this.historyStack.shift();
         }
         this.redoStack = [];
@@ -6486,7 +6633,7 @@ Call out patterns like flaky tests, missing assertions, unclear error handling, 
 Keep the tone direct and practical. Do not invent details that are not supported by the logs. If the logs are incomplete, say so clearly.`;
     }
 
-    _stringifyAILogSummaryValue(value, maxLength = 12000) {
+    _stringifyAILogSummaryValue(value, maxLength = 0) {
         if (value == null) return '';
 
         let text = '';
@@ -6500,7 +6647,7 @@ Keep the tone direct and practical. Do not invent details that are not supported
             }
         }
 
-        if (text.length > maxLength) {
+        if (maxLength > 0 && text.length > maxLength) {
             return `${text.slice(0, maxLength)}\n...[truncated]`;
         }
 
@@ -6601,11 +6748,11 @@ Keep the tone direct and practical. Do not invent details that are not supported
             }
 
             if (sourceResult?.securityResults) {
-                sectionParts.push(`SECURITY RESULTS:\n${this._stringifyAILogSummaryValue(sourceResult.securityResults, 8000)}`);
+                sectionParts.push(`SECURITY RESULTS:\n${this._stringifyAILogSummaryValue(sourceResult.securityResults)}`);
             }
 
             if (sourceResult?.artifacts) {
-                sectionParts.push(`ARTIFACTS:\n${this._stringifyAILogSummaryValue(sourceResult.artifacts, 4000)}`);
+                sectionParts.push(`ARTIFACTS:\n${this._stringifyAILogSummaryValue(sourceResult.artifacts)}`);
             }
 
             sections.push(sectionParts.join('\n\n'));
@@ -6985,8 +7132,8 @@ ${summaryText || 'No summary generated.'}
         if (!this.nodes.length || !this.canvas) return;
         const canvas=this.canvas.getBoundingClientRect(),toolbar=this.container.querySelector('.ve-toolbar')?.getBoundingClientRect(),actions=this.container.querySelector('.ve-top-action-bar')?.getBoundingClientRect();
         const left=Math.max(16,(toolbar?.right??canvas.left)-canvas.left+16),top=Math.max(16,(actions?.bottom??canvas.top)-canvas.top+16);
-        const minX=Math.min(...this.nodes.map(node=>this._graphToViewportPoint(node.position).x))*this.scale+this.panning.x;
-        const minY=Math.min(...this.nodes.map(node=>this._graphToViewportPoint(node.position).y))*this.scale+this.panning.y;
+        const minX=this.nodes.reduce((bound,node)=>Math.min(bound,this._graphToViewportPoint(node.position).x),Infinity)*this.scale+this.panning.x;
+        const minY=this.nodes.reduce((bound,node)=>Math.min(bound,this._graphToViewportPoint(node.position).y),Infinity)*this.scale+this.panning.y;
         if(minX<left)this.panning.x+=left-minX;
         if(minY<top)this.panning.y+=top-minY;
         this._applyViewportTransform();
@@ -7578,8 +7725,8 @@ ${summaryText || 'No summary generated.'}
                     testMode: 'auto',
                     sourceStrategy: 'saved-selection',
                     sourceExtensions: 'html,css,js,jsx,ts,tsx,mjs,cjs,vue,svelte,py,java,cs,go,rb,php,c,cpp,h,rs,swift,kt,scala,json',
-                    maxSourceFiles: 12,
-                    maxSourceChars: 60000,
+                    maxSourceFiles: 0,
+                    maxSourceChars: 0,
                     generationFallback: 'fail',
                     selectedSourceFiles: [],
                     provider: 'openai',
@@ -7604,7 +7751,7 @@ ${summaryText || 'No summary generated.'}
                     model: '',
                     apiKey: '',
                     customEndpoint: '',
-                    maxTokens: 16384,
+                    maxTokens: 0,
                     instructions: this._getDefaultAILogSummaryInstructions(),
                     savePath: '',
                     lastSummaryAt: null,
@@ -7687,7 +7834,7 @@ ${summaryText || 'No summary generated.'}
                     routePaths: '/',
                     customScenarios: '',
                     autoExplore: true,
-                    maxAutoInteractions: 8,
+                    maxAutoInteractions: 0,
                     waitAfterActionMs: 500,
                     viewportWidth: 1440,
                     viewportHeight: 900,
@@ -8549,7 +8696,7 @@ ${summaryText || 'No summary generated.'}
                         </div>
                         <div>
                             <label class="block text-xs font-semibold mb-1" style="color: #052e16;">Retry attempts</label>
-                            <input type="number" min="0" max="20" step="1" required value="${this._escapeHTML(row.attempts ?? 0)}" aria-label="Extra retries after failure" class="cfg-runner-retry-attempts w-full aero-input p-2 rounded-lg text-sm font-mono" style="background: rgba(255,255,255,0.86); color: #111827; border-color: rgba(20, 83, 45, 0.35);">
+                            <input type="number" min="0" step="1" required value="${this._escapeHTML(row.attempts ?? 0)}" aria-label="Extra retries after failure" class="cfg-runner-retry-attempts w-full aero-input p-2 rounded-lg text-sm font-mono" style="background: rgba(255,255,255,0.86); color: #111827; border-color: rgba(20, 83, 45, 0.35);">
                         </div>
                         <button type="button" class="cfg-runner-remove-retry rounded-full w-10 h-10 font-bold" data-index="${index}" style="background: #ea580c; color: white; border: 2px solid rgba(124, 45, 18, 0.75);">X</button>
                     </div>
@@ -8735,12 +8882,12 @@ ${summaryText || 'No summary generated.'}
                     </div>
 
                     <div>
-                        <label class="block text-sm mb-1">Max tokens (output limit)</label>
-                        <input type="number" id="cfg-ai-log-max-tokens" value="${this._escapeHTML(config.maxTokens ?? 16384)}"
-                            min="1024" max="65536" step="1024"
+                        <label class="block text-sm mb-1">Output token budget (0 = provider default; Anthropic requires a value)</label>
+                        <input type="number" id="cfg-ai-log-max-tokens" value="${this._escapeHTML(config.maxTokens ?? 0)}"
+                            min="0" step="1"
                             class="w-full aero-input p-2 rounded-lg font-mono text-sm"
                             style="background: rgba(255,255,255,0.12); color: white; border-color: rgba(255,255,255,0.25);">
-                        <p class="text-xs mt-1" style="color: rgba(255,255,255,0.82);">Higher values = longer analysis but more API cost.</p>
+                        <p class="text-xs mt-1" style="color: rgba(255,255,255,0.82);">An optional output budget controls cost. Provider and model limits still apply.</p>
                     </div>
 
                     <div>
@@ -8794,7 +8941,7 @@ ${summaryText || 'No summary generated.'}
                 model: modal.querySelector('#cfg-ai-log-model').value.trim(),
                 apiKey: modal.querySelector('#cfg-ai-log-apikey').value.trim() || config.apiKey || '',
                 customEndpoint: modal.querySelector('#cfg-ai-log-endpoint').value.trim(),
-                maxTokens: parseInt(modal.querySelector('#cfg-ai-log-max-tokens').value, 10) || 16384,
+                maxTokens: parseInt(modal.querySelector('#cfg-ai-log-max-tokens').value, 10) || 0,
                 instructions: modal.querySelector('#cfg-ai-log-instructions').value.trim() || this._getDefaultAILogSummaryInstructions(),
                 savePath: modal.querySelector('#cfg-ai-log-save-path').value.trim()
             };
@@ -8992,9 +9139,9 @@ CRITICAL RULES:
 
                     <!-- Max Tokens -->
                     <div>
-                        <label class="block text-sm text-slate-800 mb-1">Max tokens (output limit)</label>
-                        <input type="number" id="cfg-ai-max-tokens" value="${this._escapeHTML(config.maxTokens ?? 16384)}"
-                            min="1024" max="65536" step="1024"
+                        <label class="block text-sm text-slate-800 mb-1">Output token budget (0 = provider default; Anthropic requires a value)</label>
+                        <input type="number" id="cfg-ai-max-tokens" value="${this._escapeHTML(config.maxTokens ?? 0)}"
+                            min="0" step="1"
                             placeholder="16384"
                             class="w-full aero-input p-2 rounded-lg font-mono text-sm" style="background: rgba(255,255,255,0.1); color: white; border-color: rgba(255,255,255,0.2);">
                         <p class="text-xs text-slate-600 mt-1">Higher values = longer tests but more API cost. If tests get cut off mid-code, increase this.</p>
@@ -9042,15 +9189,15 @@ CRITICAL RULES:
 
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm text-slate-800 mb-1">Max source files</label>
-                            <input type="number" id="cfg-ai-max-files" value="${this._escapeHTML(config.maxSourceFiles || 12)}"
-                                min="1" max="100" step="1"
+                            <label class="block text-sm text-slate-800 mb-1">Source file budget (0 = all)</label>
+                            <input type="number" id="cfg-ai-max-files" value="${this._escapeHTML(config.maxSourceFiles ?? 0)}"
+                                min="0" step="1"
                                 class="w-full aero-input p-2 rounded-lg font-mono text-sm" style="background: rgba(255,255,255,0.1); color: white; border-color: rgba(255,255,255,0.2);">
                         </div>
                         <div>
-                            <label class="block text-sm text-slate-800 mb-1">Max source characters</label>
-                            <input type="number" id="cfg-ai-max-chars" value="${this._escapeHTML(config.maxSourceChars || 60000)}"
-                                min="2000" max="500000" step="1000"
+                            <label class="block text-sm text-slate-800 mb-1">Source character budget (0 = all)</label>
+                            <input type="number" id="cfg-ai-max-chars" value="${this._escapeHTML(config.maxSourceChars ?? 0)}"
+                                min="0" step="1"
                                 class="w-full aero-input p-2 rounded-lg font-mono text-sm" style="background: rgba(255,255,255,0.1); color: white; border-color: rgba(255,255,255,0.2);">
                         </div>
                     </div>
@@ -9144,7 +9291,7 @@ CRITICAL RULES:
             try {
                 // Use electronAPI to list all source files in the cloned repo
                 // List common source file extensions
-                const sourceResponse = await window.LVXMachinaGraph.invoke('sourceFiles',{path:repoPath,extensions:modal.querySelector('#cfg-ai-source-exts').value,maxFiles:500});
+                const sourceResponse = await window.LVXMachinaGraph.invoke('sourceFiles',{path:repoPath,extensions:modal.querySelector('#cfg-ai-source-exts').value,maxFiles:0});
                 const allFiles = (sourceResponse.files||sourceResponse).map(file=>typeof file==='string'?file:file.path);
                 const sourceExtensions = String(modal.querySelector('#cfg-ai-source-exts').value || '')
                     .split(',')
@@ -9260,7 +9407,7 @@ CRITICAL RULES:
                     // Read each selected file's content via Electron API
                     for (const file of selectedFiles) {
                         if (!file.content) {
-                            const response=await window.LVXMachinaGraph.invoke('sourceFiles',{path:findConnectedGitRepo().repoPath,files:[file.path],maxFiles:500,maxSourceChars:2000000,includeContent:true});
+                            const response=await window.LVXMachinaGraph.invoke('sourceFiles',{path:findConnectedGitRepo().repoPath,files:[file.path],maxFiles:0,maxSourceChars:0,includeContent:true});
                             const sourceFile=(response.files||response).find(source=>source.path===file.path);
                             if(!sourceFile||typeof sourceFile.content!=='string')throw new Error('The selected source could not be read.');
                             file.content=sourceFile.content;
@@ -9306,7 +9453,7 @@ CRITICAL RULES:
             try {
                 // Check if electronAPI is available (running in Electron)
                 if (window.LVXMachinaGraph) {
-                    const maxTokens = parseInt(modal.querySelector('#cfg-ai-max-tokens').value) || 16384;
+                    const maxTokens = parseInt(modal.querySelector('#cfg-ai-max-tokens').value) || 0;
                     const result = await window.LVXMachinaGraph.generatePreview({...node,data:{...config,provider,model,apiKey:apiKey||config.apiKey,instructions:userPrompt,systemPrompt,customEndpoint,maxTokens,testMode:resolvedTestMode,maxSourceFiles:Number(modal.querySelector('#cfg-ai-max-files').value),maxSourceChars:Number(modal.querySelector('#cfg-ai-max-chars').value),sourceExtensions:modal.querySelector('#cfg-ai-source-exts').value,testFilename:filename,sourceCode:sourceCodeContext,sourceStrategy:sourceCodeContext?'inline':'prompt-only'}});
                     if (result.success && result.generatedText) {
                         // Strip markdown code fences if the AI included them despite instructions
@@ -9359,8 +9506,8 @@ CRITICAL RULES:
             node.data.testMode = modal.querySelector('#cfg-ai-test-mode').value;
             node.data.sourceStrategy = modal.querySelector('#cfg-ai-source-strategy').value;
             node.data.sourceExtensions = modal.querySelector('#cfg-ai-source-exts').value.trim();
-            node.data.maxSourceFiles = parseInt(modal.querySelector('#cfg-ai-max-files').value, 10) || 12;
-            node.data.maxSourceChars = parseInt(modal.querySelector('#cfg-ai-max-chars').value, 10) || 60000;
+            node.data.maxSourceFiles = parseInt(modal.querySelector('#cfg-ai-max-files').value, 10) || 0;
+            node.data.maxSourceChars = parseInt(modal.querySelector('#cfg-ai-max-chars').value, 10) || 0;
             node.data.generationFallback = modal.querySelector('#cfg-ai-fallback').value;
             node.data.selectedSourceFiles = loadedSourceFiles.length > 0
                 ? loadedSourceFiles.filter(file => file.selected).map(file => file.relativePath || file.path)
@@ -9372,7 +9519,7 @@ CRITICAL RULES:
             node.data.instructions = modal.querySelector('#cfg-ai-instructions').value;
             node.data.generatedCode = modal.querySelector('#cfg-ai-code').value;
             node.data.command = modal.querySelector('#cfg-ai-command').value.trim();
-            node.data.maxTokens = parseInt(modal.querySelector('#cfg-ai-max-tokens').value) || 16384;
+            node.data.maxTokens = parseInt(modal.querySelector('#cfg-ai-max-tokens').value) || 0;
 
             node.data.name = ` AI: ${filename}`;
 
@@ -9467,9 +9614,33 @@ CRITICAL RULES:
         };
     }
 
+    showAPIAtlasConfig(node) {
+        const test = structuredClone(node.data.apiAtlasDefinition), escape = value => this._escapeHTML(String(value ?? '')), binding = window.LVXStudio.state.workspace?.workspaceRoot;
+        const dialog = document.createElement('dialog'); dialog.className = 'aa-node-dialog aa-workspace';
+        const field = (name,label,value,type='text') => `<label>${label}<input name="${name}" type="${type}" value="${escape(value)}" required></label>`;
+        dialog.innerHTML = `<form><h3>Workflow API test copy</h3><p>This workflow keeps its own test definition. Changes here apply when you save the graph. The API map test stays available separately.</p><div class="aa-fields">${field('name','Test name',test.name)}<label>Method<select name="method">${['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'].map(method=>`<option ${method===test.method?'selected':''}>${method}</option>`).join('')}</select></label>${field('url','Full request URL',test.url,'url')}${field('expectedStatus','Expected HTTP status',test.expectedStatus,'number')}${field('timeoutMs','Timeout (ms)',test.timeoutMs,'number')}${field('maxLatency','Maximum response time (ms; 0 = no check)',test.maxLatency||0,'number')}<label>Request headers (JSON)<textarea name="headers">${escape(JSON.stringify(test.headers||{},null,2))}</textarea></label><label>Request body<textarea name="body">${escape(test.body||'')}</textarea></label><label>Expected response headers (JSON)<textarea name="expectedHeaders">${escape(JSON.stringify(test.expectedHeaders||{},null,2))}</textarea></label>${test.kind==='contract'?`<label>Response JSON schema<textarea name="schema">${escape(test.schema===undefined?'':JSON.stringify(test.schema,null,2))}</textarea></label>`:''}</div><p role="alert"></p><div class="aa-actions"><button type="button" data-cancel>Cancel</button><button type="button" data-map>Open endpoint in API map</button><button type="submit">Apply to workflow copy</button></div></form>`;
+        const launcher = document.activeElement;document.body.append(dialog);dialog.showModal();dialog.querySelector('input').focus();
+        dialog.onclose = () => { dialog.remove();launcher?.focus(); };
+        dialog.querySelector('[data-cancel]').onclick = () => dialog.close();
+        dialog.querySelector('[data-map]').onclick = () => {dialog.close();window.dispatchEvent(new CustomEvent('lvx-open-api-atlas',{detail:{endpointId:test.endpointId}}));};
+        dialog.querySelector('form').onsubmit = async event => {
+            event.preventDefault();const submit=dialog.querySelector('[type=submit]');submit.disabled=true;
+            try {
+                const form=new FormData(event.target),next={...test,name:form.get('name'),url:form.get('url'),method:form.get('method'),expectedStatus:Number(form.get('expectedStatus')),timeoutMs:Number(form.get('timeoutMs')),maxLatency:Number(form.get('maxLatency')),headers:JSON.parse(form.get('headers')),expectedHeaders:JSON.parse(form.get('expectedHeaders')),body:form.get('body'),updatedAt:new Date().toISOString()};
+                if(form.has('schema')){if(form.get('schema').trim())next.schema=JSON.parse(form.get('schema'));else delete next.schema;}
+                await window.LVXStudio.invoke('githubStudio','apiValidateTest',{test:next,workspaceRoot:binding});
+                const safe=await window.LVXCredentials.protect(next,'Workflow API test');
+                if(binding!==window.LVXStudio.state.workspace?.workspaceRoot)throw Error('Workspace changed. Reopen the graph in its original project.');
+                node.data={...node.data,name:safe.name,url:safe.url,method:safe.method,expectedStatus:safe.expectedStatus,schema:safe.schema,apiAtlasDefinition:safe};
+                this.render();this._commitHistoryState();dialog.close();
+            } catch(error){dialog.querySelector('[role=alert]').textContent=error.message;submit.disabled=false;}
+        };
+    }
+
     showAPIPerformanceConfig(nodeId) {
         const node = this.nodes.find(n => n.id === nodeId);
         if (!node) return;
+        if (node.data?.apiAtlasDefinition) return this.showAPIAtlasConfig(node);
         const config = node.data || {};
         const modal = document.createElement('div');
         modal.className = 'mg-dialog fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000]';
@@ -9494,15 +9665,15 @@ CRITICAL RULES:
                     </div>
                     <div>
                         <label class="block text-sm mb-1">Duration (seconds)</label>
-                        <input type="number" id="cfg-perf-duration" min="0.01" max="300" step="0.01" value="${this._escapeHTML(config.duration || 30)}" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900">
+                        <input type="number" id="cfg-perf-duration" min="0" step="0.01" value="${this._escapeHTML(config.duration || 30)}" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900">
                     </div>
                     <div>
                         <label class="block text-sm mb-1">Concurrent Connections</label>
-                        <input type="number" id="cfg-perf-connections" min="1" max="64" value="${this._escapeHTML(config.connections || 10)}" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900">
+                        <input type="number" id="cfg-perf-connections" min="1" value="${this._escapeHTML(config.connections || 10)}" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900">
                     </div>
                     <div>
                         <label class="block text-sm mb-1">Pass condition (Max latency ms)</label>
-                        <input type="number" id="cfg-perf-latency" min="0" max="120000" value="${this._escapeHTML(config.maxLatency || 500)}" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900">
+                        <input type="number" id="cfg-perf-latency" min="0" value="${this._escapeHTML(config.maxLatency || 500)}" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900">
                     </div>
                 </div>
                 <div class="flex gap-2 justify-end">
@@ -9529,6 +9700,7 @@ CRITICAL RULES:
     showAPIContractConfig(nodeId) {
         const node = this.nodes.find(n => n.id === nodeId);
         if (!node) return;
+        if (node.data?.apiAtlasDefinition) return this.showAPIAtlasConfig(node);
         const config = node.data || {};
         const modal = document.createElement('div');
         modal.className = 'mg-dialog fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000]';
@@ -9739,12 +9911,12 @@ CRITICAL RULES:
                             </select>
                         </div>
                         <div>
-                            <label class="block text-sm mb-1">Max auto interactions</label>
-                            <input type="number" id="cfg-ux-max-actions" value="${this._escapeHTML(config.maxAutoInteractions ?? 8)}" min="1" max="50" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
+                            <label class="block text-sm mb-1">Interaction budget (0 = all)</label>
+                            <input type="number" id="cfg-ux-max-actions" value="${this._escapeHTML(config.maxAutoInteractions ?? 0)}" min="0" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
                         </div>
                         <div>
                             <label class="block text-sm mb-1">Wait after action (ms)</label>
-                            <input type="number" id="cfg-ux-wait-ms" value="${this._escapeHTML(config.waitAfterActionMs ?? 500)}" min="100" max="10000" step="50" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
+                            <input type="number" id="cfg-ux-wait-ms" value="${this._escapeHTML(config.waitAfterActionMs ?? 500)}" min="0" step="50" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
                         </div>
                         <div>
                             <label class="block text-sm mb-1">Continue after failure</label>
@@ -9757,11 +9929,11 @@ CRITICAL RULES:
                     <div class="grid grid-cols-4 gap-4">
                         <div>
                             <label class="block text-sm mb-1">Viewport width</label>
-                            <input type="number" id="cfg-ux-width" value="${this._escapeHTML(config.viewportWidth ?? 1440)}" min="320" max="3840" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
+                            <input type="number" id="cfg-ux-width" value="${this._escapeHTML(config.viewportWidth ?? 1440)}" min="1" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
                         </div>
                         <div>
                             <label class="block text-sm mb-1">Viewport height</label>
-                            <input type="number" id="cfg-ux-height" value="${this._escapeHTML(config.viewportHeight ?? 900)}" min="320" max="2160" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
+                            <input type="number" id="cfg-ux-height" value="${this._escapeHTML(config.viewportHeight ?? 900)}" min="1" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
                         </div>
                         <div>
                             <label class="block text-sm mb-1">Fail on console errors</label>
@@ -9820,10 +9992,10 @@ CRITICAL RULES:
             node.data.routePaths = modal.querySelector('#cfg-ux-route-paths').value || '/';
             node.data.customScenarios = scenarioText;
             node.data.autoExplore = modal.querySelector('#cfg-ux-auto-explore').value === 'true';
-            node.data.maxAutoInteractions = Math.max(1, parseInt(modal.querySelector('#cfg-ux-max-actions').value, 10) || 8);
-            node.data.waitAfterActionMs = Math.max(100, parseInt(modal.querySelector('#cfg-ux-wait-ms').value, 10) || 500);
-            node.data.viewportWidth = Math.max(320, parseInt(modal.querySelector('#cfg-ux-width').value, 10) || 1440);
-            node.data.viewportHeight = Math.max(320, parseInt(modal.querySelector('#cfg-ux-height').value, 10) || 900);
+            node.data.maxAutoInteractions = Number(modal.querySelector('#cfg-ux-max-actions').value);
+            node.data.waitAfterActionMs = Number(modal.querySelector('#cfg-ux-wait-ms').value);
+            node.data.viewportWidth = Number(modal.querySelector('#cfg-ux-width').value);
+            node.data.viewportHeight = Number(modal.querySelector('#cfg-ux-height').value);
             node.data.continueOnFailure = modal.querySelector('#cfg-ux-continue').value === 'true';
             node.data.failOnConsoleErrors = modal.querySelector('#cfg-ux-console-errors').value === 'true';
             node.data.failOnPageErrors = modal.querySelector('#cfg-ux-page-errors').value === 'true';
@@ -9944,7 +10116,7 @@ CRITICAL RULES:
                 <div class="space-y-4 mb-6">
                     <div>
                         <label class="block text-sm mb-1">Delay in milliseconds</label>
-                        <input type="number" min="0" max="86400000" step="1" id="cfg-wait-delay-ms" value="${Number.isFinite(Number(config.delayMs)) ? Number(config.delayMs) : 5000}" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
+                        <input type="number" min="0" step="1" id="cfg-wait-delay-ms" value="${Number.isFinite(Number(config.delayMs)) ? Number(config.delayMs) : 5000}" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
                         <p class="text-xs text-blue-100 mt-1">1000 = 1 second, 5000 = 5 seconds, 60000 = 1 minute.</p>
                     </div>
                     <div>
@@ -10001,7 +10173,7 @@ window.visualEditor = new VisualEditor('visual-editor-root'); // Default
 
 ;
 
-;/* module: script; source: script.js; sha256: 2ed180e772e8878c5eb1d16d812dc31ccf443bf49ed393636c5e99334b5a847f */
+;/* module: script; source: script.js; sha256: 2401d8951385ef4f3ecd60e4520d5fbbdca1a27902635bbf93048e5f933d7b75 */
 
 // ============================================
 // EXECUTION ENGINE
@@ -10308,7 +10480,7 @@ sys.modules['BrowserLibrary'] = _browser_module
 
 async function executeDesktopCode(engine, code, inputFiles = [], contextVariables = {}, executionOptions = {}) {
     const api=window.electronAPI.studioOps;
-    const run=await api.invoke('execution','start',{engine,code,inputFiles,contextVariables,timeoutMs:120000,...executionOptions});
+    const run=await api.invoke('execution','start',{engine,code,inputFiles,contextVariables,timeoutMs:0,...executionOptions});
     window.LVXActiveRuns ||= new Set();
     window.LVXActiveRuns.add(run.id);
     try {
@@ -13092,7 +13264,6 @@ async function importFromJSON(event) {
     window.LVXStudio?.clearImport?.();
     input.disabled = true;
     try {
-        if (file.size > 100 * 1024 * 1024) throw new Error('This file is too large. Project imports support files up to 100 MB.');
         const content = JSON.parse((await file.text()).replace(/^\uFEFF/, ''));
         // Full project exports use the native validated importer, including graphs,
         // agents, conversations and evidence. Never reduce them to legacy suites.
@@ -14114,7 +14285,7 @@ window.clearAllBaselines = clearAllBaselines;
 
 ;
 
-;/* module: cicd-integration; source: cicd-integration.js; sha256: 0452580b814d3ef81326d2d9596ec1cfc29c3788bf9896b6f42eeab692c3d763 */
+;/* module: cicd-integration; source: cicd-integration.js; sha256: ba25f19448399eb797067f93f2972b7676287956dbd3becd8663d619800acfe8 */
 /**
  * CI/CD Integration Manager
  * Manages backend configuration for CI/CD pipeline integration
@@ -14190,7 +14361,7 @@ class CICDConfiguration {
           'X-API-Key': config.apiKey,
           'Content-Type': 'application/json'
         },
-        timeout: 5000
+        timeout: 0
       });
 
       if (!response.ok) {
@@ -14761,7 +14932,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 ;
 
-;/* module: collaboration; source: collaboration.js; sha256: 15fbad70fda48b18671a5374c928cc81891d09e624244a4d32af7657c5b6b62b */
+;/* module: collaboration; source: collaboration.js; sha256: b9f527d8dd1d1c872032cda8e1a026691a14052063d9b741afc0a1da243fd7a2 */
 /**
  * ============================================
  * COLLABORATION MANAGER
@@ -14807,8 +14978,8 @@ class CollaborationManager {
       throw new Error('Invalid backend URL format. Must start with http:// or https://');
     }
 
-    if (!safeConfig.apiKey || safeConfig.apiKey.length < 10) {
-      throw new Error('API key must be at least 10 characters');
+    if (!safeConfig.apiKey) {
+      throw new Error('API key is required');
     }
 
     return this._persistProtected(this.BACKEND_CONFIG_KEY,safeConfig);
@@ -14851,8 +15022,6 @@ class CollaborationManager {
     }
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
       const response = await this._request(`${config.backendUrl}/health`, {
         method: 'GET',
@@ -14860,10 +15029,9 @@ class CollaborationManager {
           'X-API-Key': config.apiKey,
           'Content-Type': 'application/json'
         },
-        signal: controller.signal
+        timeout: 0
       });
 
-      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`Backend returned ${response.status}: ${response.statusText}`);
@@ -15073,7 +15241,7 @@ class CollaborationManager {
 
     // Include execution history if requested
     if (includeHistory && window.testHistoryManager) {
-      exportData.history = window.testHistoryManager.getSuiteHistory(suite.id, 50) || [];
+      exportData.history = window.testHistoryManager.getSuiteHistory(suite.id) || [];
     }
 
     // Create downloadable JSON file
@@ -15306,11 +15474,7 @@ class CollaborationManager {
 
     versions.push(snapshot);
 
-    // Keep only last 20 versions per suite
-    if (versions.length > 20) {
-      console.log(`Removing old versions, keeping last 20`);
-      versions.splice(0, versions.length - 20);
-    }
+    // Preserve complete version history; deletion is an explicit user action.
 
     return this._persistProtected(`versions_${suite.id}`,versions,snapshot);
   }
@@ -15549,16 +15713,7 @@ class CollaborationManager {
       });
     }
 
-    // Sanitize assertions (remove sensitive expected values)
-    if (clean.assertions && Array.isArray(clean.assertions)) {
-      clean.assertions.forEach(assertion => {
-        if (assertion.expected && typeof assertion.expected === 'string') {
-          if (assertion.expected.length > 100) {
-            assertion.expected = assertion.expected.substring(0, 100) + '... [truncated]';
-          }
-        }
-      });
-    }
+    // Preserve complete ordinary assertion text; sensitive fields were redacted above.
 
     return clean;
   }
@@ -15607,7 +15762,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 ;
 
-;/* module: debugger; source: debugger.js; sha256: f4539db04b026ba8e12dc0b8df6eb3b004e17e85545bd1aae099a8b37498470f */
+;/* module: debugger; source: debugger.js; sha256: d7f22286d60385edddc3be37cdcaa1d07bd9f49ada33dfcc9e271271ceec6b32 */
 class TestDebugger {
   constructor() {
     this.isActive = false;
@@ -15861,10 +16016,11 @@ function updateDebugVariablesList() {
     return;
   }
 
+  const escape = value => String(value).replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
   container.innerHTML = entries.map(([key, value]) => `
     <div class='p-1 aero-button rounded mb-1'>
-      <div class='font-mono font-semibold text-xs'>${key}</div>
-      <div class='aero-text-muted break-all text-xs'>${String(value).substring(0, 50)}${String(value).length > 50 ? '...' : ''}</div>
+      <div class='font-mono font-semibold text-xs'>${escape(key)}</div>
+      <div class='aero-text-muted break-all text-xs'>${escape(value)}</div>
     </div>
   `).join('');
 }
@@ -16429,7 +16585,7 @@ class ElementPicker {
 
 ;
 
-;/* module: integrations; source: integrations.js; sha256: a483ff97ded2dde8aaffd9e457c8e1437d2f808094e7bfadf7e51dd927d69139 */
+;/* module: integrations; source: integrations.js; sha256: 37c5646e82372efc1c85db012025b0ad24d33c05d1720073b981773c33a7db91 */
 /**
  * LVX-Machina Integration Manager
  * Handles notifications to external platforms (Slack, Discord, Email, Webhooks)
@@ -16439,7 +16595,7 @@ class IntegrationsManager {
     constructor() {
         this.STORAGE_KEY = 'notification_integrations';
         this.HISTORY_KEY = 'notification_history';
-        this.MAX_HISTORY = 100;
+        this.MAX_HISTORY = 0;
     }
 
     // Save integration configuration
@@ -16749,7 +16905,7 @@ LVX-Machina Test Automation
 
     // Record notification attempt
     recordNotification(integration, testResult, success, error = null) {
-        const history = this.getNotificationHistory();
+        const history = JSON.parse(localStorage.getItem(this.HISTORY_KEY) || '[]');
 
         const record = {
             id: this._generateId(),
@@ -16766,17 +16922,17 @@ LVX-Machina Test Automation
         history.push(record);
 
         // Keep only MAX_HISTORY
-        if (history.length > this.MAX_HISTORY) {
+        if (this.MAX_HISTORY && history.length > this.MAX_HISTORY) {
             history.splice(0, history.length - this.MAX_HISTORY);
         }
 
         localStorage.setItem(this.HISTORY_KEY, JSON.stringify(history));
     }
 
-    getNotificationHistory(limit = 50) {
+    getNotificationHistory(limit = 0) {
         const data = localStorage.getItem(this.HISTORY_KEY);
         const history = data ? JSON.parse(data) : [];
-        return history.slice(-limit).reverse(); // Most recent first
+        return history.slice(limit ? -limit : 0).reverse(); // Most recent first
     }
 
     _generateId() {
@@ -16871,7 +17027,7 @@ LVX-Machina Test Automation
 
         // Add top vulnerabilities if any
         if (vulnerabilities && vulnerabilities.length > 0) {
-            const topVulns = vulnerabilities.slice(0, 3).map(v =>
+            const topVulns = vulnerabilities.map(v =>
                 `• [${v.severity}] ${v.ruleName || v.type}: ${v.description?.substring(0, 50) || 'No description'}...`
             ).join('\n');
             message.attachments[0].fields.push({
@@ -16930,7 +17086,7 @@ LVX-Machina Test Automation
 
         // Add top vulnerabilities if any
         if (vulnerabilities && vulnerabilities.length > 0) {
-            const topVulns = vulnerabilities.slice(0, 3).map(v =>
+            const topVulns = vulnerabilities.map(v =>
                 `• **[${v.severity}]** ${v.ruleName || v.type}`
             ).join('\n');
             message.embeds[0].fields.push({
@@ -16964,7 +17120,7 @@ LVX-Machina Test Automation
             security: {
                 policyPassed: scanResults.policyPassed,
                 summary: scanResults.summary,
-                vulnerabilities: scanResults.vulnerabilities?.slice(0, 10), // Limit to 10
+                vulnerabilities: scanResults.vulnerabilities, // Limit to 10
                 duration: scanResults.duration
             }
         };
@@ -17377,7 +17533,7 @@ function switchIntegrationsTab(tab) {
 // Render notification history
 function renderNotificationHistory() {
     const container = document.getElementById('notification-history-list');
-    const history = window.integrationsManager.getNotificationHistory(50);
+    const history = window.integrationsManager.getNotificationHistory();
 
     if (history.length === 0) {
         container.innerHTML = '<p class="aero-text-muted text-sm">No notification history yet</p>';
@@ -17976,7 +18132,7 @@ function escapeHtml(text) {
 
 ;
 
-;/* module: security-testing; source: security-testing.js; sha256: a5690bc31fee4f2e304d79d1826dd92379b7f2afde428a5c20abf7afa96a72f2 */
+;/* module: security-testing; source: security-testing.js; sha256: e869600cbe193e9d38b36cca21ff974af540600f94ae6b76b323e5a3e4c175bd */
 /**
  * LVX-Machina Security Testing Module
  * DevSecOps security scanning capabilities including SAST, DAST, secrets detection, and dependency scanning
@@ -18107,7 +18263,7 @@ class SASTScanner {
                     recommendation: rule.recommendation,
                     line: lineNumber,
                     column: match.index - code.lastIndexOf('\n', match.index),
-                    match: match[0].substring(0, 100),
+                    match: match[0],
                     language: language
                 });
             }
@@ -18210,9 +18366,9 @@ class DependencyScanner {
         const results = (data.vulns || []).map(vuln => ({
             scanner: this.name, package: packageName, version: cleanVersion, vulnId: vuln.id,
             severity: this._mapSeverity(vuln.severity, vuln.database_specific?.severity),
-            description: vuln.summary || vuln.details?.substring(0, 200) || vuln.id,
+            description: vuln.summary || vuln.details || vuln.id,
             recommendation: `Update ${packageName} to a patched version`,
-            references: vuln.references?.slice(0, 3).map(r => r.url) || []
+            references: (vuln.references || []).map(r => r.url)
         }));
         this.cache.set(cacheKey, { data: results, timestamp: Date.now() });
         return results;
@@ -18438,7 +18594,7 @@ class XSSScanner {
                     type: 'reflected-xss',
                     severity: 'HIGH',
                     line: code.substring(0, match.index).split('\n').length,
-                    match: match[0].substring(0, 80),
+                    match: match[0],
                     description: desc,
                     recommendation: 'Sanitize all user input before DOM insertion'
                 });
@@ -18494,7 +18650,7 @@ class SecurityTestManager {
         this.STORAGE_KEY = 'security_scan_results';
         this.POLICY_KEY = 'security_policy';
         this.HISTORY_KEY = 'security_scan_history';
-        this.MAX_HISTORY = 100;
+        this.MAX_HISTORY = 0;
 
         // Initialize scanners
         this.scanners = new Map();
@@ -18850,25 +19006,25 @@ class SecurityTestManager {
             });
 
             // Keep only MAX_HISTORY entries
-            history = history.slice(0, this.MAX_HISTORY);
+            if (this.MAX_HISTORY) history = history.slice(0, this.MAX_HISTORY);
             localStorage.setItem(this.HISTORY_KEY, JSON.stringify(history));
         } catch (e) {
             console.error('Failed to save scan history:', e);
         }
     }
 
-    getHistory(limit = 50) {
+    getHistory(limit = 0) {
         try {
             const stored = localStorage.getItem(this.HISTORY_KEY);
             const history = stored ? JSON.parse(stored) : [];
-            return history.slice(0, limit);
+            return limit ? history.slice(0, limit) : history;
         } catch (e) {
             return [];
         }
     }
 
     getStatistics() {
-        const history = this.getHistory(100);
+        const history = this.getHistory();
         const stats = {
             totalScans: history.length,
             passedScans: history.filter(h => h.policyPassed).length,
@@ -18993,11 +19149,11 @@ console.log('Security Testing Module loaded');
 
 ;
 
-;/* module: studio-storage; source: studio-storage.js; sha256: 6e36e7881cbe6762785e5b7cdde9ae84d71143dea5a50a8abb25ab81511d19c4 */
+;/* module: studio-storage; source: studio-storage.js; sha256: 7f0530f9703247468f985d515857c1fdc9d8abcb7023b328f00a5f8d3b4fa9a5 */
 /* Canonical desktop suite storage and an explicit, non-destructive legacy import. */
 (function (global) {
   'use strict';
-  const ID = /^[a-zA-Z0-9][a-zA-Z0-9_.:@-]{0,199}$/;
+  const ID = /^[a-zA-Z0-9][a-zA-Z0-9_.:@-]*$/;
   const SECRET = /(?:^(?:api[_-]?key|password|passwd|secret|secret[_-]?value|ciphertext|encryption[_-]?key|access[_-]?token|refresh[_-]?token|authorization|private[_-]?key|credential|credentials|client[_-]?secret|token)$|(?:api[_-]?key|password|passwd|secret|token|authheader|webhookurl|clientsecret|private[_-]?key)$)/i;
   const ARRAY_SOURCES = {
     pipeline_test_suites: 'suites', test_data_sets: 'datasets', test_environments: 'environments',
@@ -19176,8 +19332,7 @@ console.log('Security Testing Module loaded');
       db = await new Promise((resolve, reject) => {
         const request = global.indexedDB.open('LVX_Machina_Versions');
         let settled = false;
-        const timer = global.setTimeout(() => finish(false, failure('VERSION_BLOCKED', 'Opening version history timed out. Close other editors and retry.')), 10000);
-        function finish(ok, value) { if (settled) { if (ok) value.close(); return; } settled = true; global.clearTimeout(timer); if (ok) resolve(value); else reject(value); }
+        function finish(ok, value) { if (settled) { if (ok) value.close(); return; } settled = true; if (ok) resolve(value); else reject(value); }
         request.onupgradeneeded = () => { request.transaction.abort(); finish(false, failure('VERSION_COVERAGE', 'Version database disappeared while opening; nothing was created.')); };
         request.onsuccess = () => finish(true, request.result);
         request.onerror = () => finish(false, failure('VERSION_READ', 'Legacy IndexedDB could not be opened. Originals remain unchanged.'));
@@ -19191,16 +19346,9 @@ console.log('Security Testing Module loaded');
         const transaction = db.transaction(['version_histories'], 'readonly');
         const request = transaction.objectStore('version_histories').openCursor();
         const result = [];
-        let bytes = 0, versionCount = 0;
         request.onsuccess = () => {
           const cursor = request.result;
           if (!cursor) return;
-          bytes += JSON.stringify(cursor.value).length * 2;
-          versionCount += Array.isArray(cursor.value?.versions) ? cursor.value.versions.length : 0;
-          if (bytes > 32 * 1024 * 1024 || versionCount > 9999) {
-            reject(failure('VERSION_LIMIT', 'Legacy version history exceeds the safe 32 MiB / 9,999-version import limit. Export histories separately or explicitly exclude versions.'));
-            transaction.abort(); return;
-          }
           result.push(cursor.value); cursor.continue();
         };
         request.onerror = () => reject(failure('VERSION_READ', 'Version histories could not be read.'));
@@ -19216,14 +19364,14 @@ console.log('Security Testing Module loaded');
     if (typeof global.indexedDB.databases !== 'function') throw failure('LEGACY_COVERAGE', 'Cannot safely inspect the consolidated Machina database. Use the desktop app to preview migration; originals are unchanged.');
     const databases = await global.indexedDB.databases(); if (!databases.some(db => db.name === 'LVX_Machina_Storage')) return { records: [], coverage: 'absent' };
     const db = await new Promise((resolve, reject) => { const request = global.indexedDB.open('LVX_Machina_Storage'); request.onupgradeneeded = () => { request.transaction.abort(); reject(failure('LEGACY_COVERAGE', 'Consolidated storage disappeared; no database was created.')); }; request.onsuccess = () => resolve(request.result); request.onerror = () => reject(failure('LEGACY_READ', 'Consolidated Machina storage could not be opened. Close the old app and retry.')); request.onblocked = () => reject(failure('LEGACY_BLOCKED', 'Close other Machina windows before previewing consolidated storage.')); });
-    const supported = { test_suites: 'suites', execution_history: 'history', security_scans: 'security-history', screenshots: 'baselines', versions: 'versions', datasets: 'datasets', unit_tests: 'unit-tests' }, records = []; let bytes = 0;
+    const supported = { test_suites: 'suites', execution_history: 'history', security_scans: 'security-history', screenshots: 'baselines', versions: 'versions', datasets: 'datasets', unit_tests: 'unit-tests' }, records = [];
     try {
       const stores = Object.keys(supported).filter(name => (includeVersions || name !== 'versions') && db.objectStoreNames.contains(name));
       if(stores.length)await new Promise((resolve,reject)=>{
         // One readonly transaction is a coherent snapshot across every original
         // category, even when another old Machina window is still open.
-        const tx=db.transaction(stores,'readonly'),rows=Object.fromEntries(stores.map(name=>[name,[]]));let count=0;
-        for(const name of stores){const request=tx.objectStore(name).openCursor();request.onsuccess=()=>{const cursor=request.result;if(!cursor)return;bytes+=JSON.stringify(cursor.value).length*2;count++;if(bytes>32*1048576||count>9999){reject(failure('LEGACY_LIMIT','Consolidated Machina storage exceeds the 32 MiB / 9,999-record migration limit. Export and split it without deleting originals.'));tx.abort();return;}rows[name].push(clone(cursor.value));cursor.continue();};request.onerror=()=>reject(failure('LEGACY_READ',`Could not read ${name}; originals remain unchanged.`));}
+        const tx=db.transaction(stores,'readonly'),rows=Object.fromEntries(stores.map(name=>[name,[]]));
+        for(const name of stores){const request=tx.objectStore(name).openCursor();request.onsuccess=()=>{const cursor=request.result;if(!cursor)return;rows[name].push(clone(cursor.value));cursor.continue();};request.onerror=()=>reject(failure('LEGACY_READ',`Could not read ${name}; originals remain unchanged.`));}
         tx.oncomplete=()=>{for(const name of stores)for(const value of rows[name])records.push({collection:supported[name],value,source:`IndexedDB:LVX_Machina_Storage/${name}`});resolve();};tx.onerror=tx.onabort=()=>reject(failure('LEGACY_READ','Consolidated Machina snapshot failed; originals remain unchanged.'));
       });
       return { records, coverage: 'complete' };
@@ -19245,7 +19393,7 @@ console.log('Security Testing Module loaded');
       omitted.count++; return false;
     }).map(([name, child]) => [name, sanitize(child, omitted, name)]));
     if (typeof value === 'string') {
-      const result = value.replace(/-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z]+ )?PRIVATE KEY-----/g, '[REDACTED PRIVATE KEY]').replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,})\b/g, '[REDACTED CREDENTIAL]').replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/:]+:[^\s/@]+@/gi, '$1[REDACTED]@');
+      const result = value.replace(/-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z]+ )?PRIVATE KEY-----/g, '[REDACTED PRIVATE KEY]').replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,})\b/g, '[REDACTED CREDENTIAL]').replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^\s/:]+:[^\s/@]+@/gi, '$1[REDACTED]@');
       if (result !== value) omitted.count++;
       return result;
     }
@@ -19383,7 +19531,6 @@ console.log('Security Testing Module loaded');
       }
       if (deps.size) record.value.dependencies = [...deps.values()];
     }
-    if (collected.length > 9999) errors.push('Legacy project exceeds the 9,999-record atomic migration limit. Export and split it before migrating.');
     if (omitted.count) warnings.push(`${omitted.count} credential-like fields or values were omitted. Configure credentials in the OS-backed secret vault; originals remain unchanged.`);
     if (versions.coverage === 'unavailable') warnings.push('IndexedDB is unavailable in this environment. Only localStorage versions could be captured.');
     if (!includeVersions) warnings.push('Version histories were explicitly excluded.');
@@ -19464,7 +19611,7 @@ console.log('Security Testing Module loaded');
 
 ;
 
-;/* module: unit-testing; source: unit-testing.js; sha256: 1c3133ce307aa537cec0cdc3d90bad7a2e19d5f98b87e49de84f28b81cf1da6b */
+;/* module: unit-testing; source: unit-testing.js; sha256: 3191e16c2b537ee57ab29dccdcf2bd09465515b58bde29fd66ce2a25f25a1179 */
 
 // ============================================
 // UNIT TESTING SYSTEM
@@ -20377,7 +20524,7 @@ async function executeNativePythonUnitTest(unitTest) {
     const code=buildPythonUnitTestCode(unitTest)+'\nprint('+JSON.stringify(marker)+' + json.dumps(_lvx_result))\nARTIFACTS={"unitResult": _lvx_result}\nif _lvx_result["status"] != "PASS":\n    _lvx_failure = _lvx_result.get("error") or _lvx_result.get("cleanup_error") or "Native unit tests failed"\n    if _lvx_result.get("errors") and not _lvx_result.get("assertions_failed"): raise RuntimeError(_lvx_failure)\n    raise AssertionError(_lvx_failure)\n';
     try {
         await studio.invoke('host','checkImported',{definition:unitTest});
-        const start=await studio.invoke('execution','start',{engine:'python',code,timeoutMs:Number(unitTest.timeout_ms||30000),...unitExecutionParameters(unitTest),inputs:unitTest.inputs||unitTest.contextVariables||{},inputFiles:unitTest.input_files||unitTest.inputFiles||[]});
+        const start=await studio.invoke('execution','start',{engine:'python',code,timeoutMs:Number(unitTest.timeout_ms ?? 0),...unitExecutionParameters(unitTest),inputs:unitTest.inputs||unitTest.contextVariables||{},inputFiles:unitTest.input_files||unitTest.inputFiles||[]});
         window.LVXActiveUnitRun=start.id;let run=start;
         while(run.status==='RUNNING'||run.status==='PENDING'){await new Promise(resolve=>setTimeout(resolve,40));run=await studio.invoke('execution','getRun',{id:start.id});}
         if(run.status==='CANCELLED')return {status:'CANCELLED',run_id:run.id,error:'Run cancelled.',output:run.stdout||'',assertions_passed:0,assertions_failed:0};
@@ -20504,7 +20651,7 @@ async function executeJavaScriptUnitTest(unitTest) {
             const started = await studio.invoke('execution', 'start', {
                 engine: unitTest.test_framework === 'jest' ? 'jest' : 'javascript',
                 code: unitTest.test_code || '', setup: unitTest.setup_code || '', cleanup: unitTest.teardown_code || '',
-                timeoutMs: Number(unitTest.timeout_ms || 30000),
+                timeoutMs: Number(unitTest.timeout_ms ?? 0),
                 ...(unitTest.project_path ? { projectPath:unitTest.project_path } : {}),
                 ...unitExecutionParameters(unitTest),
                 ...(unitTest.fixture_id ? { fixtureId:unitTest.fixture_id } : {})
@@ -20525,8 +20672,8 @@ async function executeJavaScriptUnitTest(unitTest) {
         const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
         const worker = new Worker(url);
         // Workers cannot create nested workers here; authored code runs only once.
-        const timeout = Number(unitTest.timeout_ms || 30000);
-        try { return await new Promise(resolve => { const timer = setTimeout(() => { worker.terminate(); resolve({ status:'FAIL',error:'Unit test timed out; worker stopped.',assertions_passed:0,assertions_failed:1 }); }, timeout); worker.onmessage=e=>{clearTimeout(timer);resolve(e.data);};worker.onerror=e=>{clearTimeout(timer);resolve({status:'FAIL',error:e.message,assertions_passed:0,assertions_failed:1});};worker.postMessage(unitTest); }); }
+        const timeout = Number(unitTest.timeout_ms ?? 0);
+        try { return await new Promise(resolve => { if(!Number.isSafeInteger(timeout)||timeout<0)throw Error('Test timeout must be a nonnegative safe integer.');let timer;const end=performance.now()+timeout;const arm=()=>{const remaining=end-performance.now();if(remaining<=0){worker.terminate();resolve({ status:'FAIL',error:'Unit test timed out; worker stopped.',assertions_passed:0,assertions_failed:1 });}else timer=setTimeout(arm,Math.min(2**31-1,remaining));};if(timeout)arm(); worker.onmessage=e=>{clearTimeout(timer);resolve(e.data);};worker.onerror=e=>{clearTimeout(timer);resolve({status:'FAIL',error:e.message,assertions_passed:0,assertions_failed:1});};worker.postMessage(unitTest); }); }
         finally { worker.terminate(); URL.revokeObjectURL(url); }
     }
     if (unitTest.test_framework === 'jest') return { status: 'FAIL', error: 'Jest runtime unavailable in this browser. Choose Custom for assert/expect script tests.', assertions_passed: 0, assertions_failed: 1 };
@@ -20655,8 +20802,8 @@ async function executeJavaScriptUnitTest(unitTest) {
                 }
             }
         `);
-        const configuredTimeout = Number(unitTest.timeout_ms ?? 30000);
-        if (!Number.isFinite(configuredTimeout) || configuredTimeout <= 0) throw new Error('Test timeout must be positive');
+        const configuredTimeout = Number(unitTest.timeout_ms ?? 0);
+        if (!Number.isSafeInteger(configuredTimeout) || configuredTimeout < 0) throw new Error('Test timeout must be a nonnegative safe integer; 0 means no deadline');
         let timer;
         try {
             await Promise.race([execute(testContext).then(async () => {
@@ -20667,7 +20814,7 @@ async function executeJavaScriptUnitTest(unitTest) {
                     catch (error) { cleanupError = error; }
                 }
             }), new Promise((_, reject) => {
-                timer = setTimeout(() => { controller.abort(); reject(new Error(`Unit test timed out after ${configuredTimeout}ms; cancellation requested`)); }, configuredTimeout);
+                if(configuredTimeout){const end=performance.now()+configuredTimeout;const arm=()=>{const remaining=end-performance.now();if(remaining<=0){controller.abort();reject(new Error(`Unit test timed out after ${configuredTimeout}ms; cancellation requested`));}else timer=setTimeout(arm,Math.min(2**31-1,remaining));};arm();}
             })]);
         } catch (error) { primaryError = primaryError || error; }
         finally { clearTimeout(timer); }
@@ -21537,7 +21684,7 @@ console.log('Collaboration UI functions (Part 1) loaded');
 
 ;
 
-;/* module: machina-data; source: machina-data.js; sha256: 2daa57fe7d7468025c3f14327e37f7cdf9d5e153a77c9e1062ef1ce4e463d864 */
+;/* module: machina-data; source: machina-data.js; sha256: e27026e9726e45f8ee3d3239b3cae3233f4a630dce7c5e42fc368bcc65e7c3e7 */
 (function(root,factory){const api=factory(root);if(typeof module==='object'&&module.exports)module.exports=api;root.LVXMachinaData=api;})(typeof globalThis==='object'?globalThis:this,function(root){
   'use strict';
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -21553,7 +21700,7 @@ console.log('Collaboration UI functions (Part 1) loaded');
     function dataPolicy(){return {mode:value('retention-mode'),sessionRetention:{enabled:checked('session-enabled'),keepForever:checked('session-forever'),maxExports:Number(value('session-count'))},logRetention:{enabled:checked('log-enabled'),maxFiles:Number(value('log-count')),maxAgeDays:Number(value('log-days')),maxTotalSizeMB:Number(value('log-mb'))}};}
     async function sessions(){const result=await invoke('listSessions');if(disposed)return;container.querySelector('[data-sessions]').innerHTML=`<ul class="studio-record-list">${result.sessions.map(s=>`<li><span>${esc(s.fileName)}<small>${esc(s.modifiedAt)} · ${s.sizeBytes} bytes</small></span><div class="studio-actions">${button('download-session','Export JSON',`data-id="${esc(s.id)}"`)}${button('delete-session','Delete saved copy',`data-id="${esc(s.id)}"`)}</div></li>`).join('')||'<li>No sessions saved yet.</li>'}</ul>`;}
     async function plans(){const result=await invoke('listMockPlans');if(disposed)return;container.querySelector('[data-plan-select]').innerHTML=`<option value="">Choose a saved fixture plan</option>${result.records.map(r=>`<option value="${esc(r.id)}">${esc(r.value.name||r.id)}</option>`).join('')}`;}
-    async function loadPolicy(){const result=await invoke('getRetention');if(disposed)return;retentionRevision=result.revision;const p=result.policy;container.querySelector('[data-policy]').innerHTML=`<label class="studio-field">Retention mode<select name="retention-mode"><option value="custom" ${p.mode==='custom'?'selected':''}>Use saved limits</option><option value="unlimited" ${p.mode==='unlimited'?'selected':''}>Keep all sessions and logs</option></select></label><div class="studio-form-grid"><section><h4>Saved sessions</h4>${check('Enable automatic session cleanup','session-enabled',p.sessionRetention.enabled)}${check('Keep session exports forever','session-forever',p.sessionRetention.keepForever)}${field('Maximum saved exports','session-count',p.sessionRetention.maxExports,'number','min="1" max="1000"')}</section><section><h4>Native log history</h4>${check('Enable automatic log cleanup','log-enabled',p.logRetention.enabled)}${field('Maximum log files','log-count',p.logRetention.maxFiles,'number','min="1" max="10000"')}${field('Maximum age in days','log-days',p.logRetention.maxAgeDays,'number','min="1" max="36500"')}${field('Maximum total size in MB','log-mb',p.logRetention.maxTotalSizeMB,'number','min="1" max="10000"')}</section></div>`;}
+    async function loadPolicy(){const result=await invoke('getRetention');if(disposed)return;retentionRevision=result.revision;const p=result.policy;container.querySelector('[data-policy]').innerHTML=`<label class="studio-field">Retention mode<select name="retention-mode"><option value="custom" ${p.mode==='custom'?'selected':''}>Use saved limits</option><option value="unlimited" ${p.mode==='unlimited'?'selected':''}>Keep all sessions and logs</option></select></label><div class="studio-form-grid"><section><h4>Saved sessions</h4>${check('Enable automatic session cleanup','session-enabled',p.sessionRetention.enabled)}${check('Keep session exports forever','session-forever',p.sessionRetention.keepForever)}${field('Export budget (0 = all)','session-count',p.sessionRetention.maxExports,'number','min="0"')}</section><section><h4>Native log history</h4>${check('Enable automatic log cleanup','log-enabled',p.logRetention.enabled)}${field('File budget (0 = all)','log-count',p.logRetention.maxFiles,'number','min="0"')}${field('Age budget in days (0 = forever)','log-days',p.logRetention.maxAgeDays,'number','min="0"')}${field('Size budget in MB (0 = all)','log-mb',p.logRetention.maxTotalSizeMB,'number','min="0"')}</section></div>`;}
     async function click(event){const target=event.target.closest('[data-machina-action]');if(!target||!container.contains(target))return;const action=target.dataset.machinaAction;target.disabled=true;
       try{
         if(action==='browse-folder'){const selected=await choosePath({kind:'directory'});if(disposed||!selected||selected.cancelled)return;const chosen=typeof selected==='string'?selected:selected.path;if(chosen){container.querySelector('[name="legacy-path"]').value=chosen;container.querySelector('[name="legacy-file"]').value='';notice('Folder selected. Preview the legacy import to review its contents.');}}
@@ -21581,7 +21728,7 @@ console.log('Collaboration UI functions (Part 1) loaded');
 
 ;
 
-;/* module: machina-graph-bridge; source: machina-graph-bridge.js; sha256: 0708c198dfd3b2e155811d22ff66f75469018db1fe3f1d8e63ea8336a2afcef1 */
+;/* module: machina-graph-bridge; source: machina-graph-bridge.js; sha256: d83361c05e61fa570ea7b2c45a1ced807cb54c028d19fd6da17e557373fbd732 */
 /* Native execution boundary and progressive visual authoring for the Machina graph. */
 (() => {
  'use strict';
@@ -21686,6 +21833,7 @@ console.log('Collaboration UI functions (Part 1) loaded');
   const {element,run,workflow}=session;if(!element)return;
   if(session.editor?._executionOwner===session.token)session.editor.setRunResults?.(run.results||{});
   element.querySelector('[data-run-status]').textContent=run.status;
+  const browserLabel=element.querySelector('[data-run-browser]');browserLabel.hidden=!['headed','headless'].includes(run.browserMode);browserLabel.textContent='E2E browser: '+(run.browserMode==='headed'?'Headed (visible)':'Headless (background)');
   const dockButton=[...document.querySelectorAll('#mg-session-dock button')].find(button=>button.dataset.key==='run:'+run.id);if(dockButton)dockButton.textContent=`${workflow.name||'Workflow'} · ${run.status}`;
   element.querySelector('[data-run-stop]').disabled=terminal.has(run.status);
   const results=run.results||{};element.querySelector('tbody').innerHTML=(workflow.nodes||[]).map(node=>{const result=results[node.id]||{};return `<tr data-node-id="${esc(node.id)}" data-run-status="${esc(result.status||'PENDING')}"><td>${esc(node.data?.name||node.id)}</td><td>${esc(result.status||'PENDING')}</td><td>${esc(result.message||result.error||'')}${node.data?.missingSuiteReference?` <span>Saved test ${esc(node.data.suiteId)} could not be found.</span>${session.editor?` <button data-relink-suite="${esc(node.id)}">${icon('folder')} Choose saved test</button>`:''}`:''}${terminal.has(result.status)?` <button data-node-output="${esc(node.id)}">${icon('file')} View output</button>`:''}</td><td>${esc(Array.isArray(result.attempts)?result.attempts.length:result.attempt??'')}</td></tr>`;}).join('');
@@ -21693,22 +21841,23 @@ console.log('Collaboration UI functions (Part 1) loaded');
   for(const button of element.querySelectorAll('[data-node-output]'))button.onclick=()=>showOutput(workflow.nodes.find(node=>node.id===button.dataset.nodeOutput),results[button.dataset.nodeOutput]);
   const log=[run.stdout,run.stderr,run.error,...Object.entries(results).flatMap(([id,r])=>[r.stdout&&`${id}: ${r.stdout}`,r.stderr&&`${id}: ${r.stderr}`,r.output,r.error])].filter(Boolean).join('\n');
   element.querySelector('[data-run-log]').textContent=log||'Waiting for execution evidence.';
-  element.querySelector('[data-run-evidence]').textContent=JSON.stringify(run,null,2);
+  const evidenceElement=element.querySelector('[data-run-evidence]');if(evidenceElement.parentElement.open)evidenceElement.textContent=JSON.stringify(run,null,2);
   syncAuthoringResults(session);
   if(terminal.has(run.status)){window.LVXCodeReview?.settleRun(run.id,run.status);for(const waiter of session.waiters.splice(0))waiter.resolve(clone(run));}else for(const pending of run.pendingReviews||[])showReview({...pending,id:run.id});
  }
  function mountRun(run,workflow,editor,binding=context,token=null){
   installStyles();const element=document.createElement('section');element.className='mg-run';element.setAttribute('role','dialog');element.setAttribute('aria-label','Pipeline execution');
   element.innerHTML=`<header><h2>${esc(workflow.name||'Workflow run')}</h2><strong data-run-status>${esc(run.status)}</strong><button data-run-minimize title="Minimize run">${icon('minus')} Minimize</button><button data-run-export>${icon('download')} Export log</button><button data-run-stop>${icon('stop')} Stop</button><button data-run-close>${icon('close')} Close</button></header><div class="mg-run-body"><table><thead><tr><th>Node</th><th>Status</th><th>Evidence</th><th>Attempts</th></tr></thead><tbody></tbody></table><h3>Execution log</h3><pre data-run-log></pre><details><summary>Full persisted evidence</summary><pre data-run-evidence></pre></details></div><p data-run-error role="alert"></p>`;
+  const browserLabel=document.createElement('p');browserLabel.dataset.runBrowser='';browserLabel.setAttribute('role','status');element.querySelector('.mg-run-body').prepend(browserLabel);
   document.body.appendChild(element);const session={run,workflow:clone(workflow),element,waiters:[],editor,applied:new Map(),binding,token};sessions.set(run.id,session);
   const minimize=()=>{element.classList.add('hidden');dockItem('run:'+run.id,`${workflow.name||'Workflow'} · ${session.run.status}`,()=>element.classList.remove('hidden'));};
   element.querySelector('[data-run-minimize]').onclick=minimize;
   element.querySelector('[data-run-export]').onclick=()=>download('workflow-'+run.id+'.json',JSON.stringify(session.run,null,2),'application/json');
   element.querySelector('[data-run-close]').onclick=()=>{if(!terminal.has(session.run.status))minimize();else{element.remove();sessions.delete(run.id);clearDock('run:'+run.id);}};
   element.querySelector('[data-run-stop]').onclick=async()=>{const target=element.querySelector('[data-run-error]');try{await invoke('cancel',{id:run.id},binding);session.run=await invoke('getRun',{id:run.id},binding);displayRun(session);}catch(error){target.textContent=error.message;}};
-  displayRun(session);return session;
+  element.querySelector('[data-run-evidence]').parentElement.ontoggle=()=>{if(element.querySelector('[data-run-evidence]').parentElement.open)element.querySelector('[data-run-evidence]').textContent=JSON.stringify(session.run,null,2);};displayRun(session);return session;
  }
- function handleEvent(event){if(event.domain!=='execution')return;if(event.type==='review-request')showReview(event);const session=sessions.get(event.id);if(session&&event.type==='run'){session.run=event;displayRun(session);}}
+ function handleEvent(event){if(event.domain!=='execution')return;if(event.type==='review-request')showReview(event);const session=sessions.get(event.id);if(session&&event.type==='run'){session.run={...session.run,...event};displayRun(session);}if(session&&event.type==='output'&&['stdout','stderr'].includes(event.stream)){session.run[event.stream]=(session.run[event.stream]||'')+event.text;const log=session.element.querySelector('[data-run-log]');if(log.textContent==='Waiting for execution evidence.')log.textContent='';log.appendChild(document.createTextNode(event.text));}}
  function showReview(request){
   if(!request.decisionId||!window.LVXCodeReview)return;
   const session=sessions.get(request.id),node=session?.workflow.nodes.find(n=>n.id===request.nodeId);
@@ -21738,7 +21887,16 @@ console.log('Collaboration UI functions (Part 1) loaded');
   if(window.LVXReviewImported&&!await window.LVXReviewImported(protectedWorkflow))return {status:'CANCELLED',cancelled:true};
   const {waitForCompletion=false,...executionOptions}=options;
   const editor=authoringEditor||binding.editor,token={};if(editor){editor._executionOwner=token;editor.setRunResults?.({});}
-  const run=await invoke('runWorkflow',{workflow:protectedWorkflow,...executionOptions},binding);
+  let run;
+  try{run=await invoke('runWorkflow',{workflow:protectedWorkflow,...executionOptions},binding);}
+  catch(error){
+   if(error.acceptImportReview&&editor?.container){
+    let target=editor.container.closest('.studio-graph-screen')?.querySelector('.studio-graph-notice')||editor.container.querySelector('[data-import-run-notice]');
+    if(!target){target=document.createElement('p');target.dataset.importRunNotice='';editor.container.prepend(target);}
+    const offer=failure=>{target.textContent=failure.message;target.setAttribute('role','alert');window.LVXImportReviewRecovery?.append(target,failure,async()=>{try{if(editor!==context.editor)throw Error('The graph changed. Retry from the current graph.');await failure.acceptImportReview();await runWorkflow(workflow,options,authoringEditor);target.textContent='Imported content accepted.';}catch(next){offer(next);}});};offer(error);
+   }
+   throw error;
+  }
   const session=mountRun(run,protectedWorkflow,editor&&snapshot.nodes.every(node=>editor.nodes.some(candidate=>candidate.id===node.id))?editor:null,binding,token);binding.onRun?.(run,protectedWorkflow);
   if(!terminal.has(run.status))void poll(session);
   return waitForCompletion?waitForRun(run.id):run;
@@ -21773,7 +21931,7 @@ console.log('Collaboration UI functions (Part 1) loaded');
   if(node.type==='ai-unit-test')extras+=`<label>Optional inline source code<textarea data-extra="sourceCode">${esc(d.sourceCode||'')}</textarea></label>`;
   if(['unit-test-runner','ai-unit-test','code-review','log-collector','ai-log-summary'].includes(node.type))extras+=`<label><input type="checkbox" data-extra="overwrite" ${d.overwrite?'checked':''}> Replace an existing generated file when approved</label>`;
   if(node.type==='push-deploy')extras+=`<label><input type="checkbox" data-extra="enabled" ${d.enabled===true?'checked':''}> Enable this deployment step</label><p class="mg-hint">Deployment also requires explicit deployment approval in the connected review session.</p>`;
-  const details=document.createElement('details');details.className='mg-execution-details';details.innerHTML=`<summary>Execution and failure handling</summary><div class="grid">${extras}${input('Total attempts (including first run)','retryAttempts',typeof storedRetry==='object'?storedRetry.maxAttempts??1:storedRetry??1,'number','min="1" max="21"')}${input('Retry delay (ms)','retryDelay',storedRetry?.backoffMs??0,'number','min="0" max="60000"')}<label>When this node fails<select data-extra="onFailure"><option value="stop" ${storedFailure!=='continue'?'selected':''}>Stop dependent execution</option><option value="continue" ${storedFailure==='continue'?'selected':''}>Continue independent work</option></select></label>${input('Exclusive resource names (comma separated)','resources',Array.isArray(storedResources)?storedResources.join(', '):String(storedResources))}</div>`;
+  const details=document.createElement('details');details.className='mg-execution-details';details.innerHTML=`<summary>Execution and failure handling</summary><div class="grid">${extras}${input('Total attempts (including first run)','retryAttempts',typeof storedRetry==='object'?storedRetry.maxAttempts??1:storedRetry??1,'number','min="1"')}${input('Retry delay (ms)','retryDelay',storedRetry?.backoffMs??0,'number','min="0"')}<label>When this node fails<select data-extra="onFailure"><option value="stop" ${storedFailure!=='continue'?'selected':''}>Stop dependent execution</option><option value="continue" ${storedFailure==='continue'?'selected':''}>Continue independent work</option></select></label>${input('Exclusive resource names (comma separated)','resources',Array.isArray(storedResources)?storedResources.join(', '):String(storedResources))}</div>`;
   const footer=inner.querySelector(':scope > .flex.justify-end');
   const formBody=inner.querySelector(':scope > .overflow-y-auto');
   if(formBody)formBody.appendChild(details);else inner.insertBefore(details,footer||error);
@@ -21790,7 +21948,7 @@ console.log('Collaboration UI functions (Part 1) loaded');
    const before=clone(node);
    try{
     const extras=Object.fromEntries(Array.from(details.querySelectorAll('[data-extra]')).map(field=>[field.dataset.extra,field.type==='checkbox'?field.checked:field.type==='number'?Number(field.value):field.value]));
-    if(!Number.isInteger(extras.retryAttempts)||extras.retryAttempts<1||extras.retryAttempts>21)throw Error('Total attempts must be a whole number from 1 to 21 (the first run plus up to 20 retries).');
+    if(!Number.isSafeInteger(extras.retryAttempts)||extras.retryAttempts<1)throw Error('Total attempts must be a positive whole number.');
     const priorRetry=node.retry??node.data.retry;const retry=priorRetry&&typeof priorRetry==='object'?{...priorRetry}:{};if(node.retry!==undefined||extras.retryAttempts!==1||extras.retryDelay!==0)node.retry={...retry,maxAttempts:extras.retryAttempts,backoffMs:extras.retryDelay};node.onFailure=extras.onFailure;node.resources=extras.resources.split(',').map(s=>s.trim()).filter(Boolean);
     for(const key of ['cwd','engine','overwrite','enabled','sourceCode'])if(Object.hasOwn(extras,key))node.data[key]=extras[key];
     await original?.call(save,event);
@@ -22409,11 +22567,10 @@ console.log('Security UI loaded');
 
 ;
 
-;/* module: studio-recovery; source: studio-recovery.js; sha256: b106c44e4d016c3f38587cd8e47ab84585b665fd678955a3da75cdb032438b42 */
+;/* module: studio-recovery; source: studio-recovery.js; sha256: 01e5f329277ff58d9ac851a888c0eb27dd79a3ce6709e89fcbbf44b0f9d0540f */
 /* Explicit archive recovery remains usable when the project's SQLite cannot open. */
 (function (global) {
   'use strict';
-  const MAX_BYTES = 100 * 1024 * 1024;
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   const icon = name => global.LVXIcons?.svg(name) || '';
   function unwrap(result) {
@@ -22435,7 +22592,7 @@ console.log('Security UI loaded');
     try { status = await call('status'); workspaceRoot = status.workspaceRoot; if (!workspaceRoot) throw new Error('Choose the workspace folder before restoring an archive.'); }
     catch (error) { message(error.message, true, true); return; }
     // The exact root is captured once. Host workspace checks reject stale forms.
-    body.innerHTML = `<p class="studio-path">Workspace: ${esc(workspaceRoot)}</p>${status.error ? `<details class="studio-evidence"><summary>Why the project could not open</summary><p>${esc(status.error.message)}</p></details>` : ''}<form data-recovery-form><section class="studio-section"><h3>Choose a saved archive</h3><p>Select an LVX project archive (.json), smaller than 100 MB. Validation checks its format, checksums, records and dependencies before anything changes.</p><label class="studio-field">Project archive<input type="file" name="recovery-archive" accept=".json,application/json" aria-describedby="recovery-file-help"></label><p id="recovery-file-help">Use an archive exported from Project &amp; backup. A damaged or incomplete file cannot be restored.</p><div class="studio-actions"><button type="submit" data-recovery-validate disabled>${icon('search')}Validate archive</button></div><div data-recovery-preview></div></section><section class="studio-section"><h3>Replace the damaged workspace</h3><p>Restore replaces all current project records and stored evidence with this archive. The original database and its journals are kept in the private project storage folder for recovery.</p><p>Credential values are excluded. Imported code must be reviewed before it can run. Restored schedules stay disabled until you enable them.</p><label><input type="checkbox" name="recovery-confirm" disabled> I understand this replaces the current project with the selected archive.</label><div class="studio-actions"><button type="button" data-recovery-restore class="studio-primary" disabled>${icon('refresh')}Restore project from archive</button></div></section></form><section class="studio-section" data-recovery-result hidden></section>`;
+    body.innerHTML = `<p class="studio-path">Workspace: ${esc(workspaceRoot)}</p>${status.error ? `<details class="studio-evidence"><summary>Why the project could not open</summary><p>${esc(status.error.message)}</p></details>` : ''}<form data-recovery-form><section class="studio-section"><h3>Choose a saved archive</h3><p>Select an LVX project archive (.json). Validation checks its format, checksums, records and dependencies before anything changes.</p><label class="studio-field">Project archive<input type="file" name="recovery-archive" accept=".json,application/json" aria-describedby="recovery-file-help"></label><p id="recovery-file-help">Use an archive exported from Project &amp; backup. A damaged or incomplete file cannot be restored.</p><div class="studio-actions"><button type="submit" data-recovery-validate disabled>${icon('search')}Validate archive</button></div><div data-recovery-preview></div></section><section class="studio-section"><h3>Replace the damaged workspace</h3><p>Restore replaces all current project records and stored evidence with this archive. The original database and its journals are kept in the private project storage folder for recovery.</p><p>Credential values are excluded. Imported code must be reviewed before it can run. Restored schedules stay disabled until you enable them.</p><label><input type="checkbox" name="recovery-confirm" disabled> I understand this replaces the current project with the selected archive.</label><div class="studio-actions"><button type="button" data-recovery-restore class="studio-primary" disabled>${icon('refresh')}Restore project from archive</button></div></section></form><section class="studio-section" data-recovery-result hidden></section>`;
     const form = body.querySelector('form'), fileInput = body.querySelector('[name="recovery-archive"]'), validateButton = body.querySelector('[data-recovery-validate]'), confirm = body.querySelector('[name="recovery-confirm"]'), restoreButton = body.querySelector('[data-recovery-restore]'), preview = body.querySelector('[data-recovery-preview]'), resultRegion = body.querySelector('[data-recovery-result]');
     function controls() {
       form.setAttribute('aria-busy', String(busy));
@@ -22448,8 +22605,7 @@ console.log('Security UI loaded');
     function invalidate() { generation++; archive = null; valid = false; confirm.checked = false; preview.replaceChildren(); controls(); }
     fileInput.addEventListener('change', () => {
       selectedFile = fileInput.files?.[0] || null; invalidate();
-      if (selectedFile && selectedFile.size >= MAX_BYTES) { selectedFile = null; controls(); message('This archive is too large. Choose a JSON archive smaller than 100 MB.', true, true); }
-      else message(selectedFile ? `Selected ${selectedFile.name}. Validate it to see what will be restored.` : 'Choose a saved project archive.');
+      message(selectedFile ? `Selected ${selectedFile.name}. Validate it to see what will be restored.` : 'Choose a saved project archive.');
     });
     confirm.addEventListener('change', controls);
     form.addEventListener('submit', async event => {
@@ -22461,7 +22617,7 @@ console.log('Security UI loaded');
         if (token !== generation || !form.isConnected) return;
         const errors = Array.isArray(validation?.errors) ? validation.errors : [];
         if (validation?.valid !== true) {
-          preview.innerHTML = `<h4 tabindex="-1">Archive needs attention</h4><ul>${(errors.length ? errors : ['The archive could not be verified.']).slice(0, 30).map(error => `<li>${esc(error)}</li>`).join('')}</ul><p>Choose a complete archive exported from LVX. Your original database has not been changed.</p>`;
+          preview.innerHTML = `<h4 tabindex="-1">Archive needs attention</h4><ul>${(errors.length ? errors : ['The archive could not be verified.']).map(error => `<li>${esc(error)}</li>`).join('')}</ul><p>Choose a complete archive exported from LVX. Your original database has not been changed.</p>`;
           message('Validation failed. Nothing has been restored.', true); preview.querySelector('h4').focus(); return;
         }
         if (!Number.isSafeInteger(validation.records) || validation.records < 0 || !Number.isSafeInteger(validation.artifacts) || validation.artifacts < 0) throw new Error('The archive preview is incomplete. Validate the file again.');
@@ -22498,7 +22654,7 @@ console.log('Security UI loaded');
 
 ;
 
-;/* module: visual-web-tester; source: visual-web-tester.js; sha256: 466f3df61730de84a4054cd5490fc29d9c5d4fa3faf05a9ce352e29856cb8585 */
+;/* module: visual-web-tester; source: visual-web-tester.js; sha256: dc506078cc740d5412ad81dad41f141133d4b772bc16bdc3a0ed59f233f328fa */
 // Robot uses two or more spaces (or a tab) between cells. Escape literals so
 // user text cannot accidentally create extra cells, variables or physical rows.
 function vwtRobotCell(value) {
@@ -22658,12 +22814,12 @@ const vwt_availableSteps = [
     icon: window.LVXIcons?.svg('clock') || '',
     params: [
       { key: 'selector', label: 'CSS Selector', type: 'text', placeholder: 'e.g., #results' },
-      { key: 'timeout', label: 'Timeout (ms)', type: 'number', placeholder: '5000' }
+      { key: 'timeout', label: 'Deadline in ms (0 = none)', type: 'number', placeholder: '0' }
     ],
     execute: async (params, iframeWin, log) => {
-      const timeout = parseInt(params.timeout, 10) || 5000;
+      const timeout = Number(params.timeout ?? 0);if(!Number.isSafeInteger(timeout)||timeout<0)throw Error('Element deadline must be a nonnegative safe integer; 0 means no deadline.');
       const startTime = Date.now();
-      while (Date.now() - startTime < timeout) {
+      while (timeout === 0 || Date.now() - startTime < timeout) {
         if (iframeWin.document.querySelector(params.selector)) {
           log(` Waited for and found element: ${params.selector}`);
           return;
@@ -22672,7 +22828,7 @@ const vwt_availableSteps = [
       }
       throw new Error(`Wait timed out after ${timeout}ms for element: ${params.selector}`);
     },
-    robot: (p) => ` Wait For Element ${p.selector} timeout=${(parseInt(p.timeout, 10) || 5000) / 1000}s`
+    robot: (p) => ` Wait For Element ${p.selector} timeout=${Number(p.timeout ?? 0) / 1000}s`
   },
   {
     name: 'Save Screenshot Baseline',
@@ -22777,7 +22933,7 @@ vwt_availableSteps.forEach(config => {
       case 'Click Element': return vwtRobotRow('Click Element', p.selector);
       case 'Input Text': return vwtRobotRow('Input Text', p.selector, p.text);
       case 'Element Should Contain': return vwtRobotRow('Element Should Contain', p.selector, p.text);
-      case 'Wait For Element': return vwtRobotRow('Wait For Element', p.selector, String((Number(p.timeout) || 5000) / 1000));
+      case 'Wait For Element': return vwtRobotRow('Wait For Element', p.selector, String(Number(p.timeout ?? 0) / 1000));
       default: return vwtRobotRow('Fail', `${config.name} requires the Visual Web Tester runtime; run this saved visual suite in LVX Test Studio.`);
     }
   };

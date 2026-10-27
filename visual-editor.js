@@ -24,7 +24,7 @@ class VisualEditor {
         this.activeConnection = null; // { sourceNodeId, currentX, currentY }
         this.historyStack = [];
         this.redoStack = [];
-        this.historyLimit = 100;
+        this.historyLimit = 0;
         this.runResults = {};
         this._executionOwner = null;
 
@@ -281,7 +281,7 @@ class VisualEditor {
         }
 
         this.historyStack.push(snapshot);
-        if (this.historyStack.length > this.historyLimit) {
+        if (this.historyLimit > 0 && this.historyStack.length > this.historyLimit) {
             this.historyStack.shift();
         }
         this.redoStack = [];
@@ -543,7 +543,7 @@ Call out patterns like flaky tests, missing assertions, unclear error handling, 
 Keep the tone direct and practical. Do not invent details that are not supported by the logs. If the logs are incomplete, say so clearly.`;
     }
 
-    _stringifyAILogSummaryValue(value, maxLength = 12000) {
+    _stringifyAILogSummaryValue(value, maxLength = 0) {
         if (value == null) return '';
 
         let text = '';
@@ -557,7 +557,7 @@ Keep the tone direct and practical. Do not invent details that are not supported
             }
         }
 
-        if (text.length > maxLength) {
+        if (maxLength > 0 && text.length > maxLength) {
             return `${text.slice(0, maxLength)}\n...[truncated]`;
         }
 
@@ -658,11 +658,11 @@ Keep the tone direct and practical. Do not invent details that are not supported
             }
 
             if (sourceResult?.securityResults) {
-                sectionParts.push(`SECURITY RESULTS:\n${this._stringifyAILogSummaryValue(sourceResult.securityResults, 8000)}`);
+                sectionParts.push(`SECURITY RESULTS:\n${this._stringifyAILogSummaryValue(sourceResult.securityResults)}`);
             }
 
             if (sourceResult?.artifacts) {
-                sectionParts.push(`ARTIFACTS:\n${this._stringifyAILogSummaryValue(sourceResult.artifacts, 4000)}`);
+                sectionParts.push(`ARTIFACTS:\n${this._stringifyAILogSummaryValue(sourceResult.artifacts)}`);
             }
 
             sections.push(sectionParts.join('\n\n'));
@@ -1042,8 +1042,8 @@ ${summaryText || 'No summary generated.'}
         if (!this.nodes.length || !this.canvas) return;
         const canvas=this.canvas.getBoundingClientRect(),toolbar=this.container.querySelector('.ve-toolbar')?.getBoundingClientRect(),actions=this.container.querySelector('.ve-top-action-bar')?.getBoundingClientRect();
         const left=Math.max(16,(toolbar?.right??canvas.left)-canvas.left+16),top=Math.max(16,(actions?.bottom??canvas.top)-canvas.top+16);
-        const minX=Math.min(...this.nodes.map(node=>this._graphToViewportPoint(node.position).x))*this.scale+this.panning.x;
-        const minY=Math.min(...this.nodes.map(node=>this._graphToViewportPoint(node.position).y))*this.scale+this.panning.y;
+        const minX=this.nodes.reduce((bound,node)=>Math.min(bound,this._graphToViewportPoint(node.position).x),Infinity)*this.scale+this.panning.x;
+        const minY=this.nodes.reduce((bound,node)=>Math.min(bound,this._graphToViewportPoint(node.position).y),Infinity)*this.scale+this.panning.y;
         if(minX<left)this.panning.x+=left-minX;
         if(minY<top)this.panning.y+=top-minY;
         this._applyViewportTransform();
@@ -1635,8 +1635,8 @@ ${summaryText || 'No summary generated.'}
                     testMode: 'auto',
                     sourceStrategy: 'saved-selection',
                     sourceExtensions: 'html,css,js,jsx,ts,tsx,mjs,cjs,vue,svelte,py,java,cs,go,rb,php,c,cpp,h,rs,swift,kt,scala,json',
-                    maxSourceFiles: 12,
-                    maxSourceChars: 60000,
+                    maxSourceFiles: 0,
+                    maxSourceChars: 0,
                     generationFallback: 'fail',
                     selectedSourceFiles: [],
                     provider: 'openai',
@@ -1661,7 +1661,7 @@ ${summaryText || 'No summary generated.'}
                     model: '',
                     apiKey: '',
                     customEndpoint: '',
-                    maxTokens: 16384,
+                    maxTokens: 0,
                     instructions: this._getDefaultAILogSummaryInstructions(),
                     savePath: '',
                     lastSummaryAt: null,
@@ -1744,7 +1744,7 @@ ${summaryText || 'No summary generated.'}
                     routePaths: '/',
                     customScenarios: '',
                     autoExplore: true,
-                    maxAutoInteractions: 8,
+                    maxAutoInteractions: 0,
                     waitAfterActionMs: 500,
                     viewportWidth: 1440,
                     viewportHeight: 900,
@@ -2606,7 +2606,7 @@ ${summaryText || 'No summary generated.'}
                         </div>
                         <div>
                             <label class="block text-xs font-semibold mb-1" style="color: #052e16;">Retry attempts</label>
-                            <input type="number" min="0" max="20" step="1" required value="${this._escapeHTML(row.attempts ?? 0)}" aria-label="Extra retries after failure" class="cfg-runner-retry-attempts w-full aero-input p-2 rounded-lg text-sm font-mono" style="background: rgba(255,255,255,0.86); color: #111827; border-color: rgba(20, 83, 45, 0.35);">
+                            <input type="number" min="0" step="1" required value="${this._escapeHTML(row.attempts ?? 0)}" aria-label="Extra retries after failure" class="cfg-runner-retry-attempts w-full aero-input p-2 rounded-lg text-sm font-mono" style="background: rgba(255,255,255,0.86); color: #111827; border-color: rgba(20, 83, 45, 0.35);">
                         </div>
                         <button type="button" class="cfg-runner-remove-retry rounded-full w-10 h-10 font-bold" data-index="${index}" style="background: #ea580c; color: white; border: 2px solid rgba(124, 45, 18, 0.75);">X</button>
                     </div>
@@ -2792,12 +2792,12 @@ ${summaryText || 'No summary generated.'}
                     </div>
 
                     <div>
-                        <label class="block text-sm mb-1">Max tokens (output limit)</label>
-                        <input type="number" id="cfg-ai-log-max-tokens" value="${this._escapeHTML(config.maxTokens ?? 16384)}"
-                            min="1024" max="65536" step="1024"
+                        <label class="block text-sm mb-1">Output token budget (0 = provider default; Anthropic requires a value)</label>
+                        <input type="number" id="cfg-ai-log-max-tokens" value="${this._escapeHTML(config.maxTokens ?? 0)}"
+                            min="0" step="1"
                             class="w-full aero-input p-2 rounded-lg font-mono text-sm"
                             style="background: rgba(255,255,255,0.12); color: white; border-color: rgba(255,255,255,0.25);">
-                        <p class="text-xs mt-1" style="color: rgba(255,255,255,0.82);">Higher values = longer analysis but more API cost.</p>
+                        <p class="text-xs mt-1" style="color: rgba(255,255,255,0.82);">An optional output budget controls cost. Provider and model limits still apply.</p>
                     </div>
 
                     <div>
@@ -2851,7 +2851,7 @@ ${summaryText || 'No summary generated.'}
                 model: modal.querySelector('#cfg-ai-log-model').value.trim(),
                 apiKey: modal.querySelector('#cfg-ai-log-apikey').value.trim() || config.apiKey || '',
                 customEndpoint: modal.querySelector('#cfg-ai-log-endpoint').value.trim(),
-                maxTokens: parseInt(modal.querySelector('#cfg-ai-log-max-tokens').value, 10) || 16384,
+                maxTokens: parseInt(modal.querySelector('#cfg-ai-log-max-tokens').value, 10) || 0,
                 instructions: modal.querySelector('#cfg-ai-log-instructions').value.trim() || this._getDefaultAILogSummaryInstructions(),
                 savePath: modal.querySelector('#cfg-ai-log-save-path').value.trim()
             };
@@ -3049,9 +3049,9 @@ CRITICAL RULES:
 
                     <!-- Max Tokens -->
                     <div>
-                        <label class="block text-sm text-slate-800 mb-1">Max tokens (output limit)</label>
-                        <input type="number" id="cfg-ai-max-tokens" value="${this._escapeHTML(config.maxTokens ?? 16384)}"
-                            min="1024" max="65536" step="1024"
+                        <label class="block text-sm text-slate-800 mb-1">Output token budget (0 = provider default; Anthropic requires a value)</label>
+                        <input type="number" id="cfg-ai-max-tokens" value="${this._escapeHTML(config.maxTokens ?? 0)}"
+                            min="0" step="1"
                             placeholder="16384"
                             class="w-full aero-input p-2 rounded-lg font-mono text-sm" style="background: rgba(255,255,255,0.1); color: white; border-color: rgba(255,255,255,0.2);">
                         <p class="text-xs text-slate-600 mt-1">Higher values = longer tests but more API cost. If tests get cut off mid-code, increase this.</p>
@@ -3099,15 +3099,15 @@ CRITICAL RULES:
 
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm text-slate-800 mb-1">Max source files</label>
-                            <input type="number" id="cfg-ai-max-files" value="${this._escapeHTML(config.maxSourceFiles || 12)}"
-                                min="1" max="100" step="1"
+                            <label class="block text-sm text-slate-800 mb-1">Source file budget (0 = all)</label>
+                            <input type="number" id="cfg-ai-max-files" value="${this._escapeHTML(config.maxSourceFiles ?? 0)}"
+                                min="0" step="1"
                                 class="w-full aero-input p-2 rounded-lg font-mono text-sm" style="background: rgba(255,255,255,0.1); color: white; border-color: rgba(255,255,255,0.2);">
                         </div>
                         <div>
-                            <label class="block text-sm text-slate-800 mb-1">Max source characters</label>
-                            <input type="number" id="cfg-ai-max-chars" value="${this._escapeHTML(config.maxSourceChars || 60000)}"
-                                min="2000" max="500000" step="1000"
+                            <label class="block text-sm text-slate-800 mb-1">Source character budget (0 = all)</label>
+                            <input type="number" id="cfg-ai-max-chars" value="${this._escapeHTML(config.maxSourceChars ?? 0)}"
+                                min="0" step="1"
                                 class="w-full aero-input p-2 rounded-lg font-mono text-sm" style="background: rgba(255,255,255,0.1); color: white; border-color: rgba(255,255,255,0.2);">
                         </div>
                     </div>
@@ -3201,7 +3201,7 @@ CRITICAL RULES:
             try {
                 // Use electronAPI to list all source files in the cloned repo
                 // List common source file extensions
-                const sourceResponse = await window.LVXMachinaGraph.invoke('sourceFiles',{path:repoPath,extensions:modal.querySelector('#cfg-ai-source-exts').value,maxFiles:500});
+                const sourceResponse = await window.LVXMachinaGraph.invoke('sourceFiles',{path:repoPath,extensions:modal.querySelector('#cfg-ai-source-exts').value,maxFiles:0});
                 const allFiles = (sourceResponse.files||sourceResponse).map(file=>typeof file==='string'?file:file.path);
                 const sourceExtensions = String(modal.querySelector('#cfg-ai-source-exts').value || '')
                     .split(',')
@@ -3317,7 +3317,7 @@ CRITICAL RULES:
                     // Read each selected file's content via Electron API
                     for (const file of selectedFiles) {
                         if (!file.content) {
-                            const response=await window.LVXMachinaGraph.invoke('sourceFiles',{path:findConnectedGitRepo().repoPath,files:[file.path],maxFiles:500,maxSourceChars:2000000,includeContent:true});
+                            const response=await window.LVXMachinaGraph.invoke('sourceFiles',{path:findConnectedGitRepo().repoPath,files:[file.path],maxFiles:0,maxSourceChars:0,includeContent:true});
                             const sourceFile=(response.files||response).find(source=>source.path===file.path);
                             if(!sourceFile||typeof sourceFile.content!=='string')throw new Error('The selected source could not be read.');
                             file.content=sourceFile.content;
@@ -3363,7 +3363,7 @@ CRITICAL RULES:
             try {
                 // Check if electronAPI is available (running in Electron)
                 if (window.LVXMachinaGraph) {
-                    const maxTokens = parseInt(modal.querySelector('#cfg-ai-max-tokens').value) || 16384;
+                    const maxTokens = parseInt(modal.querySelector('#cfg-ai-max-tokens').value) || 0;
                     const result = await window.LVXMachinaGraph.generatePreview({...node,data:{...config,provider,model,apiKey:apiKey||config.apiKey,instructions:userPrompt,systemPrompt,customEndpoint,maxTokens,testMode:resolvedTestMode,maxSourceFiles:Number(modal.querySelector('#cfg-ai-max-files').value),maxSourceChars:Number(modal.querySelector('#cfg-ai-max-chars').value),sourceExtensions:modal.querySelector('#cfg-ai-source-exts').value,testFilename:filename,sourceCode:sourceCodeContext,sourceStrategy:sourceCodeContext?'inline':'prompt-only'}});
                     if (result.success && result.generatedText) {
                         // Strip markdown code fences if the AI included them despite instructions
@@ -3416,8 +3416,8 @@ CRITICAL RULES:
             node.data.testMode = modal.querySelector('#cfg-ai-test-mode').value;
             node.data.sourceStrategy = modal.querySelector('#cfg-ai-source-strategy').value;
             node.data.sourceExtensions = modal.querySelector('#cfg-ai-source-exts').value.trim();
-            node.data.maxSourceFiles = parseInt(modal.querySelector('#cfg-ai-max-files').value, 10) || 12;
-            node.data.maxSourceChars = parseInt(modal.querySelector('#cfg-ai-max-chars').value, 10) || 60000;
+            node.data.maxSourceFiles = parseInt(modal.querySelector('#cfg-ai-max-files').value, 10) || 0;
+            node.data.maxSourceChars = parseInt(modal.querySelector('#cfg-ai-max-chars').value, 10) || 0;
             node.data.generationFallback = modal.querySelector('#cfg-ai-fallback').value;
             node.data.selectedSourceFiles = loadedSourceFiles.length > 0
                 ? loadedSourceFiles.filter(file => file.selected).map(file => file.relativePath || file.path)
@@ -3429,7 +3429,7 @@ CRITICAL RULES:
             node.data.instructions = modal.querySelector('#cfg-ai-instructions').value;
             node.data.generatedCode = modal.querySelector('#cfg-ai-code').value;
             node.data.command = modal.querySelector('#cfg-ai-command').value.trim();
-            node.data.maxTokens = parseInt(modal.querySelector('#cfg-ai-max-tokens').value) || 16384;
+            node.data.maxTokens = parseInt(modal.querySelector('#cfg-ai-max-tokens').value) || 0;
 
             node.data.name = ` AI: ${filename}`;
 
@@ -3524,9 +3524,33 @@ CRITICAL RULES:
         };
     }
 
+    showAPIAtlasConfig(node) {
+        const test = structuredClone(node.data.apiAtlasDefinition), escape = value => this._escapeHTML(String(value ?? '')), binding = window.LVXStudio.state.workspace?.workspaceRoot;
+        const dialog = document.createElement('dialog'); dialog.className = 'aa-node-dialog aa-workspace';
+        const field = (name,label,value,type='text') => `<label>${label}<input name="${name}" type="${type}" value="${escape(value)}" required></label>`;
+        dialog.innerHTML = `<form><h3>Workflow API test copy</h3><p>This workflow keeps its own test definition. Changes here apply when you save the graph. The API map test stays available separately.</p><div class="aa-fields">${field('name','Test name',test.name)}<label>Method<select name="method">${['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'].map(method=>`<option ${method===test.method?'selected':''}>${method}</option>`).join('')}</select></label>${field('url','Full request URL',test.url,'url')}${field('expectedStatus','Expected HTTP status',test.expectedStatus,'number')}${field('timeoutMs','Timeout (ms)',test.timeoutMs,'number')}${field('maxLatency','Maximum response time (ms; 0 = no check)',test.maxLatency||0,'number')}<label>Request headers (JSON)<textarea name="headers">${escape(JSON.stringify(test.headers||{},null,2))}</textarea></label><label>Request body<textarea name="body">${escape(test.body||'')}</textarea></label><label>Expected response headers (JSON)<textarea name="expectedHeaders">${escape(JSON.stringify(test.expectedHeaders||{},null,2))}</textarea></label>${test.kind==='contract'?`<label>Response JSON schema<textarea name="schema">${escape(test.schema===undefined?'':JSON.stringify(test.schema,null,2))}</textarea></label>`:''}</div><p role="alert"></p><div class="aa-actions"><button type="button" data-cancel>Cancel</button><button type="button" data-map>Open endpoint in API map</button><button type="submit">Apply to workflow copy</button></div></form>`;
+        const launcher = document.activeElement;document.body.append(dialog);dialog.showModal();dialog.querySelector('input').focus();
+        dialog.onclose = () => { dialog.remove();launcher?.focus(); };
+        dialog.querySelector('[data-cancel]').onclick = () => dialog.close();
+        dialog.querySelector('[data-map]').onclick = () => {dialog.close();window.dispatchEvent(new CustomEvent('lvx-open-api-atlas',{detail:{endpointId:test.endpointId}}));};
+        dialog.querySelector('form').onsubmit = async event => {
+            event.preventDefault();const submit=dialog.querySelector('[type=submit]');submit.disabled=true;
+            try {
+                const form=new FormData(event.target),next={...test,name:form.get('name'),url:form.get('url'),method:form.get('method'),expectedStatus:Number(form.get('expectedStatus')),timeoutMs:Number(form.get('timeoutMs')),maxLatency:Number(form.get('maxLatency')),headers:JSON.parse(form.get('headers')),expectedHeaders:JSON.parse(form.get('expectedHeaders')),body:form.get('body'),updatedAt:new Date().toISOString()};
+                if(form.has('schema')){if(form.get('schema').trim())next.schema=JSON.parse(form.get('schema'));else delete next.schema;}
+                await window.LVXStudio.invoke('githubStudio','apiValidateTest',{test:next,workspaceRoot:binding});
+                const safe=await window.LVXCredentials.protect(next,'Workflow API test');
+                if(binding!==window.LVXStudio.state.workspace?.workspaceRoot)throw Error('Workspace changed. Reopen the graph in its original project.');
+                node.data={...node.data,name:safe.name,url:safe.url,method:safe.method,expectedStatus:safe.expectedStatus,schema:safe.schema,apiAtlasDefinition:safe};
+                this.render();this._commitHistoryState();dialog.close();
+            } catch(error){dialog.querySelector('[role=alert]').textContent=error.message;submit.disabled=false;}
+        };
+    }
+
     showAPIPerformanceConfig(nodeId) {
         const node = this.nodes.find(n => n.id === nodeId);
         if (!node) return;
+        if (node.data?.apiAtlasDefinition) return this.showAPIAtlasConfig(node);
         const config = node.data || {};
         const modal = document.createElement('div');
         modal.className = 'mg-dialog fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000]';
@@ -3551,15 +3575,15 @@ CRITICAL RULES:
                     </div>
                     <div>
                         <label class="block text-sm mb-1">Duration (seconds)</label>
-                        <input type="number" id="cfg-perf-duration" min="0.01" max="300" step="0.01" value="${this._escapeHTML(config.duration || 30)}" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900">
+                        <input type="number" id="cfg-perf-duration" min="0" step="0.01" value="${this._escapeHTML(config.duration || 30)}" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900">
                     </div>
                     <div>
                         <label class="block text-sm mb-1">Concurrent Connections</label>
-                        <input type="number" id="cfg-perf-connections" min="1" max="64" value="${this._escapeHTML(config.connections || 10)}" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900">
+                        <input type="number" id="cfg-perf-connections" min="1" value="${this._escapeHTML(config.connections || 10)}" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900">
                     </div>
                     <div>
                         <label class="block text-sm mb-1">Pass condition (Max latency ms)</label>
-                        <input type="number" id="cfg-perf-latency" min="0" max="120000" value="${this._escapeHTML(config.maxLatency || 500)}" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900">
+                        <input type="number" id="cfg-perf-latency" min="0" value="${this._escapeHTML(config.maxLatency || 500)}" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900">
                     </div>
                 </div>
                 <div class="flex gap-2 justify-end">
@@ -3586,6 +3610,7 @@ CRITICAL RULES:
     showAPIContractConfig(nodeId) {
         const node = this.nodes.find(n => n.id === nodeId);
         if (!node) return;
+        if (node.data?.apiAtlasDefinition) return this.showAPIAtlasConfig(node);
         const config = node.data || {};
         const modal = document.createElement('div');
         modal.className = 'mg-dialog fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[10000]';
@@ -3796,12 +3821,12 @@ CRITICAL RULES:
                             </select>
                         </div>
                         <div>
-                            <label class="block text-sm mb-1">Max auto interactions</label>
-                            <input type="number" id="cfg-ux-max-actions" value="${this._escapeHTML(config.maxAutoInteractions ?? 8)}" min="1" max="50" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
+                            <label class="block text-sm mb-1">Interaction budget (0 = all)</label>
+                            <input type="number" id="cfg-ux-max-actions" value="${this._escapeHTML(config.maxAutoInteractions ?? 0)}" min="0" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
                         </div>
                         <div>
                             <label class="block text-sm mb-1">Wait after action (ms)</label>
-                            <input type="number" id="cfg-ux-wait-ms" value="${this._escapeHTML(config.waitAfterActionMs ?? 500)}" min="100" max="10000" step="50" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
+                            <input type="number" id="cfg-ux-wait-ms" value="${this._escapeHTML(config.waitAfterActionMs ?? 500)}" min="0" step="50" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
                         </div>
                         <div>
                             <label class="block text-sm mb-1">Continue after failure</label>
@@ -3814,11 +3839,11 @@ CRITICAL RULES:
                     <div class="grid grid-cols-4 gap-4">
                         <div>
                             <label class="block text-sm mb-1">Viewport width</label>
-                            <input type="number" id="cfg-ux-width" value="${this._escapeHTML(config.viewportWidth ?? 1440)}" min="320" max="3840" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
+                            <input type="number" id="cfg-ux-width" value="${this._escapeHTML(config.viewportWidth ?? 1440)}" min="1" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
                         </div>
                         <div>
                             <label class="block text-sm mb-1">Viewport height</label>
-                            <input type="number" id="cfg-ux-height" value="${this._escapeHTML(config.viewportHeight ?? 900)}" min="320" max="2160" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
+                            <input type="number" id="cfg-ux-height" value="${this._escapeHTML(config.viewportHeight ?? 900)}" min="1" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
                         </div>
                         <div>
                             <label class="block text-sm mb-1">Fail on console errors</label>
@@ -3877,10 +3902,10 @@ CRITICAL RULES:
             node.data.routePaths = modal.querySelector('#cfg-ux-route-paths').value || '/';
             node.data.customScenarios = scenarioText;
             node.data.autoExplore = modal.querySelector('#cfg-ux-auto-explore').value === 'true';
-            node.data.maxAutoInteractions = Math.max(1, parseInt(modal.querySelector('#cfg-ux-max-actions').value, 10) || 8);
-            node.data.waitAfterActionMs = Math.max(100, parseInt(modal.querySelector('#cfg-ux-wait-ms').value, 10) || 500);
-            node.data.viewportWidth = Math.max(320, parseInt(modal.querySelector('#cfg-ux-width').value, 10) || 1440);
-            node.data.viewportHeight = Math.max(320, parseInt(modal.querySelector('#cfg-ux-height').value, 10) || 900);
+            node.data.maxAutoInteractions = Number(modal.querySelector('#cfg-ux-max-actions').value);
+            node.data.waitAfterActionMs = Number(modal.querySelector('#cfg-ux-wait-ms').value);
+            node.data.viewportWidth = Number(modal.querySelector('#cfg-ux-width').value);
+            node.data.viewportHeight = Number(modal.querySelector('#cfg-ux-height').value);
             node.data.continueOnFailure = modal.querySelector('#cfg-ux-continue').value === 'true';
             node.data.failOnConsoleErrors = modal.querySelector('#cfg-ux-console-errors').value === 'true';
             node.data.failOnPageErrors = modal.querySelector('#cfg-ux-page-errors').value === 'true';
@@ -4001,7 +4026,7 @@ CRITICAL RULES:
                 <div class="space-y-4 mb-6">
                     <div>
                         <label class="block text-sm mb-1">Delay in milliseconds</label>
-                        <input type="number" min="0" max="86400000" step="1" id="cfg-wait-delay-ms" value="${Number.isFinite(Number(config.delayMs)) ? Number(config.delayMs) : 5000}" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
+                        <input type="number" min="0" step="1" id="cfg-wait-delay-ms" value="${Number.isFinite(Number(config.delayMs)) ? Number(config.delayMs) : 5000}" class="w-full aero-input p-2 rounded-lg bg-white border-slate-300 text-slate-900 font-mono text-sm">
                         <p class="text-xs text-blue-100 mt-1">1000 = 1 second, 5000 = 5 seconds, 60000 = 1 minute.</p>
                     </div>
                     <div>

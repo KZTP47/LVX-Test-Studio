@@ -1,7 +1,7 @@
 class TestHistoryManager {
   constructor() {
     this.STORAGE_KEY = 'test_execution_history';
-    this.MAX_HISTORY_ENTRIES = 1000; // Keep last 1000 executions
+    this.MAX_HISTORY_ENTRIES = 0; // Preserve all executions by default.
   }
 
   // Record a test execution
@@ -24,7 +24,7 @@ class TestHistoryManager {
     history.push(record);
 
     // Keep only MAX_HISTORY_ENTRIES
-    if (history.length > this.MAX_HISTORY_ENTRIES) {
+    if (this.MAX_HISTORY_ENTRIES && history.length > this.MAX_HISTORY_ENTRIES) {
       history.splice(0, history.length - this.MAX_HISTORY_ENTRIES);
     }
 
@@ -39,10 +39,10 @@ class TestHistoryManager {
   }
 
   // Get history for specific suite
-  getSuiteHistory(suiteId, limit = 50) {
+  getSuiteHistory(suiteId, limit = 0) {
     return this.getHistory()
       .filter(r => r.suiteId === suiteId)
-      .slice(-limit);
+      .slice(limit ? -limit : 0);
   }
 
   // Get recent history
@@ -116,7 +116,7 @@ class TestHistoryManager {
           flakyTests.push({
             ...stats,
             flakinessScore: Math.min(failRate, 1 - failRate) * 2, // 0-1 scale
-            recentExecutions: stats.executions.slice(-10)
+            recentExecutions: stats.executions
           });
         }
       }
@@ -161,7 +161,7 @@ class TestHistoryManager {
   }
 
   // Get slowest tests
-  getSlowestTests(limit = 10, history = this.getHistory()) {
+  getSlowestTests(limit = 0, history = this.getHistory()) {
 
     // Group by suite and calculate average execution time
     const suiteAvgTimes = new Map();
@@ -187,15 +187,15 @@ class TestHistoryManager {
       suiteName: stats.suiteName,
       averageTime: Math.round(stats.totalTime / stats.executions.length),
       executionCount: stats.executions.length,
-      slowestTime: Math.max(...stats.executions.map(e => e.executionTime || 0))
+      slowestTime: stats.executions.reduce((max, e) => Math.max(max, e.executionTime || 0), 0)
     }));
 
     // Sort by average time
-    return avgTimes.sort((a, b) => b.averageTime - a.averageTime).slice(0, limit);
+    return avgTimes.sort((a, b) => b.averageTime - a.averageTime).slice(0, limit || undefined);
   }
 
   // Get most frequently run tests
-  getMostRunTests(limit = 10, history = this.getHistory()) {
+  getMostRunTests(limit = 0, history = this.getHistory()) {
     const suiteRunCounts = new Map();
 
     history.forEach(record => {
@@ -217,7 +217,7 @@ class TestHistoryManager {
 
     return Array.from(suiteRunCounts.values())
       .sort((a, b) => b.runCount - a.runCount)
-      .slice(0, limit);
+      .slice(0, limit || undefined);
   }
 
   // Clear old history
@@ -257,9 +257,11 @@ let suiteHistoryChart = null;
 function openReportingDashboard() {
   document.getElementById('reporting-dashboard-modal').classList.remove('hidden');
   refreshDashboard();
+  window.dispatchEvent(new CustomEvent('lvx-reporting-companions',{detail:{open:true}}));
 }
 
 function closeDashboard() {
+  window.dispatchEvent(new CustomEvent('lvx-reporting-companions',{detail:{open:false}}));
   document.getElementById('reporting-dashboard-modal').classList.add('hidden');
 
   // Destroy charts to prevent memory leaks
@@ -286,7 +288,7 @@ function refreshDashboard() {
   renderFlakyTests(history);
   renderSlowestTests(history);
   renderMostRunTests(history);
-  renderRecentExecutions(history.slice(-20).reverse());
+  renderRecentExecutions(history.slice().reverse());
 }
 
 // Render summary statistics
@@ -564,7 +566,7 @@ function renderSuiteHistoryChart(history) {
   }
 
   // Show last 20 executions
-  const recentHistory = history.slice(-20);
+  const recentHistory = history.slice();
 
   suiteHistoryChart = new Chart(ctx, {
     type: 'bar',
@@ -670,7 +672,7 @@ function refreshSecurityDashboard() {
   const counts = source.bySeverity || (typeof source.totalVulnerabilities === 'object' ? source.totalVulnerabilities : {});
   const stats = { ...source, bySeverity: counts, totalVulnerabilities: typeof source.totalVulnerabilities === 'number'
     ? source.totalVulnerabilities : Object.values(counts).reduce((total, n) => total + (Number(n) || 0), 0) };
-  const history = window.securityManager.getHistory(100);
+  const history = window.securityManager.getHistory();
   stats.unavailableScans = history.filter(scan => scan.status === 'ERROR' || scan.error).length;
 
   renderSecuritySummary(stats);
@@ -751,27 +753,17 @@ function renderSecurityTrendChart(history) {
     securityTrendChart.destroy();
   }
 
-  // Group by date (last 14 days)
+  // Keep every recorded date; chart layout may scroll without dropping history.
   const dailyData = new Map();
-  const now = new Date();
-
-  // Initialize last 14 days
-  for (let i = 13; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-    const dateStr = date.toISOString().split('T')[0];
-    dailyData.set(dateStr, { vulnerabilities: 0, scans: 0 });
+  for (const scan of history) {
+    const parsed = new Date(scan.timestamp);
+    if (!Number.isFinite(parsed.getTime())) continue;
+    const dateStr = parsed.toISOString().split('T')[0];
+    const data = dailyData.get(dateStr) || { vulnerabilities: 0, scans: 0 };
+    data.scans++; data.vulnerabilities += scan.summary?.total || 0; dailyData.set(dateStr, data);
   }
-
-  // Aggregate history
-  history.forEach(scan => {
-    const dateStr = new Date(scan.timestamp).toISOString().split('T')[0];
-    if (dailyData.has(dateStr)) {
-      const data = dailyData.get(dateStr);
-      data.scans++;
-      data.vulnerabilities += scan.summary?.total || 0;
-    }
-  });
+  const ordered = [...dailyData].sort(([a], [b]) => a.localeCompare(b));
+  dailyData.clear(); for (const [day, data] of ordered) dailyData.set(day, data);
 
   const labels = Array.from(dailyData.keys()).map(d =>
     new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -858,7 +850,7 @@ function renderTopVulnerabilities(history) {
   // Sort by count and take top 10
   const topVulns = Array.from(vulnCounts.values())
     .sort((a, b) => b.count - a.count)
-    .slice(0, 10);
+    .slice();
 
   if (topVulns.length === 0) {
     const unavailable = history.some(scan => (!Array.isArray(scan.vulnerabilities) || scan.vulnerabilities.length === 0) && (scan.summary?.total > 0 || Object.entries(scan.summary || {}).some(([key, count]) => ['critical', 'high', 'medium', 'low'].includes(key) && count > 0)));

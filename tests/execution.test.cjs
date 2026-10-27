@@ -212,7 +212,8 @@ test('EXE-16 latest engine cycle errors persist ERROR and timestamp over old SUC
 function runnerHarness() {
     const dirs=[];const pending=[];const realRequire=require;
     function requireStub(name) {
-        if(name==='child_process') return {execFile:(runtime,args,options,callback)=>pending.push({runtime,args,options,callback})};
+        if(name==='child_process') return {execFile:(runtime,args,options,callback)=>{const child=new (require('node:events').EventEmitter)();pending.push({runtime,args,options,callback:(...values)=>{callback(...values);child.emit('close');}});return child;}};
+        if(name==='./legacy-processes.cjs') return require(path.join(root,'services','legacy-processes.cjs'));
         if(name==='fs') return {...fs,mkdtempSync:prefix=>{const dir=fs.mkdtempSync(prefix);dirs.push(dir);return dir;}};
         return realRequire(name);
     }
@@ -225,6 +226,7 @@ function runnerHarness() {
 test('DRV-01 child runner uses packaged Electron Node and explicit module/browser paths outside launch cwd',async()=>{
     const h=runnerHarness();const result=h.run('console.log(42)');const child=h.pending[0];
     assert.equal(child.runtime,'C:/installed/LVX.exe');assert.equal(child.options.env.ELECTRON_RUN_AS_NODE,'1');assert.equal(child.options.windowsHide,true);
+    assert.equal(child.options.timeout,0);assert.equal(child.options.maxBuffer,Infinity);
     assert.equal(child.options.env.NODE_PATH,path.join(root,'node_modules'));assert.equal(child.options.cwd,path.dirname(child.args[0]));assert.notEqual(child.options.cwd,root);
     child.callback(null,'42','');assert.equal((await result).status,'SUCCESS');assert.equal(fs.existsSync(h.dirs[0]),false);
 });

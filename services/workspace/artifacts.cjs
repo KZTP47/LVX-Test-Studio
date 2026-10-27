@@ -14,7 +14,7 @@ function listArtifacts(store, { runId } = {}) {
 }
 function putArtifact(store, { runId, name, mimeType = 'application/octet-stream', dataBase64 }) {
   key(runId, 'Run id');
-  if (typeof name !== 'string' || !name || name.length > 500 || typeof mimeType !== 'string' || mimeType.length > 200) throw new WorkspaceError('VALIDATION', 'Artifact needs a name and media type.');
+  if (typeof name !== 'string' || !name || typeof mimeType !== 'string') throw new WorkspaceError('VALIDATION', 'Artifact needs a name and media type.');
   const data = decodeBase64(dataBase64);
   const artifact = { id: crypto.randomUUID(), runId, name, mimeType, bytes: data.length, checksum: sha256(data), created: new Date().toISOString() };
   store.transaction(() => { store.db.prepare('INSERT INTO artifacts VALUES(?,?,?,?,?,?,?)').run(artifact.id, runId, name, mimeType, data, artifact.checksum, artifact.created); store.bump(); });
@@ -42,15 +42,15 @@ function retention(store, { maxAgeDays, maxBytes, dryRun = true } = {}) {
     const { artifacts } = listArtifacts(store);
     let remainingBytes = artifacts.reduce((sum, artifact) => sum + artifact.bytes, 0);
     const removed = [];
-    const cutoff = maxAgeDays === undefined ? null : Date.now() - maxAgeDays * 86400000;
+    const cutoff = !maxAgeDays ? null : Date.now() - maxAgeDays * 86400000;
     for (const artifact of artifacts) {
       if (artifact.pinned) continue;
-      if (cutoff !== null && Date.parse(artifact.created) < cutoff || maxBytes !== undefined && remainingBytes > maxBytes) {
+      if (cutoff !== null && Date.parse(artifact.created) < cutoff || maxBytes > 0 && remainingBytes > maxBytes) {
         removed.push(artifact); remainingBytes -= artifact.bytes;
       }
     }
     if (!dryRun && removed.length) { for (const artifact of removed) store.db.prepare('DELETE FROM artifacts WHERE id=?').run(artifact.id); store.bump(); }
-    return { status: 'SUCCESS', dryRun, removed, removedBytes: removed.reduce((sum, artifact) => sum + artifact.bytes, 0), remainingBytes, limitBlockedByPinned: maxBytes !== undefined && remainingBytes > maxBytes, pinnedRuns: store.db.prepare('SELECT COUNT(*) AS count FROM pinned_runs').get().count };
+    return { status: 'SUCCESS', dryRun, removed, removedBytes: removed.reduce((sum, artifact) => sum + artifact.bytes, 0), remainingBytes, limitBlockedByPinned: maxBytes > 0 && remainingBytes > maxBytes, pinnedRuns: store.db.prepare('SELECT COUNT(*) AS count FROM pinned_runs').get().count };
   });
 }
 module.exports = { listArtifacts, putArtifact, readArtifact, pinArtifact, retention };

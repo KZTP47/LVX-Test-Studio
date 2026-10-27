@@ -102,6 +102,7 @@
   const {element,run,workflow}=session;if(!element)return;
   if(session.editor?._executionOwner===session.token)session.editor.setRunResults?.(run.results||{});
   element.querySelector('[data-run-status]').textContent=run.status;
+  const browserLabel=element.querySelector('[data-run-browser]');browserLabel.hidden=!['headed','headless'].includes(run.browserMode);browserLabel.textContent='E2E browser: '+(run.browserMode==='headed'?'Headed (visible)':'Headless (background)');
   const dockButton=[...document.querySelectorAll('#mg-session-dock button')].find(button=>button.dataset.key==='run:'+run.id);if(dockButton)dockButton.textContent=`${workflow.name||'Workflow'} · ${run.status}`;
   element.querySelector('[data-run-stop]').disabled=terminal.has(run.status);
   const results=run.results||{};element.querySelector('tbody').innerHTML=(workflow.nodes||[]).map(node=>{const result=results[node.id]||{};return `<tr data-node-id="${esc(node.id)}" data-run-status="${esc(result.status||'PENDING')}"><td>${esc(node.data?.name||node.id)}</td><td>${esc(result.status||'PENDING')}</td><td>${esc(result.message||result.error||'')}${node.data?.missingSuiteReference?` <span>Saved test ${esc(node.data.suiteId)} could not be found.</span>${session.editor?` <button data-relink-suite="${esc(node.id)}">${icon('folder')} Choose saved test</button>`:''}`:''}${terminal.has(result.status)?` <button data-node-output="${esc(node.id)}">${icon('file')} View output</button>`:''}</td><td>${esc(Array.isArray(result.attempts)?result.attempts.length:result.attempt??'')}</td></tr>`;}).join('');
@@ -109,22 +110,23 @@
   for(const button of element.querySelectorAll('[data-node-output]'))button.onclick=()=>showOutput(workflow.nodes.find(node=>node.id===button.dataset.nodeOutput),results[button.dataset.nodeOutput]);
   const log=[run.stdout,run.stderr,run.error,...Object.entries(results).flatMap(([id,r])=>[r.stdout&&`${id}: ${r.stdout}`,r.stderr&&`${id}: ${r.stderr}`,r.output,r.error])].filter(Boolean).join('\n');
   element.querySelector('[data-run-log]').textContent=log||'Waiting for execution evidence.';
-  element.querySelector('[data-run-evidence]').textContent=JSON.stringify(run,null,2);
+  const evidenceElement=element.querySelector('[data-run-evidence]');if(evidenceElement.parentElement.open)evidenceElement.textContent=JSON.stringify(run,null,2);
   syncAuthoringResults(session);
   if(terminal.has(run.status)){window.LVXCodeReview?.settleRun(run.id,run.status);for(const waiter of session.waiters.splice(0))waiter.resolve(clone(run));}else for(const pending of run.pendingReviews||[])showReview({...pending,id:run.id});
  }
  function mountRun(run,workflow,editor,binding=context,token=null){
   installStyles();const element=document.createElement('section');element.className='mg-run';element.setAttribute('role','dialog');element.setAttribute('aria-label','Pipeline execution');
   element.innerHTML=`<header><h2>${esc(workflow.name||'Workflow run')}</h2><strong data-run-status>${esc(run.status)}</strong><button data-run-minimize title="Minimize run">${icon('minus')} Minimize</button><button data-run-export>${icon('download')} Export log</button><button data-run-stop>${icon('stop')} Stop</button><button data-run-close>${icon('close')} Close</button></header><div class="mg-run-body"><table><thead><tr><th>Node</th><th>Status</th><th>Evidence</th><th>Attempts</th></tr></thead><tbody></tbody></table><h3>Execution log</h3><pre data-run-log></pre><details><summary>Full persisted evidence</summary><pre data-run-evidence></pre></details></div><p data-run-error role="alert"></p>`;
+  const browserLabel=document.createElement('p');browserLabel.dataset.runBrowser='';browserLabel.setAttribute('role','status');element.querySelector('.mg-run-body').prepend(browserLabel);
   document.body.appendChild(element);const session={run,workflow:clone(workflow),element,waiters:[],editor,applied:new Map(),binding,token};sessions.set(run.id,session);
   const minimize=()=>{element.classList.add('hidden');dockItem('run:'+run.id,`${workflow.name||'Workflow'} · ${session.run.status}`,()=>element.classList.remove('hidden'));};
   element.querySelector('[data-run-minimize]').onclick=minimize;
   element.querySelector('[data-run-export]').onclick=()=>download('workflow-'+run.id+'.json',JSON.stringify(session.run,null,2),'application/json');
   element.querySelector('[data-run-close]').onclick=()=>{if(!terminal.has(session.run.status))minimize();else{element.remove();sessions.delete(run.id);clearDock('run:'+run.id);}};
   element.querySelector('[data-run-stop]').onclick=async()=>{const target=element.querySelector('[data-run-error]');try{await invoke('cancel',{id:run.id},binding);session.run=await invoke('getRun',{id:run.id},binding);displayRun(session);}catch(error){target.textContent=error.message;}};
-  displayRun(session);return session;
+  element.querySelector('[data-run-evidence]').parentElement.ontoggle=()=>{if(element.querySelector('[data-run-evidence]').parentElement.open)element.querySelector('[data-run-evidence]').textContent=JSON.stringify(session.run,null,2);};displayRun(session);return session;
  }
- function handleEvent(event){if(event.domain!=='execution')return;if(event.type==='review-request')showReview(event);const session=sessions.get(event.id);if(session&&event.type==='run'){session.run=event;displayRun(session);}}
+ function handleEvent(event){if(event.domain!=='execution')return;if(event.type==='review-request')showReview(event);const session=sessions.get(event.id);if(session&&event.type==='run'){session.run={...session.run,...event};displayRun(session);}if(session&&event.type==='output'&&['stdout','stderr'].includes(event.stream)){session.run[event.stream]=(session.run[event.stream]||'')+event.text;const log=session.element.querySelector('[data-run-log]');if(log.textContent==='Waiting for execution evidence.')log.textContent='';log.appendChild(document.createTextNode(event.text));}}
  function showReview(request){
   if(!request.decisionId||!window.LVXCodeReview)return;
   const session=sessions.get(request.id),node=session?.workflow.nodes.find(n=>n.id===request.nodeId);
@@ -154,7 +156,16 @@
   if(window.LVXReviewImported&&!await window.LVXReviewImported(protectedWorkflow))return {status:'CANCELLED',cancelled:true};
   const {waitForCompletion=false,...executionOptions}=options;
   const editor=authoringEditor||binding.editor,token={};if(editor){editor._executionOwner=token;editor.setRunResults?.({});}
-  const run=await invoke('runWorkflow',{workflow:protectedWorkflow,...executionOptions},binding);
+  let run;
+  try{run=await invoke('runWorkflow',{workflow:protectedWorkflow,...executionOptions},binding);}
+  catch(error){
+   if(error.acceptImportReview&&editor?.container){
+    let target=editor.container.closest('.studio-graph-screen')?.querySelector('.studio-graph-notice')||editor.container.querySelector('[data-import-run-notice]');
+    if(!target){target=document.createElement('p');target.dataset.importRunNotice='';editor.container.prepend(target);}
+    const offer=failure=>{target.textContent=failure.message;target.setAttribute('role','alert');window.LVXImportReviewRecovery?.append(target,failure,async()=>{try{if(editor!==context.editor)throw Error('The graph changed. Retry from the current graph.');await failure.acceptImportReview();await runWorkflow(workflow,options,authoringEditor);target.textContent='Imported content accepted.';}catch(next){offer(next);}});};offer(error);
+   }
+   throw error;
+  }
   const session=mountRun(run,protectedWorkflow,editor&&snapshot.nodes.every(node=>editor.nodes.some(candidate=>candidate.id===node.id))?editor:null,binding,token);binding.onRun?.(run,protectedWorkflow);
   if(!terminal.has(run.status))void poll(session);
   return waitForCompletion?waitForRun(run.id):run;
@@ -189,7 +200,7 @@
   if(node.type==='ai-unit-test')extras+=`<label>Optional inline source code<textarea data-extra="sourceCode">${esc(d.sourceCode||'')}</textarea></label>`;
   if(['unit-test-runner','ai-unit-test','code-review','log-collector','ai-log-summary'].includes(node.type))extras+=`<label><input type="checkbox" data-extra="overwrite" ${d.overwrite?'checked':''}> Replace an existing generated file when approved</label>`;
   if(node.type==='push-deploy')extras+=`<label><input type="checkbox" data-extra="enabled" ${d.enabled===true?'checked':''}> Enable this deployment step</label><p class="mg-hint">Deployment also requires explicit deployment approval in the connected review session.</p>`;
-  const details=document.createElement('details');details.className='mg-execution-details';details.innerHTML=`<summary>Execution and failure handling</summary><div class="grid">${extras}${input('Total attempts (including first run)','retryAttempts',typeof storedRetry==='object'?storedRetry.maxAttempts??1:storedRetry??1,'number','min="1" max="21"')}${input('Retry delay (ms)','retryDelay',storedRetry?.backoffMs??0,'number','min="0" max="60000"')}<label>When this node fails<select data-extra="onFailure"><option value="stop" ${storedFailure!=='continue'?'selected':''}>Stop dependent execution</option><option value="continue" ${storedFailure==='continue'?'selected':''}>Continue independent work</option></select></label>${input('Exclusive resource names (comma separated)','resources',Array.isArray(storedResources)?storedResources.join(', '):String(storedResources))}</div>`;
+  const details=document.createElement('details');details.className='mg-execution-details';details.innerHTML=`<summary>Execution and failure handling</summary><div class="grid">${extras}${input('Total attempts (including first run)','retryAttempts',typeof storedRetry==='object'?storedRetry.maxAttempts??1:storedRetry??1,'number','min="1"')}${input('Retry delay (ms)','retryDelay',storedRetry?.backoffMs??0,'number','min="0"')}<label>When this node fails<select data-extra="onFailure"><option value="stop" ${storedFailure!=='continue'?'selected':''}>Stop dependent execution</option><option value="continue" ${storedFailure==='continue'?'selected':''}>Continue independent work</option></select></label>${input('Exclusive resource names (comma separated)','resources',Array.isArray(storedResources)?storedResources.join(', '):String(storedResources))}</div>`;
   const footer=inner.querySelector(':scope > .flex.justify-end');
   const formBody=inner.querySelector(':scope > .overflow-y-auto');
   if(formBody)formBody.appendChild(details);else inner.insertBefore(details,footer||error);
@@ -206,7 +217,7 @@
    const before=clone(node);
    try{
     const extras=Object.fromEntries(Array.from(details.querySelectorAll('[data-extra]')).map(field=>[field.dataset.extra,field.type==='checkbox'?field.checked:field.type==='number'?Number(field.value):field.value]));
-    if(!Number.isInteger(extras.retryAttempts)||extras.retryAttempts<1||extras.retryAttempts>21)throw Error('Total attempts must be a whole number from 1 to 21 (the first run plus up to 20 retries).');
+    if(!Number.isSafeInteger(extras.retryAttempts)||extras.retryAttempts<1)throw Error('Total attempts must be a positive whole number.');
     const priorRetry=node.retry??node.data.retry;const retry=priorRetry&&typeof priorRetry==='object'?{...priorRetry}:{};if(node.retry!==undefined||extras.retryAttempts!==1||extras.retryDelay!==0)node.retry={...retry,maxAttempts:extras.retryAttempts,backoffMs:extras.retryDelay};node.onFailure=extras.onFailure;node.resources=extras.resources.split(',').map(s=>s.trim()).filter(Boolean);
     for(const key of ['cwd','engine','overwrite','enabled','sourceCode'])if(Object.hasOwn(extras,key))node.data[key]=extras[key];
     await original?.call(save,event);

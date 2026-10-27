@@ -2,25 +2,30 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {requestAI}=require('../services/ai-provider.cjs');
 const {protectConfiguration}=require('../services/protect-configuration.cjs');
-test('AI provider resolves references in main, bounds the response and keeps keys out of errors/results',async()=>{
+test('AI provider resolves references in main, preserves an explicit token budget and keeps keys out of errors/results',async()=>{
   const key='private fixture/key?',reference='secret:12345678-1234-4234-8234-123456789abc';let seen;
   const response=await requestAI({provider:'custom',customEndpoint:'http://127.0.0.1:34567/chat',apiKey:reference,prompt:'Check the source',maxTokens:321},{resolveSecret:r=>{assert.equal(r,reference);return key;},fetch:async(url,options)=>{seen={url,options};return new Response(JSON.stringify({choices:[{message:{content:'assert(true); // '+key}}]}));}});
   assert.equal(seen.options.headers.Authorization,'Bearer '+key);assert.equal(JSON.parse(seen.options.body).max_tokens,321);assert.match(response.generatedText,/REDACTED/);assert.ok(!response.generatedText.includes(key));
   await assert.rejects(requestAI({provider:'custom',customEndpoint:'http://localhost/chat',apiKey:key},{fetch:async()=>new Response(encodeURIComponent(key),{status:401})}),error=>!error.message.includes(key)&&!error.message.includes(encodeURIComponent(key)));
 });
-test('AI transport rejects unsupported providers, invalid limits/JSON, empty and oversized responses',async()=>{
+test('AI transport accepts uncapped defaults and large complete responses while rejecting invalid budgets, provider protocols, JSON and empty content',async()=>{
   const base={provider:'custom',customEndpoint:'http://localhost/chat',prompt:'x'};
   await assert.rejects(requestAI({...base,provider:'unknown'}),/Unknown AI/);
-  await assert.rejects(requestAI({...base,maxTokens:0}),/Token limit/);
+  for(const maxTokens of [-1,1.5,Infinity,true])await assert.rejects(requestAI({...base,maxTokens}),/Token budget/);
+  await assert.rejects(requestAI({...base,provider:'anthropic',maxTokens:0}),/Anthropic requires an explicit positive/);
+  let body;const noBudget=await requestAI({...base,maxTokens:0},{fetch:async(url,options)=>{body=JSON.parse(options.body);return Response.json({choices:[{message:{content:'complete'}}]});}});assert.equal(noBudget.generatedText,'complete');assert.equal(Object.hasOwn(body,'max_tokens'),false);
   await assert.rejects(requestAI({...base,customEndpoint:'file:///tmp/input'}),/HTTP/);
   await assert.rejects(requestAI(base,{fetch:async()=>new Response('broken')}),/invalid JSON/);
   await assert.rejects(requestAI(base,{fetch:async()=>new Response(JSON.stringify({choices:[]}))}),/no generated text/);
-  await assert.rejects(requestAI(base,{fetch:async()=>new Response('x'.repeat(8*1024*1024+1))}),/8 MB/);
+  const large='x'.repeat(8*1024*1024+1),accepted=await requestAI(base,{fetch:async()=>Response.json({choices:[{message:{content:large}}]})});assert.equal(accepted.generatedText,large);
 });
 test('AI transport forwards abort signal and combines multipart provider text',async()=>{
   const controller=new AbortController();let observed;
   const result=await requestAI({provider:'google',apiKey:'fixture',signal:controller.signal},{fetch:async(url,{signal})=>{observed=signal;return new Response(JSON.stringify({candidates:[{content:{parts:[{text:'first'},{text:' second'}]}}]}));}});
-  assert.equal(result.generatedText,'first second');controller.abort();assert.equal(observed.aborted,true);
+  assert.equal(result.generatedText,'first second');assert.equal(observed.aborted,false);
+  const pendingController=new AbortController();let fetched;const started=new Promise(resolve=>{fetched=resolve;});
+  const pending=requestAI({provider:'google',apiKey:'fixture',signal:pendingController.signal},{fetch:async(url,{signal})=>{fetched();return new Promise((resolve,reject)=>{signal.addEventListener('abort',()=>reject(new DOMException('Fixture request cancelled','AbortError')),{once:true});});}});
+  await started;pendingController.abort();await assert.rejects(pending,{name:'AbortError',message:'Fixture request cancelled'});
 });
 test('Legacy import protection handles auth tokens, JSON headers, typed secret parameters and password fields',async()=>{
   const stored=[];const protect=value=>protectConfiguration(value,{storeSecret:async payload=>{stored.push(payload);return {reference:'secret:'+require('node:crypto').randomUUID()};}});

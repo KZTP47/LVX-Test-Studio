@@ -6,9 +6,10 @@ const path = require('node:path');
 const { createNativeTransport, SUPPORTS, MAX_BYTES, UUID, errorState } = require('./native.cjs');
 const conversations = require('./conversations.cjs');
 const { createSessionProof } = require('./session-proof.cjs');
+const { nonnegative } = require('../capacity.cjs');
 
 const COLLECTIONS = ['agent-boards', 'agent-sessions', 'agent-runs', 'agent-messages', 'agent-events'];
-const KEY = /^[a-zA-Z0-9][a-zA-Z0-9_.@-]{0,63}$/;
+const KEY = /^[a-zA-Z0-9][a-zA-Z0-9_.@-]*$/;
 const TERMINAL = new Set(['completed', 'blocked', 'limit', 'partial', 'error', 'cancelled', 'interrupted']);
 const now = () => new Date().toISOString();
 const copy = value => JSON.parse(JSON.stringify(value));
@@ -18,10 +19,10 @@ const digest = value => crypto.createHash('sha256').update(JSON.stringify(value)
 const boardRuntime = b => ({ mode: b.mode, maxTurns: b.maxTurns, concurrency: b.concurrency, acceptanceWorkflowId: b.acceptanceWorkflowId, nodes: b.nodes.map(({ position, appearance, ...n }) => n), edges: b.edges, ...(b.projects?.length?{projects:b.projects.map(({id,path})=>({id,path}))}:{}) });
 const projectPath = (board,node,root) => (node.activeProjectId || node.projectId) ? board.projects?.find(project=>project.id===(node.activeProjectId || node.projectId))?.path : root;
 const runSnapshotFingerprint = run => digest([run.id, run.boardId, run.kind, run.maxTurns, run.requestFingerprint, run.acceptanceCriteria, run.taskContext || null]);
-function fail(code, message) { const error = Error(message); error.code = code; throw error; }
-function id(value, label) { if (typeof value !== 'string' || !KEY.test(value)) fail('VALIDATION', `${label} needs a simple identifier of at most 64 characters.`); return value; }
-function text(value, label, max = MAX_BYTES) {
-  if (typeof value !== 'string' || Buffer.byteLength(value) > max) fail('VALIDATION', `${label} must be text no larger than ${max} bytes.`);
+function fail(code, message, details) { const error = Error(message); error.code = code; if(details)error.details=details;throw error; }
+function id(value, label) { if (typeof value !== 'string' || !KEY.test(value)) fail('VALIDATION', `${label} needs a simple identifier using letters, digits, dots, underscores, @ or hyphens.`); return value; }
+function text(value, label) {
+  if (typeof value !== 'string') fail('VALIDATION', `${label} must be text.`);
   return value;
 }
 
@@ -35,16 +36,16 @@ function normalizeAppearance(input) {
   const icon = input.icon ?? 'robot';
   if (!['robot', 'code', 'shield', 'book', 'target', 'network'].includes(icon)) fail('VALIDATION', 'Choose a supported agent icon.');
   const avatar = input.avatar ?? '';
-  if (typeof avatar !== 'string' || avatar.length > 350000) fail('VALIDATION', 'Agent picture must be a raster image smaller than 256 KB.');
+  if (typeof avatar !== 'string') fail('VALIDATION', 'Agent picture must be a raster image.');
   if (avatar) {
     const match = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(avatar);
     if (!match) fail('VALIDATION', 'Agent picture must be an embedded PNG, JPEG or WebP image.');
     const bytes = Buffer.from(match[2], 'base64');
     const valid = match[1] === 'png' ? bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) : match[1] === 'jpeg' ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255 : bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP';
-    if (!valid || bytes.length > 256 * 1024 || bytes.toString('base64') !== match[2]) fail('VALIDATION', 'Agent picture has invalid or oversized image data.');
+    if (!valid || bytes.toString('base64') !== match[2]) fail('VALIDATION', 'Agent picture has invalid image data.');
   }
   const zoom = input.zoom === undefined ? 1 : input.zoom, hue = input.hue === undefined ? 0 : input.hue;
-  if (!Number.isFinite(zoom) || zoom < 1 || zoom > 3 || !Number.isFinite(hue) || hue < 0 || hue > 360) fail('VALIDATION', 'Picture zoom or hue is outside its allowed range.');
+  if (!Number.isFinite(zoom) || zoom <= 0 || !Number.isFinite(hue)) fail('VALIDATION', 'Picture zoom or hue is outside its allowed range.');
   const bubbleColor=input.bubbleColor??color;if(!/^#[a-f0-9]{6}$/i.test(bubbleColor))fail('VALIDATION','Chat bubble color must be a six-digit hex color.');
   return { color, ...(input.bubbleColor!==undefined?{bubbleColor}:{}), icon, avatar, zoom, hue };
 }
@@ -77,41 +78,44 @@ function historicalInput(message) {
 
 function normalizeBoard(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) fail('VALIDATION', 'Board must be an object.');
+  if(input.maxTurns!==undefined&&input.maxTurns!==null&&(!Number.isSafeInteger(input.maxTurns)||input.maxTurns<0))fail('VALIDATION','Turn budget must be a nonnegative safe integer; 0 means no budget.');
+  if(input.concurrency!==undefined&&input.concurrency!==null&&(!Number.isSafeInteger(input.concurrency)||input.concurrency<1))fail('VALIDATION','Concurrency must be a positive safe integer.');
+  for(const node of Array.isArray(input.nodes)?input.nodes:[]){if(node?.apiConfig){nonnegative(node.apiConfig.maxTokens??0,'Output token budget');nonnegative(node.apiConfig.timeoutMs??0,'API deadline');}}
   const b = copy(input);
   if (b.schemaVersion !== 1) fail('VALIDATION', 'Unsupported agent board schema.');
   id(b.id, 'Board ID');
-  text(b.name, 'Board name', 300); if (!b.name.trim()) fail('VALIDATION', 'Give the board a name.');
+  text(b.name, 'Board name'); if (!b.name.trim()) fail('VALIDATION', 'Give the board a name.');
   b.goal = text(b.goal ?? '', 'Goal');
   b.acceptanceCriteria = text(b.acceptanceCriteria ?? '', 'Acceptance criteria');
   if (!['manual', 'linked'].includes(b.mode)) fail('VALIDATION', 'Board mode must be manual or linked.');
-  b.maxTurns ??= 10; b.concurrency ??= 1;
-  if (!Number.isInteger(b.maxTurns) || b.maxTurns < 1 || b.maxTurns > 100) fail('VALIDATION', 'Turn budget must be 1–100.');
-  if (!Number.isInteger(b.concurrency) || b.concurrency < 1 || b.concurrency > 4) fail('VALIDATION', 'Concurrency must be 1–4.');
-  if (!Array.isArray(b.nodes) || b.nodes.length > 40 || !Array.isArray(b.edges) || b.edges.length > 200) fail('VALIDATION', 'Board supports up to 40 agents and 200 directed links.');
+  b.maxTurns ??= 0; b.concurrency ??= 1;
+  if (!Number.isSafeInteger(b.maxTurns) || b.maxTurns < 0) fail('VALIDATION', 'Turn budget must be a nonnegative safe integer; 0 means no budget.');
+  if (!Number.isSafeInteger(b.concurrency) || b.concurrency < 1) fail('VALIDATION', 'Concurrency must be a positive safe integer.');
+  if (!Array.isArray(b.nodes) || !Array.isArray(b.edges)) fail('VALIDATION', 'Board agents and directed links must be lists.');
   const nodes = new Set(), edges = new Set(), pairs = new Set();
   const projects=new Set();
   if(b.projects!==undefined){
-    if(!Array.isArray(b.projects)||b.projects.length>20)fail('VALIDATION','A board supports up to twenty project folders.');
+    if(!Array.isArray(b.projects))fail('VALIDATION','Project folders must be a list.');
     b.projects=b.projects.map(project=>{
       id(project.id,'Project folder ID');if(project.id==='__workspace__'||projects.has(project.id))fail('VALIDATION','Project folder IDs must be unique.');projects.add(project.id);
       text(project.name,'Folder name',300);if(!project.name.trim())fail('VALIDATION','Give each project folder a name.');
       text(project.path,'Folder path',4000);if(!path.isAbsolute(project.path)||project.path.includes('\0'))fail('VALIDATION','Project folder paths must be absolute.');
-      if(!project.position||![project.position.x,project.position.y].every(value=>Number.isFinite(value)&&Math.abs(value)<=1e6))fail('VALIDATION','Folder positions must be finite canvas coordinates.');
+      if(!project.position||![project.position.x,project.position.y].every(value=>Number.isFinite(value)))fail('VALIDATION','Folder positions must be finite canvas coordinates.');
       return {id:project.id,name:project.name,path:project.path,position:{...project.position}};
     });
   }
   b.nodes = b.nodes.map(node => {
     id(node.id, 'Agent ID'); if (nodes.has(node.id)) fail('VALIDATION', 'Agent IDs must be unique.'); nodes.add(node.id);
-    text(node.name, 'Agent name', 300); if (!node.name.trim()) fail('VALIDATION', 'Give each agent a name.');
+    text(node.name, 'Agent name'); if (!node.name.trim()) fail('VALIDATION', 'Give each agent a name.');
     if (!SUPPORTS[node.provider]) fail('VALIDATION', 'Unknown agent provider.');
     const permission = node.permission || 'native';
     if (!SUPPORTS[node.provider].permissions.includes(permission)) fail('VALIDATION', `${node.provider} does not support the selected permission guarantee.`);
-    const model = text(node.model ?? '', 'Model', 300), effort = text(node.effort ?? '', 'Effort', 30);
+    const model = text(node.model ?? '', 'Model'), effort = text(node.effort ?? '', 'Effort');
     if (model && (/^\s*-/.test(model) || /[\s\u0000-\u001f]/.test(model))) fail('VALIDATION', 'Model must be a model identifier without whitespace or a leading option dash.');
     if (effort && (!SUPPORTS[node.provider].effort || !['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'].includes(effort))) fail('VALIDATION', 'Unsupported provider effort selection.');
     if (node.provider === 'claude' && ['none', 'minimal', 'ultra'].includes(effort)) fail('VALIDATION', 'Claude effort must be low, medium, high, xhigh or max.');
-    if (!node.position || !Number.isFinite(node.position.x) || !Number.isFinite(node.position.y) || Math.abs(node.position.x) > 1e6 || Math.abs(node.position.y) > 1e6) fail('VALIDATION', 'Agent positions must be finite canvas coordinates.');
-    const result = { id: node.id, name: node.name, provider: node.provider, model, effort, permission, instructions: text(node.instructions ?? '', 'Explicit agent additions', 128 * 1024), position: { x: node.position.x, y: node.position.y } };
+    if (!node.position || !Number.isFinite(node.position.x) || !Number.isFinite(node.position.y)) fail('VALIDATION', 'Agent positions must be finite canvas coordinates.');
+    const result = { id: node.id, name: node.name, provider: node.provider, model, effort, permission, instructions: text(node.instructions ?? '', 'Explicit agent additions'), position: { x: node.position.x, y: node.position.y } };
     if(node.projectId!==undefined&&node.projectId!==''){if(!projects.has(node.projectId))fail('VALIDATION','Assign the agent to a folder that exists on this board.');result.projectId=node.projectId;}
     const assigned=node.projectIds??(node.projectId?[node.projectId]:[]);if(node.projectId&&Array.isArray(assigned)&&!assigned.includes(node.projectId))assigned.push(node.projectId);if(!Array.isArray(assigned)||assigned.some(p=>p!==''&&!projects.has(p)))fail('VALIDATION','Choose project folders on this board.');if(node.projectIds!==undefined||node.projectId!==undefined||node.activeProjectId!==undefined){result.projectIds=[...new Set(assigned)];result.activeProjectId=node.activeProjectId??node.projectId??'';}if(result.activeProjectId&&!result.projectIds.includes(result.activeProjectId))fail('VALIDATION','Active folder must be assigned to the agent.');
     if (node.appearance !== undefined) result.appearance = normalizeAppearance(node.appearance);
@@ -119,14 +123,16 @@ function normalizeBoard(input) {
       const c = node.apiConfig || {};
       if (!['custom', 'openai', 'anthropic', 'google'].includes(c.provider)) fail('VALIDATION', 'Choose an API provider.');
       if (c.apiKey && !/^secret:[a-f0-9-]{36}$/i.test(c.apiKey)) fail('VALIDATION', 'API keys must use an OS-protected secret reference.');
-      const apiModel = text(c.model ?? model, 'API model', 300);
+      const apiModel = text(c.model ?? model, 'API model');
       if ((model || apiModel) && /^\s*-|\s/.test(model || apiModel)) fail('VALIDATION', 'API model must be a model identifier without whitespace or a leading option dash.');
       if (c.provider !== 'custom' && !(model || apiModel).trim()) fail('VALIDATION', 'Choose an explicit API model for OpenAI, Anthropic or Google; there is no generic API provider default.');
       if (c.provider === 'custom') {
         let url; try { url = new URL(c.customEndpoint); } catch { fail('VALIDATION', 'Custom API endpoint must be an HTTP(S) URL.'); }
         if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) fail('VALIDATION', 'API endpoint cannot contain embedded credentials.');
       }
-      result.apiConfig = { provider: c.provider, model: apiModel, customEndpoint: text(c.customEndpoint ?? '', 'API endpoint', 4000), ...(c.apiKey ? { apiKey: c.apiKey } : {}) };
+      const maxTokens=nonnegative(c.maxTokens ?? 0,'Output token budget'), timeoutMs=nonnegative(c.timeoutMs ?? 0,'API deadline');
+      if(c.provider==='anthropic'&&!maxTokens)fail('VALIDATION','Anthropic requires an explicit positive output token budget.');
+      result.apiConfig = { provider: c.provider, model: apiModel, customEndpoint: text(c.customEndpoint ?? '', 'API endpoint'), ...(c.apiKey ? { apiKey: c.apiKey } : {}), ...(maxTokens?{maxTokens}:{}),...(timeoutMs?{timeoutMs}:{}) };
     }
     return result;
   });
@@ -141,17 +147,17 @@ function normalizeBoard(input) {
   if(b.projects!==undefined)result.projects=b.projects;
   if (b.acceptanceWorkflowId) result.acceptanceWorkflowId = id(b.acceptanceWorkflowId, 'Acceptance workflow ID');
   if (b.view) {
-    if (![b.view.zoom, b.view.panX, b.view.panY].every(Number.isFinite) || b.view.zoom < 0.1 || b.view.zoom > 4) fail('VALIDATION', 'Canvas view has invalid coordinates or zoom.');
+    if (![b.view.zoom, b.view.panX, b.view.panY].every(Number.isFinite) || b.view.zoom <= 0) fail('VALIDATION', 'Canvas view has invalid coordinates or zoom.');
     result.view = { zoom: b.view.zoom, panX: b.view.panX, panY: b.view.panY };
     if(b.view.workspacePosition!==undefined){if(!b.view.workspacePosition||![b.view.workspacePosition.x,b.view.workspacePosition.y].every(value=>Number.isFinite(value)&&Math.abs(value)<=1e6))fail('VALIDATION','Workspace folder position is invalid.');result.view.workspacePosition={x:b.view.workspacePosition.x,y:b.view.workspacePosition.y};}
   }
   if (b.panels !== undefined) {
-    if (!Array.isArray(b.panels) || b.panels.length > 40) fail('VALIDATION', 'Board supports up to forty chat windows.');
+    if (!Array.isArray(b.panels)) fail('VALIDATION', 'Chat windows must be a list.');
     const panelIds = new Set();
     result.panels = b.panels.map(p => {
       if (!p || !nodes.has(p.agentId) || panelIds.has(p.agentId)) fail('VALIDATION', 'Each chat window must refer to a different existing agent.');
       panelIds.add(p.agentId);
-      if (![p.x,p.y,p.width,p.height].every(Number.isFinite) || Math.abs(p.x)>100000 || Math.abs(p.y)>100000 || p.width<280 || p.width>2400 || p.height<240 || p.height>2400 || typeof p.minimized !== 'boolean') fail('VALIDATION', 'Chat window position or size is invalid.');
+      if (![p.x,p.y,p.width,p.height].every(Number.isFinite) || p.width<=0 || p.height<=0 || typeof p.minimized !== 'boolean') fail('VALIDATION', 'Chat window position or size is invalid.');
       if(p.maximized!==undefined&&typeof p.maximized!=='boolean')fail('VALIDATION','Chat maximized state must be boolean.');
       return { agentId:p.agentId,x:p.x,y:p.y,width:p.width,height:p.height,minimized:p.minimized,...(p.maximized!==undefined?{maximized:p.maximized}:{}) };
     });
@@ -167,7 +173,9 @@ function createService(options = {}) {
   const projectFolders = require('./project-folders.cjs').createProjectFolders(options.dataDir);
   let root = options.workspaceRoot ? fs.realpathSync(options.workspaceRoot) : null;
   let initialized = false, closed = false, transitioning = false, epoch = 0, chain = Promise.resolve(), pumpScheduled = false;
+  let capabilityCache=null;
   const generatedPreviews = new Map();
+  const authoringRuns = new Map();
   const active = new Map(), quarantined = new Set(), acceptanceRuns = new Map(), admissions = new Map();
   const admissionFingerprint = (board, message) => digest([root, boardRuntime(board), message.id, message.boardId, message.agentId, message.from, message.to, message.role, message.text, message.runId, message.generation, message.sourceGeneration, message.parentMessageId, message.edgeId, message.taskContext || null, message.transportInput, message.runSnapshotFingerprint]);
   function admit(board, messages) { for (const m of messages) if (m.state === 'queued') admissions.set(m.id, admissionFingerprint(board, m)); }
@@ -189,7 +197,7 @@ function createService(options = {}) {
   }
   const read = (collection, key) => call('read', { collection, id: key });
   const list = async collection => (await call('list', { collection })).records;
-  const values = async (collection, boardId) => (await list(collection)).filter(r => r.value.boardId === boardId);
+  const values = async (collection, boardId) => (await call('list',{collection,boardId})).records.filter(r => r.value.boardId === boardId);
   async function boardRecord(boardId) { id(boardId, 'Board ID'); const r = await read('agent-boards', boardId); if (!r) fail('NOT_FOUND', 'Agent board was not found in this workspace.'); return r; }
   async function sessionRecord(boardId, agentId) { return read('agent-sessions', `${boardId}:${agentId}`); }
   const mutation = (collection, recordId, value, record) => ({ collection, id: recordId, expectedRevision: record?.revision ?? null, value });
@@ -213,6 +221,17 @@ function createService(options = {}) {
   }
   async function state(boardId) { return (await read('agent-events', `${boardId}:cursor`))?.value || { sequence: 0, paused: false }; }
   function newSessionValue(board, node, generation = 1) { return { boardId: board.id, agentId: node.id, provider: node.provider, workspaceRoot: root, workingDirectory:node.provider==='api'?root:projectPath(board,node,root), activeProjectId:node.activeProjectId||node.projectId||'', name:'Conversation '+generation, nativeSessionId: null, generation, status: 'idle', createdAt: now() }; }
+  function chatRecovery(board,node,session){
+    let reason,message,code='SESSION_MISMATCH';
+    if(session.workspaceRoot!==root){reason='project';message='This chat was saved in another project.';}
+    else if(!node||session.provider!==node.provider||session.boardId!==board.id||session.agentId!==node.id){reason='agent';message='This chat belongs to a different agent setup.';}
+    else if(node.provider!=='api'&&(session.workingDirectory||session.workspaceRoot)!==projectPath(board,node,root)){reason='folder';message='This chat was started in another folder.';}
+    else if(session.nativeSessionId&&!sessionProof.verify(session)){reason='connection';message='LVX can’t reconnect to this saved chat on this computer.';}
+    else if(quarantined.has(`${board.id}:${node.id}`)){reason='unsaved-reply';code='SESSION_RESET_REQUIRED';message='The last reply couldn’t be saved. Check what the agent already did before continuing.';}
+    else if(node.provider!=='api'&&!['idle','running'].includes(session.status)&&!session.nativeSessionId){reason='interrupted';code='SESSION_RESET_REQUIRED';message='The previous chat was interrupted and can’t reconnect.';}
+    else return null;
+    return {code,reason,action:'newSession',expectedGeneration:session.generation,message:message+' Start a new chat to send your message. Your earlier messages will stay saved.'};
+  }
   function message(board, node, run, role, body, extra = {}) {
     return { id: crypto.randomUUID(), boardId: board.id, agentId: node.id, from: role === 'user' ? 'user' : node.id, to: node.id, role, text: body, createdAt: now(), state: 'queued', runId: run.id, runSnapshotFingerprint: runSnapshotFingerprint(run), ...(run.taskContext ? { taskContext: copy(run.taskContext) } : {}), ...extra };
   }
@@ -228,7 +247,7 @@ function createService(options = {}) {
       for (const s of await values('agent-sessions', b.id)) {
         const node = b.value.nodes.find(n => n.id === s.value.agentId);
         const invalidBinding = s.value.workspaceRoot !== root || !node || s.value.provider !== node.provider || s.id !== `${b.id}:${s.value.agentId}` || (s.value.nativeSessionId && !sessionProof.verify(s.value));
-        if (invalidBinding) changes.push(mutation('agent-sessions', s.id, { ...s.value, status: 'blocked', lastError: 'Imported or foreign native conversation binding is untrusted. Explicitly create a new conversation before running this agent.' }, s));
+        if (invalidBinding) changes.push(mutation('agent-sessions', s.id, { ...s.value, status: 'blocked', lastError: chatRecovery(b.value,node,s.value)?.message||'This saved chat can’t reconnect. Start a new chat to continue. Your earlier messages will stay saved.' }, s));
         else if (s.value.status === 'running') changes.push(mutation('agent-sessions', s.id, { ...s.value, status: 'interrupted', lastError: 'Previous process ended during a turn. Resume identity may be available; no automatic retry.' }, s));
       }
       if (changes.length) { events.push({ kind: 'recovery-interrupted', messageIds: changes.filter(c => c.collection === 'agent-messages').map(c => c.id), message: 'Pending and running work requires explicit review; nothing was replayed.' }); await transaction(b.id, changes, events); }
@@ -258,7 +277,6 @@ function createService(options = {}) {
       if ((await state(board.id)).paused) continue;
       const queued = (await values('agent-messages', board.id)).filter(r => r.value.state === 'queued').sort((a, b) => a.value.sequence - b.value.sequence);
       for (const mr of queued) {
-        if (active.size >= 4) break;
         const m = mr.value, agentKey = `${board.id}:${m.agentId}`;
         if (active.has(agentKey) || quarantined.has(agentKey)) continue;
         if ([...active.values()].filter(a => a.boardId === board.id).length >= board.concurrency) break;
@@ -283,7 +301,7 @@ function createService(options = {}) {
             await refreshRun(board.id, m.runId); continue;
           }
         }
-        if (rr.value.turns >= rr.value.maxTurns) {
+        if (rr.value.maxTurns > 0 && rr.value.turns >= rr.value.maxTurns) {
           await transaction(board.id, [mutation('agent-messages', m.id, { ...m, state: 'limit', error: 'Run turn budget reached before delivery.' }, mr)], [{ kind: 'turn-limit', runId: m.runId, messageId: m.id }]);
           await refreshRun(board.id, m.runId); continue;
         }
@@ -317,7 +335,7 @@ function createService(options = {}) {
     const onProgress = update => {
       const work=active.get(board.id+':'+node.id);
       if(binding!==root||signal.aborted||!work||work.messageId!==m.id)return;
-      const progress={status:String(update.status||'Working…').slice(0,200),text:redact(String(update.text||'')).slice(0,MAX_BYTES),updatedAt:now()};
+      const progress={status:String(update.status||'Working…'),text:redact(String(update.text||'')),updatedAt:now()};
       work.progress=progress;
       if(Date.now()-(work.lastProgressEmit||0)<100)return;work.lastProgressEmit=Date.now();
       // Ephemeral UI output is attempt-bound; it is never a second executable message.
@@ -358,7 +376,6 @@ function createService(options = {}) {
     else if (!output.trim()) { status = 'error'; error = 'API returned no assistant text.'; }
     else if (result.success === false) { status = 'error'; error = result.error || 'API request failed.'; }
     else if (result.completionStatus !== 'COMPLETE' && !(!result.completionStatus && ['stop', 'end_turn', 'stop_sequence', 'STOP'].includes(result.finishReason))) { status = 'partial'; error = 'API returned text without an explicit completion receipt. Output was retained; automatic peer delivery was withheld.'; }
-    if (Buffer.byteLength(output) > MAX_BYTES) return { status: 'partial', text: '', error: 'API output exceeded the safety limit; no silent truncation was performed.' };
     if (signal.aborted) status = 'cancelled';
     return { status, text: output, error, protocol: [], metadata: { transport: 'configured-api', nativeSession: false, historyMessages: history.length, finishReason: result.finishReason || null, completionStatus: result.completionStatus || 'UNKNOWN', usage: result.usage || null } };
   }
@@ -384,12 +401,28 @@ function createService(options = {}) {
     const turnEvidence = { messageId: running.id, agentId: node.id, generation: session.generation, status: result.status, nativeSessionId: nextSession.nativeSessionId, ...(result.invocation ? { invocation: result.invocation } : {}), ...(result.metadata ? { metadata: result.metadata } : {}), protocol: result.protocol || [], stderr: result.stderr || '', ...(safeError ? { error: safeError } : {}) };
     const nextRun = { ...rr.value, turnEvidence: [...(rr.value.turnEvidence || []), turnEvidence] };
     if (result.status === 'completed' && assistant && (rr.value.kind === 'collaboration' || (rr.value.kind === 'goal' && board.mode === 'linked'))) {
+      // An uncapped run completes after each delivery route reaches its leaves.
+      // Cycles may iterate when the user explicitly supplies a turn budget;
+      // uncapped routes never replay an ancestor automatically forever.
+      const ancestors = new Set([node.id]);
+      if (rr.value.maxTurns === 0) {
+        let ancestor = running;
+        const visited = new Set();
+        while (ancestor && !visited.has(ancestor.id)) {
+          visited.add(ancestor.id); ancestors.add(ancestor.agentId);
+          ancestor = ancestor.parentMessageId ? (await read('agent-messages', ancestor.parentMessageId))?.value : null;
+        }
+      }
       const targets = rr.value.recipientId ? (node.id===rr.value.starterId?[{id:'direct-'+rr.value.id,source:node.id,target:rr.value.recipientId}]:[]) : board.edges.filter(e=>e.enabled&&e.source===node.id);
       for (const edge of targets) {
+        if (rr.value.maxTurns === 0 && ancestors.has(edge.target)) {
+          events.push({kind:'route-completed',runId:running.runId,from:node.id,to:edge.target,reason:'Ancestor already participated in this delivery route.'});
+          continue;
+        }
         const target = board.nodes.find(n => n.id === edge.target), ts = await sessionRecord(board.id, target.id);
         if (!ts) continue;
         const peer = message(board, target, rr.value, 'peer', result.text, { from: node.id, to: target.id, generation: ts.value.generation, sourceGeneration: session.generation, parentMessageId: assistant.id, edgeId: edge.id });
-        if (rr.value.turns >= rr.value.maxTurns) { peer.state = 'limit'; peer.error = 'Turn budget reached; peer body preserved but was not delivered.'; }
+        if (rr.value.maxTurns > 0 && rr.value.turns >= rr.value.maxTurns) { peer.state = 'limit'; peer.error = 'Turn budget reached; peer body preserved but was not delivered.'; }
         newMessages.push(peer); events.push({ kind: peer.state === 'limit' ? 'turn-limit' : 'peer-queued', runId: running.runId, messageId: peer.id, from: node.id, to: target.id, parentMessageId: assistant.id });
       }
     }
@@ -420,7 +453,7 @@ function createService(options = {}) {
     else {
       if (!board.goal.trim()) fail('VALIDATION', 'Write a project goal before running agents.');
       starters = payload.agentIds?.length ? payload.agentIds : board.nodes.slice(0, 1).map(n => n.id);
-      if (!Array.isArray(starters) || !starters.length || new Set(starters).size !== starters.length || starters.length > board.maxTurns) fail('VALIDATION', 'Select distinct starter agents within the turn budget.');
+      if (!Array.isArray(starters) || !starters.length || new Set(starters).size !== starters.length || (board.maxTurns > 0 && starters.length > board.maxTurns)) fail('VALIDATION', 'Select distinct starter agents within the turn budget.');
     }
     if (!starters.every(a => board.nodes.some(n => n.id === a))) fail('VALIDATION', 'Choose agents belonging to this board.');
     const taskContext = kind === 'goal' ? { goal: board.goal, acceptanceCriteria: board.acceptanceCriteria } : null;
@@ -431,15 +464,13 @@ function createService(options = {}) {
       const m = (await values('agent-messages', board.id)).find(r => r.value.runId === existing.id && r.value.role === 'user');
       return kind === 'manual' ? { message: m?.value, runId: existing.id } : { runId: existing.id };
     }
-    const run = { ...(payload.recipientId?{recipientId:payload.recipientId,starterId:payload.agentId}:{}), id: payload.requestId, boardId: board.id, kind, status: 'queued', acceptance: 'UNREVIEWED', acceptanceCriteria: board.acceptanceCriteria, ...(taskContext ? { taskContext } : {}), createdAt: now(), startSequence: (await state(board.id)).sequence + 1, turns: 0, maxTurns: kind === 'manual' ? 1 : Math.max(payload.recipientId?2:1,board.maxTurns), requestFingerprint: fingerprint, turnEvidence: [] };
+    const run = { ...(payload.recipientId?{recipientId:payload.recipientId,starterId:payload.agentId}:{}), id: payload.requestId, boardId: board.id, kind, status: 'queued', acceptance: 'UNREVIEWED', acceptanceCriteria: board.acceptanceCriteria, ...(taskContext ? { taskContext } : {}), createdAt: now(), startSequence: (await state(board.id)).sequence + 1, turns: 0, maxTurns: kind === 'manual' ? 1 : board.maxTurns === 0 ? 0 : Math.max(payload.recipientId?2:1,board.maxTurns), requestFingerprint: fingerprint, turnEvidence: [] };
     const changes = [mutation('agent-runs', run.id, run)], messages = [];
     for (const agentId of starters) {
       const node = board.nodes.find(n => n.id === agentId), sr = await sessionRecord(board.id, agentId);
       const session = sr?.value || newSessionValue(board, node);
       if(node.provider!=='api')projectFolders.assertAllowed(root,projectPath(board,node,root));
-      if (session.provider !== node.provider || session.workspaceRoot !== root || (node.provider!=='api'&&(session.workingDirectory||session.workspaceRoot)!==projectPath(board,node,root)) || session.boardId !== board.id || session.agentId !== node.id || (session.nativeSessionId && !sessionProof.verify(session))) fail('SESSION_MISMATCH', 'Session binding is foreign, imported or does not match this provider/workspace/folder. Create a new conversation explicitly.');
-      if (quarantined.has(`${board.id}:${agentId}`)) fail('SESSION_RESET_REQUIRED', 'A previous turn could not persist its result. Review effects and explicitly create a new conversation before sending.');
-      if (node.provider !== 'api' && session.status !== 'idle' && session.status !== 'running' && !session.nativeSessionId) fail('SESSION_RESET_REQUIRED', 'Previous native execution has no proven session identity. Review effects and explicitly create a new conversation; no fresh session was started.');
+      const recovery=chatRecovery(board,node,session);if(recovery)fail(recovery.code,recovery.message,{recovery});
       if (!sr) changes.push(mutation('agent-sessions', `${board.id}:${agentId}`, session));
       messages.push(message(board, node, run, 'user', kind !== 'goal' ? payload.text : board.goal, { generation: session.generation }));
     }
@@ -461,21 +492,29 @@ function createService(options = {}) {
   async function handleLocked(action, payload) {
     assertBinding(payload);
     await initialize();
-    if (action === 'capabilities') {
-      const providers = []; for (const provider of ['codex', 'claude', 'gemini']) providers.push(await native.probe(provider));
-      providers.push({ id: 'api', name: 'Configured API', installed: !!requestAI, login: 'native-login-not-checked', supports: SUPPORTS.api });
-      return { providers, limits: { maxTurns: 100, concurrency: 4, globalConcurrency: 4, maxAgents: 40, maxLinks: 200, messageBytes: MAX_BYTES, nativeOutputBytes: MAX_BYTES, snapshotPage: 500 } };
-    }
     if (action === 'validateBoard') { try { normalizeBoard(payload.board); return { valid: true, errors: [] }; } catch (e) { return { valid: false, errors: [e.message] }; } }
-    if(action==='configureProvider'){if(!native.configure)fail('UNSUPPORTED','This native adapter does not support choosing a tool.');return native.configure(payload.provider,payload.path);}
+    if(action==='configureProvider'){if(!native.configure)fail('UNSUPPORTED','This native adapter does not support choosing a tool.');const result=await native.configure(payload.provider,payload.path);capabilityCache=null;return result;}
     if(action==='loginInvocation'){if(!native.loginInvocation)fail('UNSUPPORTED','This native adapter does not support native login.');return native.loginInvocation(payload.provider);}
     if (action === 'listBoards') return { records: await list('agent-boards') };
     if (action === 'approveProjectFolder') return projectFolders.approve(root,payload.path);
     if (action === 'projectFolderStatus') return projectFolders.status(root,payload.path);
     if (action === 'listWorkflows') return { records: await list('workflows') };
     if (action === 'saveBoard') {
-      const board = normalizeBoard(payload.board), prior = await read('agent-boards', board.id);
+      const incoming = copy(payload.board);
+      if (payload.runtimeOnly === true) for (const node of incoming.nodes || []) delete node.appearance;
+      const board = normalizeBoard(incoming), prior = await read('agent-boards', board.id);
       if ((prior?.revision ?? null) !== payload.expectedRevision) fail('CONFLICT', 'Board changed in another window. Reload before saving.');
+      if (payload.runtimeOnly === true && prior) {
+        // Never accept cosmetic changes through a message-triggered save.
+        // Keep even legacy cosmetic data byte-for-byte; explicit picture saves
+        // still validate the image independently before changing it.
+        if (prior.value.view !== undefined) board.view = copy(prior.value.view);
+        for (const node of board.nodes) {
+          const saved = prior.value.nodes.find(old => old.id === node.id);
+          if (saved?.appearance !== undefined) node.appearance = copy(saved.appearance);
+          if (saved) node.position = copy(saved.position);
+        }
+      }
       if (prior) {
         const pending = (await values('agent-messages', board.id)).some(m => ['queued', 'running'].includes(m.value.state));
         if ((pending || acceptanceRuns.has(board.id)) && digest(boardRuntime(prior.value)) !== digest(boardRuntime(board))) fail('ACTIVE_RUN', 'Stop active or queued turns and acceptance checks before changing executable agent settings or links. Goal wording is snapshotted per run.');
@@ -503,27 +542,36 @@ function createService(options = {}) {
     const br = await boardRecord(payload.boardId), board = br.value;
     switch (action) {
       case 'getBoard': return { record: br };
+      case 'savePicture': {
+        if (payload.expectedRevision !== br.revision) fail('CONFLICT', 'This board changed in another window. Refresh the agents, then choose the picture again.');
+        const node = board.nodes.find(n => n.id === payload.agentId);
+        if (!node) fail('NOT_FOUND', 'This agent is no longer on this board.');
+        if (typeof payload.avatar !== 'string') fail('VALIDATION', 'Choose a picture, or explicitly remove the current picture.');
+        // Save only cosmetic data from this request. No draft settings, folder
+        // changes, conversation resets or imported executable content are applied.
+        node.appearance = normalizeAppearance({ ...node.appearance, avatar: payload.avatar });
+        await transaction(board.id, [mutation('agent-boards', board.id, board, br)], [{ kind: 'picture-saved', agentId: node.id }]);
+        return { record: await read('agent-boards', board.id) };
+      }
       case 'deleteBoard': {
         if ((await values('agent-messages', board.id)).some(r => ['queued', 'running'].includes(r.value.state)) || [...active.values()].some(a => a.boardId === board.id) || acceptanceRuns.has(board.id)) fail('ACTIVE_RUN', 'Stop and drain this board before deleting it.');
         if (payload.expectedRevision !== br.revision) fail('CONFLICT', 'Board changed before deletion.');
         const records = [{ collection: 'agent-boards', id: br.id, expectedRevision: br.revision, delete: true }];
         for (const c of COLLECTIONS.slice(1)) for (const r of await values(c, board.id)) records.push({ collection: c, id: r.id, expectedRevision: r.revision, delete: true });
-        if (records.length > 10000) fail('LIMIT', 'Board history exceeds one atomic deletion. Export and use workspace retention tools.');
         await call('transact', { records }); return { deleted: true };
       }
       case 'previewGeneratedTests': {
         const generated=require('./generated-tests.cjs');
         const parsed=await generated.validateGeneratedTests(generated.parseGeneratedTests(payload.text,payload.filename));
         const preview=await require('./test-import.cjs').previewTestImport(parsed,{read});
-        const token=crypto.randomUUID();if(generatedPreviews.size>=25)generatedPreviews.delete(generatedPreviews.keys().next().value);generatedPreviews.set(token,{...preview,boardId:board.id,root,epoch,created:Date.now()});
-        for(const [key,value] of generatedPreviews)if(Date.now()-value.created>15*60*1000)generatedPreviews.delete(key);
+        const token=crypto.randomUUID();generatedPreviews.set(token,{...preview,boardId:board.id,root,epoch,created:Date.now()});
         return {...preview,token};
       }
       case 'importGeneratedTests': {
         const tokens=payload.tokens||[payload.token];
-        if(!Array.isArray(tokens)||!tokens.length||tokens.length>25||new Set(tokens).size!==tokens.length)fail('VALIDATION','Choose up to 25 distinct reviewed exports.');
+        if(!Array.isArray(tokens)||!tokens.length||new Set(tokens).size!==tokens.length)fail('VALIDATION','Choose distinct reviewed exports.');
         const previews=tokens.map(token=>generatedPreviews.get(token));
-        if(previews.some(p=>!p||p.root!==root||p.epoch!==epoch||p.boardId!==board.id||Date.now()-p.created>15*60*1000))fail('STALE_PREVIEW','Choose the file again to review it in this workspace.');
+        if(previews.some(p=>!p||p.root!==root||p.epoch!==epoch||p.boardId!==board.id))fail('STALE_PREVIEW','Choose the file again to review it in this workspace.');
         if(payload.reviewed!==true)fail('REVIEW_REQUIRED','Review the test source before importing.');
         const helper=require('./test-import.cjs');
         const plan=await helper.planTestImport(previews,{read,mode:payload.mode||'library',bundleName:payload.bundleName,duplicatePolicy:payload.duplicatePolicy,duplicatePolicies:payload.duplicatePolicies});
@@ -533,22 +581,22 @@ function createService(options = {}) {
       }
       case 'snapshot': {
         const after = payload.afterSequence ?? 0, limit = payload.limit ?? 200;
-        if (!Number.isSafeInteger(after) || after < 0 || !Number.isInteger(limit) || limit < 1 || limit > 500) fail('VALIDATION', 'Snapshot cursor must be nonnegative and page size 1–500.');
+        if (!Number.isSafeInteger(after) || after < 0 || !Number.isSafeInteger(limit) || limit < 0) fail('VALIDATION', 'Snapshot cursor and page size must be nonnegative safe integers; page size 0 returns all remaining history.');
         const s = await state(board.id);
         const messages = (await values('agent-messages', board.id)).map(r => r.value), events = (await values('agent-events', board.id)).map(r => r.value).filter(e => e.recordType !== 'cursor');
         const page = [...messages.map(value => ({ kind: 'message', value })), ...events.map(value => ({ kind: 'event', value }))].filter(x => x.value.sequence > after).sort((a, b) => a.value.sequence - b.value.sequence);
-        const items = page.slice(0, limit), pageEvents = items.filter(x => x.kind === 'event').map(x => x.value);
+        const items = limit === 0 ? page : page.slice(0, limit), pageEvents = items.filter(x => x.kind === 'event').map(x => x.value);
         const referenced = new Set(pageEvents.flatMap(e => [...(e.messageIds || []), ...(e.messageId ? [e.messageId] : [])]));
         const pageMessages = new Map(items.filter(x => x.kind === 'message').map(x => [x.value.id, x.value]));
         for (const m of messages) if (referenced.has(m.id)) pageMessages.set(m.id, m);
-        const sessions = (await values('agent-sessions', board.id)).map(({value}) => {const {nativeSessionProof,conversations:stored,...session}=value;return {...session,conversations:conversations.summaries(value)};});
-        return { activity: [...active.values()].filter(w=>w.boardId===board.id).map(w=>({agentId:w.agentId,messageId:w.messageId,startedAt:w.startedAt,...w.progress})), board: br, sessions, runs: (await values('agent-runs', board.id)).map(r => r.value), messages: [...pageMessages.values()].sort((a, b) => a.sequence - b.sequence), events: pageEvents, cursor: items.at(-1)?.value.sequence ?? after, hasMore: page.length > limit, paused: s.paused, latestSequence: s.sequence, acceptanceRunning: acceptanceRuns.has(board.id) };
+        const sessions = (await values('agent-sessions', board.id)).map(({value}) => {const {nativeSessionProof,conversations:stored,...session}=value;const recovery=chatRecovery(board,board.nodes.find(n=>n.id===value.agentId),value);return {...session,...(recovery?{recovery}:{}),conversations:conversations.summaries(value)};});
+        return { activity: [...active.values()].filter(w=>w.boardId===board.id).map(w=>({agentId:w.agentId,messageId:w.messageId,startedAt:w.startedAt,...w.progress})), board: br, sessions, runs: (await values('agent-runs', board.id)).map(r => r.value), messages: [...pageMessages.values()].sort((a, b) => a.sequence - b.sequence), events: pageEvents, cursor: items.at(-1)?.value.sequence ?? after, hasMore: limit > 0 && page.length > limit, paused: s.paused, latestSequence: s.sequence, acceptanceRunning: acceptanceRuns.has(board.id) };
       }
       case 'send': {
         const pending=(await values('agent-messages',board.id)).some(r=>['running','queued'].includes(r.value.state));
         if(payload.recipientId){
           if(payload.recipientId===payload.agentId||!board.nodes.some(n=>n.id===payload.recipientId))fail('VALIDATION','Choose another agent on this board.');
-          if(!pending){const edge=board.edges.find(e=>e.source===payload.agentId&&e.target===payload.recipientId);if(edge)edge.enabled=true;else board.edges.push({id:crypto.randomUUID(),source:payload.agentId,target:payload.recipientId,enabled:true});board.mode='linked';board.maxTurns=Math.max(2,board.maxTurns);await transaction(board.id,[mutation('agent-boards',br.id,board,br)],[{kind:'route-enabled',from:payload.agentId,to:payload.recipientId}]);}
+          if(!pending){const edge=board.edges.find(e=>e.source===payload.agentId&&e.target===payload.recipientId);if(edge)edge.enabled=true;else board.edges.push({id:crypto.randomUUID(),source:payload.agentId,target:payload.recipientId,enabled:true});board.mode='linked';if(board.maxTurns>0)board.maxTurns=Math.max(2,board.maxTurns);await transaction(board.id,[mutation('agent-boards',br.id,board,br)],[{kind:'route-enabled',from:payload.agentId,to:payload.recipientId}]);}
           payload.collaborate=true;
         } else if(payload.collaborate&&!board.edges.some(e=>e.enabled&&e.source===payload.agentId))fail('VALIDATION','Choose a recipient in this chat, or connect this agent to another agent.');
         return submit(board,payload,payload.collaborate?'collaboration':'manual');
@@ -562,7 +610,10 @@ function createService(options = {}) {
       case 'cancel': if (payload.runId && (await read('agent-runs', payload.runId))?.value?.boardId !== board.id) fail('NOT_FOUND', 'Run does not belong to this board.'); if(payload.agentId&&!board.nodes.some(n=>n.id===payload.agentId))fail('NOT_FOUND','Agent was not found.');await cancelMatching(board.id, payload.runId,payload.agentId); return { cancelled: true };
       case 'newSession': case 'selectConversation': case 'archiveConversation': case 'restoreConversation': case 'deleteConversation': case 'renameConversation': {
         const node=board.nodes.find(n=>n.id===payload.agentId);if(!node)fail('NOT_FOUND','Agent was not found.');
-        if(action==='newSession')await cancelMatching(board.id,null,node.id);
+        if(action==='newSession'){
+          const before=await sessionRecord(board.id,node.id);if(payload.expectedGeneration!==before?.value.generation)fail('CONFLICT','This chat changed in another window. Your message is still here. Check the conversation and try again.');
+          await cancelMatching(board.id,null,node.id);
+        }
         const sr=await sessionRecord(board.id,node.id),current=sr.value;
         if(action!=='newSession'&&([...active.values()].some(a=>a.boardId===board.id&&a.agentId===node.id)||(await values('agent-messages',board.id)).some(r=>r.value.agentId===node.id&&['queued','running'].includes(r.value.state))))fail('ACTIVE_RUN','This agent is working. Stop its run or wait, then change chats.');
         if(action==='newSession'&&payload.expectedGeneration!==current.generation)fail('CONFLICT','Conversation generation changed. Refresh and try again.');
@@ -590,6 +641,20 @@ function createService(options = {}) {
 
   async function handle(action, payload = {}) {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) fail('VALIDATION', 'Agent action payload must be an object.');
+    if(action==='capabilities'){
+      const request=await serialized(async()=>{
+        assertBinding(payload);await initialize();
+        if(capabilityCache&&(capabilityCache.pending||!payload.refresh&&Date.now()-capabilityCache.at<30000))return capabilityCache;
+        const captured={root,epoch},entry={pending:true,at:Date.now(),promise:null};
+        entry.promise=Promise.all(['codex','claude','gemini'].map(provider=>native.probe(provider))).then(providers=>serialized(()=>{
+          assertBinding(payload);if(root!==captured.root||epoch!==captured.epoch)fail('WORKSPACE_CHANGED','Workspace changed during provider discovery.');
+          providers.push({id:'api',name:'Configured API',installed:!!requestAI,login:'native-login-not-checked',supports:SUPPORTS.api});
+          return {providers,limits:{maxTurns:0,concurrency:0,globalConcurrency:0,maxAgents:0,maxLinks:0,messageBytes:0,nativeOutputBytes:0,snapshotPage:0}};
+        })).finally(()=>{entry.pending=false;entry.at=Date.now();});
+        entry.promise.catch(()=>{if(capabilityCache===entry)capabilityCache=null;});capabilityCache=entry;return entry;
+      });
+      return copy(await request.promise);
+    }
     if(action==='connection'){
       const captured=await serialized(async()=>{assertBinding(payload);return{root,epoch};});
       if(payload.provider==='api')return {provider:'api',state:'configuration',ready:null,modelPromptSent:false,summary:'Review the endpoint, model and encrypted credential in Agent settings. Connection repair does not send a test prompt.'};
@@ -640,24 +705,88 @@ function createService(options = {}) {
     return serialized(() => handleLocked(action, payload));
   }
 
+  async function authors(payload = {}) {
+    return serialized(async () => {
+      assertBinding(payload);
+      const choices = ['codex','claude','gemini'].map(provider => ({id:'native:'+provider,provider,name:provider === 'codex' ? 'Codex subscription / native login' : provider === 'claude' ? 'Claude Code subscription / native login' : 'Gemini native login'}));
+      const {PROVIDERS,descriptor}=require('./api-authors.cjs');
+      const profiles=await list('api-ai-providers');
+      for(const [provider,name] of Object.entries(PROVIDERS)){
+        const profile=profiles.find(row=>row.id===provider);
+        choices.push(profile?descriptor(profile):{id:'setup:'+provider,name:name+' · Add API key…',provider,apiKeyProfile:true});
+      }
+      for (const board of await list('agent-boards')) for (const node of board.value.nodes || []) choices.push({id:`agent:${board.id}:${node.id}`,name:`${node.name || node.provider} · ${board.value.name || 'Saved board'} · ${node.provider === 'api' ? 'API key' : 'native login'}`,provider:node.provider,model:node.model || node.apiConfig?.model || ''});
+      return {choices};
+    });
+  }
+  async function saveAuthor(payload,protect){
+    return serialized(async()=>{
+      assertBinding(payload);const {configuration,descriptor}=require('./api-authors.cjs');
+      const previous=await read('api-ai-providers',payload.provider);
+      if((previous?.revision??null)!==(payload.expectedRevision??null))throw Error('This API provider changed in another window. Refresh providers before saving.');
+      const value=await protect(configuration(payload,previous?.value),'API test author credentials');
+      assertBinding(payload);
+      if(!require('../protect-configuration.cjs').reference(value.apiKey))throw Error('The API key could not be protected. No provider was saved.');
+      await call('transact',{records:[mutation('api-ai-providers',payload.provider,value,previous)]});
+      return descriptor(await read('api-ai-providers',payload.provider));
+    });
+  }
+  async function author({authorId, prompt, instructions, signal, workspaceRoot}) {
+    const task = await serialized(async () => {
+      assertBinding({workspaceRoot});
+      let node;
+      if (/^native:(codex|claude|gemini)$/.test(authorId)) node={provider:authorId.split(':')[1],permission:'native',instructions:''};
+      else if(/^api:(openai|anthropic|google|custom)$/.test(authorId)){
+        const profile=await read('api-ai-providers',authorId.slice(4));if(!profile)throw Error('Save an API key and model before generating tests.');
+        node={provider:'api',model:profile.value.model,apiConfig:profile.value};
+      }
+      else {
+        const match = /^agent:([^:]+):([^:]+)$/.exec(authorId || ''); if (!match) fail('VALIDATION','Choose an installed subscription tool or a saved API agent.');
+        const board = await boardRecord(match[1]); node = board.value.nodes.find(node => node.id === match[2]); if (!node) fail('NOT_FOUND','This AI agent no longer exists. Refresh the provider list.');
+      }
+      const binding=root, generation=epoch, controller=new AbortController(), cancel=()=>controller.abort();
+      signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted)controller.abort();
+      const key=crypto.randomUUID(), captured=structuredClone(node);
+      const promise=Promise.resolve().then(async()=>{
+        if(controller.signal.aborted)throw Error('AI generation cancelled.');
+        const system=instructions;let text,metadata;
+        if(captured.provider==='api'){
+          if(!requestAI)throw Error('The configured AI API adapter is unavailable.');
+          const result=await requestAI({...captured.apiConfig,model:captured.model||captured.apiConfig?.model,prompt,systemPrompt:system,messages:[{role:'user',content:prompt}],signal:controller.signal});
+          if(result.success===false||result.completionStatus && result.completionStatus!=='COMPLETE'||!result.completionStatus&&!['stop','end_turn','stop_sequence','STOP'].includes(result.finishReason))throw Error('The AI response did not complete. No proposals were imported.');
+          text=result.generatedText;metadata={provider:captured.apiConfig?.provider||'api',model:captured.model||captured.apiConfig?.model||'',finishReason:result.finishReason};
+        }else{
+          const result=await native.execute({node:{...captured,instructions:system,additionalDirectories:[],...(captured.provider==='codex'?{permission:'read-only'}:{})},session:{},text:prompt,workspaceRoot:binding,signal:controller.signal});
+          if(result.status!=='completed')throw Error(result.error||'The native AI turn did not complete. No proposals were imported.');
+          text=result.text;metadata={provider:captured.provider,model:captured.model||'',transport:'native-subscription'};
+        }
+        if(binding!==root||generation!==epoch||controller.signal.aborted)throw Error('AI generation cancelled or workspace changed. No proposals were imported.');
+        return {text:redact(String(text||'')),author:metadata};
+      }).finally(()=>{signal?.removeEventListener('abort',cancel);authoringRuns.delete(key);});
+      authoringRuns.set(key,{controller,promise});return {promise};
+    });
+    return task.promise;
+  }
   async function drain() {
     await serialized(async () => {
       transitioning = true;
       if (root && initialized) for (const b of await list('agent-boards')) await cancelMatching(b.id);
       for (const a of active.values()) a.controller.abort();
       for (const a of acceptanceRuns.values()) a.controller.abort();
+      for (const a of authoringRuns.values()) a.controller.abort();
     });
-    await Promise.allSettled([...active.values(), ...acceptanceRuns.values()].map(a => a.promise));
+    await native.cancelDiagnostics?.();
+    await Promise.allSettled([...active.values(), ...acceptanceRuns.values(), ...authoringRuns.values()].map(a => a.promise));
     await chain;
   }
   async function setWorkspace(nextRoot) {
     const candidate = nextRoot ? fs.realpathSync(nextRoot) : null;
     await drain();
-    await serialized(async () => { epoch++; root = candidate; initialized = false; transitioning = false; active.clear(); admissions.clear(); quarantined.clear(); generatedPreviews.clear(); });
+    await serialized(async () => { epoch++; root = candidate; initialized = false; transitioning = false; capabilityCache=null; active.clear(); admissions.clear(); quarantined.clear(); generatedPreviews.clear(); });
     return { workspaceRoot: root };
   }
   async function close() { await drain(); await serialized(async () => { closed = true; root = null; epoch++; active.clear(); admissions.clear(); quarantined.clear(); }); }
-  return { handle, setWorkspace, close };
+  return { handle, setWorkspace, close, authors, saveAuthor, author };
 }
 
 module.exports = { createService, normalizeBoard, TERMINAL };
