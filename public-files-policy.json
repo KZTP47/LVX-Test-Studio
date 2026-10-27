@@ -182,6 +182,11 @@
       "file": "docs/images/unified-home.png",
       "sha256": "257ec1c2b733ae780bb0c2010d189933193ac6c7912de3ac928c0528b6a67447",
       "review": "Visually reviewed fixture screenshot; no personal path or real credential."
+    },
+    {
+      "file": "docs/media/LVX-Test-Studio-demo.mp4",
+      "sha256": "91563d6e8957de5d73ae3c0a8f10773ea9597a98b02c870ff9b5a0e0d81a7e66",
+      "review": "English-captioned product walkthrough of the packaged desktop app. Genuine local browser tests and an intentional negative control; agent-board configuration only. Visually reviewed, with local installation paths masked. No credentials, personal conversations or customer data."
     }
   ],
   "syntheticMatches": [
